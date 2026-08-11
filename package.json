@@ -1,0 +1,43 @@
+{
+  "name": "reefer-ready-pms",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "ReeferReady PMS — container readiness pipeline, built on the Crystal Design System.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "tokens": "node tools/extract-design-system.mjs",
+    "db:push": "npm run db:push -w @pms/api",
+    "db:seed": "npm run db:seed -w @pms/api",
+    "setup": "npm install && npm run tokens && npm run db:push && npm run db:seed",
+    "dev": "npm run tokens && concurrently -n api,web -c blue,yellow \"npm run dev -w @pms/api\" \"npm run dev -w @pms/web\"",
+    "dev:api": "npm run dev -w @pms/api",
+    "dev:web": "npm run dev -w @pms/web",
+    "build": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/api && npm run build -w @pms/web",
+    "start": "npm run start -w @pms/api",
+    "test": "npm run test -w @pms/shared && npm run test -w @pms/api",
+    "test:e2e": "npm run test:e2e -w @pms/web",
+    "typecheck": "tsc -b packages/shared apps/api apps/web",
+    "lint": "eslint . --max-warnings 0",
+    "lint:css": "stylelint \"apps/web/src/**/*.css\"",
+    "verify": "npm run typecheck && npm run lint && npm run lint:css && npm run test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0",
+    "stylelint": "^16.12.0",
+    "stylelint-config-standard": "^36.0.1",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1"
+  }
+}

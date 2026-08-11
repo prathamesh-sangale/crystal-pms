@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ReeferReady PMS — Container Readiness Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============ TOKENS (from Crystal Design System) ============ */
+:root{
+  --navy:#052379; --amber:#FBC213; --black:#010101; --white:#FFFFFF;
+  --r-sm:6px; --r-md:10px; --r-lg:14px; --r-full:999px;
+  --dur-fast:140ms; --dur-base:220ms; --ease-out:cubic-bezier(.22,.75,.28,1); --ease-spring:cubic-bezier(.34,1.4,.5,1);
+  --f-display:'Manrope',system-ui,sans-serif; --f-body:'Inter',system-ui,sans-serif; --f-mono:'JetBrains Mono',ui-monospace,monospace;
+
+  --bg:#F7F8FB; --surface:#FFFFFF; --surface-2:#F2F4F8; --surface-3:#EAECF2;
+  --text:#010101; --text-2:#6B7280; --text-3:#9CA3AF; --text-inv:#FFFFFF;
+  --line:#E4E7EE; --line-strong:#C9CFDC;
+  --accent:#052379; --accent-hover:#031A5C; --accent-press:#02123F;
+  --accent-soft:#EAF0FB; --accent-soft-2:#DCE5F7; --on-accent:#FFFFFF;
+  --amber-c:#FBC213; --amber-soft:#FFF6DD; --on-amber:#010101;
+  --success:#1E8E3E; --success-bg:#E8F5EA;
+  --error:#D93025;   --error-bg:#FDECEA;
+  --warn:#B8860B;    --warn-bg:#FFF6DD;
+  --info:#1A73E8;    --info-bg:#E8F0FE;
+  --shadow-1:0 1px 2px rgba(5,35,121,.06);
+  --shadow-2:0 2px 8px rgba(5,35,121,.08);
+  --shadow-3:0 6px 16px rgba(5,35,121,.12);
+  --shadow-4:0 12px 28px rgba(5,35,121,.16);
+  --focus:#052379;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;font-family:var(--f-body);background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow:hidden;}
+::selection{background:var(--amber);color:var(--black);}
+button{font-family:inherit;}
+
+/* ============ APP SHELL — fixed viewport, no page scroll ============ */
+.app{display:grid;grid-template-columns:212px 1fr;height:100vh;}
+.sidebar{background:var(--surface);border-right:1px solid var(--line);padding:16px 12px;height:100vh;overflow-y:auto;}
+.brandmark{display:flex;align-items:center;gap:9px;font-family:var(--f-display);font-weight:800;font-size:13.5px;letter-spacing:-.2px;padding:2px 6px 16px;}
+.brandmark .glyph{width:27px;height:27px;border-radius:8px;background:var(--navy);display:grid;place-items:center;flex:none;}
+.brandmark .glyph i{width:10px;height:10px;border-radius:2px;background:var(--amber);display:block;transform:rotate(45deg);}
+.brandmark span{color:var(--text-3);font-weight:600;font-size:9px;display:block;font-family:var(--f-mono);letter-spacing:.4px;}
+.navgroup{font-family:var(--f-display);font-weight:800;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-3);margin:14px 8px 6px;}
+.navitem{display:flex;align-items:center;gap:9px;font-family:var(--f-display);font-weight:600;font-size:12px;color:var(--text-2);
+  padding:8px 9px;border-radius:8px;cursor:pointer;transition:all var(--dur-fast) var(--ease-out);margin-bottom:2px;}
+.navitem:hover{background:var(--surface-2);color:var(--text);}
+.navitem.on{background:var(--accent-soft);color:var(--accent);}
+.navitem .ic{width:16px;height:16px;color:var(--text-3);flex:none;}
+.navitem.on .ic{color:var(--accent);}
+.navitem .tally{margin-left:auto;font-family:var(--f-mono);font-size:9px;background:var(--surface-3);color:var(--text-2);border-radius:999px;padding:2px 6px;}
+.navitem.on .tally{background:var(--amber-c);color:var(--on-amber);}
+
+.main{min-width:0;height:100vh;display:flex;flex-direction:column;}
+.topbar{flex:none;background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--line);}
+.topbar-in{padding:11px 22px;display:flex;align-items:center;gap:12px;}
+.topbar h1{font-family:var(--f-display);font-weight:800;font-size:15px;margin:0;letter-spacing:-.3px;}
+.topbar .sub{font-size:10.5px;color:var(--text-3);font-family:var(--f-mono);}
+.topbar .spacer{flex:1;}
+.content{flex:1;min-height:0;padding:16px 22px;display:flex;flex-direction:column;overflow:hidden;}
+.viewroot{flex:1;min-height:0;display:flex;flex-direction:column;}
+
+/* ============ BUTTONS ============ */
+.btn{font-family:var(--f-display);font-weight:700;font-size:12px;line-height:1;padding:9px 14px;border-radius:var(--r-md);
+  border:1.5px solid transparent;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  transition:all var(--dur-fast) var(--ease-out);min-height:36px;}
+.btn:active{transform:translateY(1px);}
+.btn-primary{background:var(--accent);color:var(--on-accent);}
+.btn-primary:hover{background:var(--accent-hover);box-shadow:var(--shadow-2);}
+.btn-secondary{background:transparent;color:var(--accent);border-color:var(--accent);}
+.btn-secondary:hover{background:var(--accent-soft);}
+.btn-ghost{background:transparent;color:var(--text-2);}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text);}
+.btn-sm{font-size:11px;padding:6px 10px;min-height:28px;}
+.btn .ic{width:14px;height:14px;}
+.iconbtn{width:34px;height:34px;border-radius:var(--r-md);border:1.5px solid var(--line);background:var(--surface);
+  color:var(--text-2);display:inline-grid;place-items:center;cursor:pointer;transition:all var(--dur-fast) var(--ease-out);}
+.iconbtn:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);}
+
+/* ============ ICONS ============ */
+.ic{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;}
+
+/* ============ HERO (compact) ============ */
+.hero{position:relative;overflow:hidden;background:var(--navy);color:#fff;border-radius:16px;padding:18px 24px;margin-bottom:12px;flex:none;}
+.hero-grid{position:absolute;inset:0;opacity:.14;background-image:linear-gradient(rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px);
+  background-size:28px 28px;mask-image:radial-gradient(circle at 85% 10%,#000,transparent 60%);}
+.hero .eyebrow{font-family:var(--f-mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:6px;position:relative;}
+.hero h1{font-family:var(--f-display);font-weight:800;font-size:18px;line-height:1.15;letter-spacing:-.4px;margin:0 0 10px;max-width:640px;position:relative;}
+.hero h1 em{font-style:normal;color:var(--amber);}
+.hero-stats{display:flex;gap:26px;position:relative;flex-wrap:wrap;}
+.hero-stat b{display:block;font-family:var(--f-display);font-weight:800;font-size:19px;}
+.hero-stat span{font-size:9.5px;color:#98A6D4;font-family:var(--f-mono);letter-spacing:.3px;}
+
+/* ============ KPI CARDS ============ */
+.cardgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:12px;flex:none;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;transition:all var(--dur-fast) var(--ease-out);}
+.card.hoverable:hover{transform:translateY(-2px);box-shadow:var(--shadow-3);border-color:var(--line-strong);cursor:pointer;}
+.card .klabel{font-size:10.5px;color:var(--text-2);font-weight:600;display:flex;align-items:center;gap:6px;}
+.card .kval{font-family:var(--f-display);font-weight:800;font-size:21px;color:var(--text);margin:5px 0 3px;letter-spacing:-.5px;}
+.card .kfoot{font-size:10px;color:var(--text-3);display:flex;align-items:center;gap:5px;}
+.card .kfoot.up{color:var(--success);} .card .kfoot.down{color:var(--error);}
+
+/* ============ TABS ============ */
+.tabs{display:flex;gap:18px;border-bottom:1.5px solid var(--line);flex:none;margin-bottom:12px;}
+.tabs button{font-family:var(--f-display);font-weight:700;font-size:12px;color:var(--text-3);background:none;border:none;
+  padding:0 2px 9px;cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;transition:all var(--dur-fast) var(--ease-out);}
+.tabs button:hover{color:var(--text);}
+.tabs button.on{color:var(--accent);border-color:var(--accent);}
+
+/* ============ PILL / BADGE ============ */
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--f-display);font-weight:700;font-size:10px;
+  padding:3px 8px;border-radius:999px;line-height:1.5;white-space:nowrap;}
+.pill.navy{background:var(--accent-soft);color:var(--accent);}
+.pill.amber{background:var(--amber-soft);color:#8A6400;}
+.pill.success{background:var(--success-bg);color:var(--success);}
+.pill.error{background:var(--error-bg);color:var(--error);}
+.pill.warn{background:var(--warn-bg);color:var(--warn);}
+.pill.neutral{background:var(--surface-3);color:var(--text-2);}
+
+/* ============ PROGRESS ============ */
+.progress{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;}
+.progress .fill{height:100%;background:var(--accent);border-radius:999px;transition:width var(--dur-base) var(--ease-out);}
+.progress.ok .fill{background:var(--success);}
+
+/* ============ KANBAN — all 10 stages fit one screen, no horizontal scroll ============ */
+.kanban{display:flex;gap:6px;flex:1;min-height:0;}
+.kcol{background:var(--surface-2);border-radius:var(--r-md);flex:1 1 0;min-width:0;display:flex;flex-direction:column;}
+.kcol-head{padding:7px 6px 6px;border-bottom:1px solid var(--line);flex:none;}
+.kcol-head .t{font-family:var(--f-display);font-weight:800;font-size:8.6px;letter-spacing:0;line-height:1.2;display:flex;flex-direction:column;align-items:flex-start;gap:3px;}
+.kcol-head .t b{font-weight:800;}
+.kcol-head .n{font-family:var(--f-mono);font-size:8.5px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:0 5px;color:var(--text-2);align-self:flex-end;}
+.kcol-head .d{font-size:7.8px;color:var(--text-3);margin-top:3px;font-family:var(--f-mono);line-height:1.2;}
+.kcol-body{padding:5px;display:flex;flex-direction:column;gap:5px;overflow-y:auto;flex:1;min-height:0;}
+.kcard{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line-strong);border-radius:var(--r-sm);padding:6px 6px;cursor:pointer;
+  transition:all var(--dur-fast) var(--ease-out);flex:none;}
+.kcard.type-double{border-left-color:var(--accent);}
+.kcard.type-anteroom{border-left-color:var(--amber-c);}
+.kcard:hover{border-color:var(--accent);box-shadow:var(--shadow-2);}
+.kcard .id{font-family:var(--f-mono);font-weight:700;font-size:9px;color:var(--text);display:block;line-height:1.3;word-break:break-all;}
+.kcard .top{display:flex;align-items:center;gap:3px;margin-bottom:4px;flex-wrap:wrap;}
+.kcard .top .dot{width:7px;height:7px;border-radius:50%;flex:none;}
+.kcard .top .dot.urgent{background:var(--error);} .kcard .top .dot.high{background:var(--warn);}
+.kcard .foot{display:flex;align-items:center;justify-content:space-between;margin-top:5px;gap:3px;}
+.avatar{width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;
+  font-family:var(--f-display);font-weight:700;font-size:7.5px;flex:none;}
+.daysbadge{font-family:var(--f-mono);font-size:7.8px;color:var(--text-3);white-space:nowrap;}
+.daysbadge.late{color:var(--error);font-weight:600;}
+
+/* ============ TABLE — bounded panel, internal scroll only ============ */
+.tablewrap{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden;flex:1;min-height:0;display:flex;flex-direction:column;}
+.tablescroll{overflow-y:auto;flex:1;min-height:0;}
+table.dt{width:100%;border-collapse:collapse;font-size:12px;}
+table.dt thead{position:sticky;top:0;z-index:2;}
+table.dt th{text-align:left;font-family:var(--f-display);font-weight:700;font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--text-3);padding:8px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);}
+table.dt td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--text);}
+table.dt tr:last-child td{border-bottom:none;}
+table.dt tr:hover td{background:var(--surface-2);}
+table.dt tr{cursor:pointer;}
+
+/* ============ FORM ============ */
+.field{display:flex;flex-direction:column;gap:5px;min-width:0;margin-bottom:12px;}
+.field label{font-family:var(--f-display);font-weight:700;font-size:11px;color:var(--text);}
+.field .fhint{font-size:10px;color:var(--text-3);}
+.input,select.input,textarea.input{font-family:var(--f-body);font-size:12.5px;color:var(--text);background:var(--surface);
+  border:1.5px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;width:100%;transition:all var(--dur-fast) var(--ease-out);}
+.input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;}
+
+/* ============ MODAL / DRAWER ============ */
+.overlay{position:fixed;inset:0;background:rgba(5,35,121,.34);z-index:800;display:none;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.modal{background:var(--surface);color:var(--text);border-radius:var(--r-lg);box-shadow:var(--shadow-4);width:100%;max-width:480px;
+  max-height:88vh;display:flex;flex-direction:column;animation:pop var(--dur-base) var(--ease-out);}
+@keyframes pop{from{opacity:0;transform:scale(.96) translateY(6px);}to{opacity:1;transform:none;}}
+.modal-head{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line);flex:none;}
+.modal-head h4{font-family:var(--f-display);font-weight:800;font-size:14px;margin:0;}
+.modal-head .close{margin-left:auto;}
+.modal-body{padding:16px 18px;overflow-y:auto;}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:var(--surface-2);flex:none;}
+
+.drawer-overlay{position:fixed;inset:0;background:rgba(5,35,121,.34);z-index:800;display:none;}
+.drawer-overlay.show{display:block;}
+.drawer{position:fixed;top:0;right:0;height:100vh;width:500px;max-width:94vw;background:var(--surface);z-index:801;
+  box-shadow:var(--shadow-4);display:flex;flex-direction:column;transform:translateX(100%);transition:transform var(--dur-base) var(--ease-out);}
+.drawer-overlay.show .drawer{transform:translateX(0);}
+.drawer-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px;flex:none;}
+.drawer-head .close{margin-left:auto;}
+.drawer-body{padding:16px 20px;overflow-y:auto;flex:1;min-height:0;}
+.drawer-foot{padding:12px 20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:9px;align-items:center;background:var(--surface-2);flex:none;}
+
+/* ============ CHECKLIST ============ */
+.stagegroup{margin-bottom:14px;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;}
+.stagegroup-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface-2);}
+.stagegroup-head .n{font-family:var(--f-display);font-weight:800;font-size:11.5px;}
+.stagegroup-head .cnt{margin-left:auto;font-family:var(--f-mono);font-size:9.5px;color:var(--text-3);}
+.checklist{padding:4px 6px;}
+.chkrow{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:7px;transition:background var(--dur-fast) var(--ease-out);}
+.chkrow:hover{background:var(--surface-2);}
+.chkrow input{appearance:none;-webkit-appearance:none;margin:0;width:17px;height:17px;border:1.5px solid var(--line-strong);
+  border-radius:5px;background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none;transition:all var(--dur-fast) var(--ease-out);}
+.chkrow input::after{content:"";width:9px;height:9px;transform:scale(0);transition:transform var(--dur-fast) var(--ease-spring);
+  background:var(--on-accent);clip-path:polygon(14% 44%,0 60%,40% 100%,100% 18%,84% 4%,38% 66%);}
+.chkrow input:checked{background:var(--accent);border-color:var(--accent);}
+.chkrow input:checked::after{transform:scale(1);}
+.chkrow label{font-size:12px;color:var(--text);cursor:pointer;flex:1;}
+.chkrow.done label{color:var(--text-3);text-decoration:line-through;}
+.chkrow .hrs{font-family:var(--f-mono);font-size:9px;color:var(--text-3);}
+.typeflag{font-family:var(--f-mono);font-size:8px;color:#8A6400;background:var(--amber-soft);border-radius:4px;padding:1px 5px;margin-left:6px;text-transform:uppercase;}
+.typeflag.double{color:var(--accent);background:var(--accent-soft);}
+
+.infogrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-bottom:14px;}
+.infogrid .k{font-family:var(--f-mono);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text-3);}
+.infogrid .v{font-size:12.5px;font-weight:600;color:var(--text);margin-top:1px;}
+
+.empty{text-align:center;padding:34px 16px;color:var(--text-3);}
+.empty .ic{width:32px;height:32px;margin:0 auto 10px;color:var(--line-strong);}
+
+.searchwrap{position:relative;display:flex;align-items:center;max-width:260px;}
+.searchwrap .ic{position:absolute;left:9px;color:var(--text-3);width:14px;height:14px;}
+.searchwrap input{padding-left:30px;}
+
+.grouphead{display:flex;align-items:center;gap:10px;margin:0 0 10px;flex:none;}
+.grouphead h2{font-family:var(--f-display);font-weight:800;font-size:12px;letter-spacing:.5px;margin:0;}
+.grouphead .rule{flex:1;height:1px;background:var(--line);}
+
+.stagebar-row{display:flex;align-items:center;gap:10px;margin-bottom:7px;}
+.stagebar-name{font-family:var(--f-mono);font-size:10px;width:200px;color:var(--text-2);flex:none;}
+.stagebar-track{flex:1;height:15px;border-radius:4px;background:var(--surface-2);overflow:hidden;}
+.stagebar-fill{height:100%;background:var(--accent);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;}
+.stagebar-fill span{font-family:var(--f-mono);font-size:8.5px;color:#fff;}
+
+.scrollpane{flex:1;min-height:0;overflow-y:auto;}
+
+/* ============ DEPOT COMMAND — 2x2 quadrant, each panel scrolls on its own ============ */
+.depotgrid{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;}
+.depotpanel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.depotpanel-head{padding:9px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;flex:none;}
+.depotpanel-head h3{font-family:var(--f-display);font-weight:800;font-size:11.5px;margin:0;letter-spacing:.1px;}
+.depotpanel-head .sub{font-size:9.5px;color:var(--text-3);font-family:var(--f-mono);margin-left:auto;}
+.depotpanel-body{flex:1;min-height:0;overflow-y:auto;padding:2px 12px;}
+.listrow{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:11.5px;}
+.listrow:last-child{border-bottom:none;}
+.listrow .rid{font-family:var(--f-mono);font-weight:700;font-size:11px;flex:none;}
+.listrow .flex1{flex:1;min-width:0;}
+.listrow .muted{color:var(--text-3);font-size:10px;}
+.listrow .req{font-size:10.5px;color:var(--text-2);line-height:1.4;margin-top:2px;}
+.listrow .col{display:flex;flex-direction:column;min-width:0;}
+.depothome-badge{font-family:var(--f-mono);font-size:8px;background:var(--amber-soft);color:#8A6400;border-radius:4px;padding:1px 5px;margin-left:5px;}
+
+@media (max-width:1000px){
+  body{overflow:auto;}
+  .app{grid-template-columns:1fr;height:auto;}
+  .sidebar{display:none;}
+  .main{height:auto;}
+  .content{overflow:visible;}
+  .formgrid{grid-template-columns:1fr;}
+  .infogrid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+<defs>
+<symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+<symbol id="i-bar" viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+<symbol id="i-snow" viewBox="0 0 24 24"><path d="M12 2v20M4 7l16 10M20 7L4 17"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></symbol>
+<symbol id="i-truck" viewBox="0 0 24 24"><rect x="1" y="6" width="14" height="11" rx="1"/><path d="M15 9h4l3 3v5h-7z"/><circle cx="6" cy="19" r="1.6"/><circle cx="17.5" cy="19" r="1.6"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+</defs>
+</svg>
+
+<div class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="brandmark">
+      <div class="glyph"><i></i></div>
+      <div>ReeferReady<span>CONTAINER READINESS PMS</span></div>
+    </div>
+    <div class="navgroup">Sitaram's View</div>
+    <div class="navitem on" data-view="depot"><svg class="ic"><use href="#i-grid"/></svg>Depot Command</div>
+    <div class="navgroup">Container Readiness</div>
+    <div class="navitem" data-view="dashboard"><svg class="ic"><use href="#i-grid"/></svg>Dashboard</div>
+    <div class="navitem" data-view="tomorrow"><svg class="ic"><use href="#i-clock"/></svg>Tomorrow's Work<span class="tally" id="tally-tom">0</span></div>
+    <div class="navitem" data-view="pipeline"><svg class="ic"><use href="#i-box"/></svg>Readiness Pipeline<span class="tally" id="tally-pipe">0</span></div>
+    <div class="navitem" data-view="timeline"><svg class="ic"><use href="#i-bar"/></svg>Stage Timeline</div>
+    <div class="navgroup">Work</div>
+    <div class="navitem" data-view="fleet"><svg class="ic"><use href="#i-truck"/></svg>All Containers</div>
+    <div class="navitem" data-view="checklist"><svg class="ic"><use href="#i-list"/></svg>Checklist Library</div>
+    <div class="navgroup">Alerts</div>
+    <div class="navitem" data-view="overdue"><svg class="ic"><use href="#i-alert"/></svg>Delayed / At Risk<span class="tally" id="tally-late">0</span></div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-in">
+        <div>
+          <h1 id="pagetitle">Dashboard</h1>
+          <div class="sub" id="pagesub">reeferready.pms — updated live</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="searchwrap" id="searchwrap" style="display:none">
+          <svg class="ic"><use href="#i-search"/></svg>
+          <input class="input" id="searchbox" placeholder="Search container ID, customer...">
+        </div>
+        <button class="btn btn-primary" id="btnAddContainer"><svg class="ic"><use href="#i-plus"/></svg>New Container</button>
+      </div>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- ADD CONTAINER MODAL -->
+<div class="overlay" id="addOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <h4>Register Container for Readiness</h4>
+      <button class="iconbtn close" id="closeAdd"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="formgrid">
+        <div class="field"><label>Container ID</label><input class="input" id="f-id" placeholder="e.g. RFCU 445 129-8"></div>
+        <div class="field"><label>Size</label>
+          <select class="input" id="f-size"><option>20ft Reefer</option><option selected>40ft HC Reefer</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Container Type</label>
+        <select class="input" id="f-type">
+          <option value="standard">Standard Reefer</option>
+          <option value="double">Double Compressor Reefer</option>
+          <option value="anteroom">Reefer with Anteroom (Mantrap Alarm)</option>
+        </select>
+        <div class="fhint" id="f-type-hint">Full base checklist: lights, casing paint, alarm, light switch, T-floor, strip curtains, ISO plugs, logo, painting, PTI.</div>
+      </div>
+      <div class="field" id="f-anteroom-wrap" style="display:none"><label>Anteroom Configuration</label>
+        <select class="input" id="f-anteroom-variant"><option value="internal">Internal Anteroom</option><option value="external">External Anteroom</option></select>
+      </div>
+      <div class="formgrid">
+        <div class="field"><label>Priority</label>
+          <select class="input" id="f-priority"><option>Standard</option><option>High</option><option>Urgent</option></select>
+        </div>
+        <div class="field"><label>Customer / Lessee</label><input class="input" id="f-customer" placeholder="e.g. Maersk Line"></div>
+      </div>
+      <div class="formgrid">
+        <div class="field"><label>Depot</label><select class="input" id="f-depot"></select></div>
+        <div class="field"><label>Assigned Technician</label><input class="input" id="f-assignee" placeholder="e.g. R. Fernandes"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="cancelAdd">Cancel</button>
+      <button class="btn btn-primary" id="submitAdd"><svg class="ic"><use href="#i-plus"/></svg>Add to Pipeline</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTAINER DETAIL DRAWER -->
+<div class="drawer-overlay" id="drawerOverlay">
+  <div class="drawer">
+    <div class="drawer-head">
+      <div>
+        <div style="font-family:var(--f-mono);font-weight:700;font-size:14px" id="dwId">—</div>
+        <div style="margin-top:5px;display:flex;gap:6px;flex-wrap:wrap" id="dwPills"></div>
+      </div>
+      <button class="iconbtn close" id="closeDrawer"><svg class="ic"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="drawer-body" id="dwBody"></div>
+    <div class="drawer-foot">
+      <div style="font-size:10.5px;color:var(--text-2)" id="dwFootProgress">0% complete</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" id="dwAdvance">Advance Stage →</button>
+        <button class="btn btn-ghost btn-sm" id="dwDelete" style="color:var(--error)">Remove</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONTAINER TYPES
+   ============================================================ */
+const TYPES = {
+  standard: {label:'Standard Reefer', pill:'neutral'},
+  double:   {label:'Double Compressor', pill:'navy'},
+  anteroom: {label:'Reefer + Anteroom', pill:'amber'},
+};
+
+/* ============================================================
+   READINESS STAGES
+   ============================================================ */
+const STAGES = [
+  {id:'gatein',      name:'Gate-In & Intake',              days:1, desc:'Off-hire survey, damage report, CSC plate check, job card issued.'},
+  {id:'structural',  name:'Structural & IICL Repair',       days:3, desc:'Corner post, panel, roof, frame repair and strip curtain fitting.'},
+  {id:'tfloor',      name:'T-Floor Repair',                 days:2, desc:'T-bar aluminum flooring inspection, slat replacement, drain clearing.'},
+  {id:'mechanical',  name:'Refrigeration & Mechanical',     days:2, desc:'Compressor(s), coil, fan, genset and light fixture testing.'},
+  {id:'electrical',  name:'Electrical, Alarm & CA Systems', days:2, desc:'Alarm, light switch, ISO plugs, door switch, mantrap/anteroom systems.'},
+  {id:'paint',       name:'Sandblast & Painting',           days:2, desc:'Surface prep, anti-corrosion primer, casing paint, exterior topcoat.'},
+  {id:'logo',        name:'Logo, Stencil & Decals',         days:1, desc:'CSC plate re-stencil, owner livery, unit ID and weight markings.'},
+  {id:'clean',       name:'Cleaning & Sanitization',        days:1, desc:'Interior wash, machinery chamber clean, odor removal, fumigation.'},
+  {id:'pti',         name:'PTI — Pre-Trip Inspection',      days:1, desc:'Pull-down test, door seal test, recorder verification, PTI decal.'},
+  {id:'qc',          name:'Final QC & Release',             days:1, desc:'Final visual/operational QC, sign-off, gate pass issued.'},
+];
+
+/* Each task: [label, hrs, onlyFor?] — onlyFor restricts the task to
+   specific container types ('double' or 'anteroom'). No onlyFor = applies to all types. */
+const STAGE_TASKS = {
+  gatein: [
+    ['Off-hire / gate-in survey photos',.5],
+    ['CSC safety approval plate verified',.5],
+    ['Unit ID & size/type confirmed',.3],
+    ['Job card / work order opened',.3],
+  ],
+  structural: [
+    ['Corner post & casting repair (IICL-5)',6],
+    ['Corrugated side panel dent repair',5],
+    ['Roof panel repair',4],
+    ['Door frame & hinge repair',3],
+    ['Underfloor cross-member repair',4],
+    ['Door strip curtains fitted & inspected',1],
+  ],
+  tfloor: [
+    ['T-bar flooring inspection',1],
+    ['Damaged T-floor slat replacement',6],
+    ['Floor drain channel clearing',1.5],
+    ['Anti-slip floor coating touch-up',2],
+  ],
+  mechanical: [
+    ['Compressor function test',2],
+    ['Condenser & evaporator coil cleaning',1.5],
+    ['Refrigerant charge & leak test',2],
+    ['Condenser/evaporator fan motor test',1.5],
+    ['Genset fuel level & function test',2],
+    ['Insulation & wall panel integrity check',1.5],
+    ['Interior & exterior light fixture check',1],
+    ['Compressor #2 function test',2,['double']],
+    ['Compressor #2 refrigerant charge & leak test',2,['double']],
+    ['Dual compressor synchronization / failover test',1.5,['double']],
+  ],
+  electrical: [
+    ['Door micro-switch / reefer plug alarm test',1],
+    ['High/low temperature alarm system test',1.5],
+    ['Interior light switch function test',.5],
+    ['ISO standard power plug & socket test',1],
+    ['Data logger / temp recorder calibration',1],
+    ['Wiring harness & plug inspection',1],
+    ['Anteroom access door & seal check',1.5,['anteroom']],
+    ['Mantrap alarm system test',1.5,['anteroom']],
+    ['Mantrap interlock function test',1,['anteroom']],
+  ],
+  paint: [
+    ['Surface prep & sandblasting',4],
+    ['Anti-corrosion primer coat',3],
+    ['Exterior container body painting',4],
+    ['Machinery casing paint touch-up',1],
+    ['Touch-up & finish inspection',1],
+  ],
+  logo: [
+    ['CSC / safety plate re-stencil',1],
+    ['Owner logo & livery decal application',2],
+    ['Door numbering & unit ID stencil',1],
+    ['Max gross / tare weight markings',.5],
+  ],
+  clean: [
+    ['Interior box wash & sanitization',1.5],
+    ['Machinery chamber cleaning',1],
+    ['Odor / residue removal',1],
+    ['Fumigation certificate (if required)',1],
+  ],
+  pti: [
+    ['Pull-down temperature test',3],
+    ['Door seal air-tightness test',1],
+    ['Recorder & sensor verification',1],
+    ['PTI decal issued (30-180 day validity)',.3],
+  ],
+  qc: [
+    ['Final visual & operational QC',1],
+    ['Release photos captured',.3],
+    ['Job card sign-off',.3],
+    ['Ready-for-release gate pass issued',.3],
+  ],
+};
+
+const NAMES = ['R. Fernandes','A. Costa','S. Menon','J. Alvares','P. Dias','K. Rao','T. Silva','M. Pinto'];
+const CUSTOMERS = ['Maersk Line','MSC','CMA CGM','Hapag-Lloyd','ONE','Evergreen Marine','Cool Carriers Ltd','Seaboard Marine'];
+
+/* ============================================================
+   DEPOT NETWORK — Sitaram sits at the home depot but needs one
+   dashboard covering readiness at home + condition visibility
+   across the other three.
+   ============================================================ */
+const DEPOTS = ['JNPT Depot (Home)','Mundra Depot','Nhava Sheva Depot','Chennai Depot'];
+const HOME_DEPOT = DEPOTS[0];
+
+/* IICL-style A-D condition grading, used for off-lease incoming units
+   so Sitaram knows the look & feel before they even gate in. */
+const GRADES = {
+  A:{label:'A — Like new',    pill:'success'},
+  B:{label:'B — Minor cosmetic', pill:'navy'},
+  C:{label:'C — Repairable damage', pill:'warn'},
+  D:{label:'D — Major / structural', pill:'error'},
+};
+
+function daysFromNowISO(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+
+/* Off-lease incoming — redelivered by customers, not yet gated in.
+   Sitaram plans repair capacity around these before they arrive. */
+const OFFLEASE = [
+  {id:'OL-1042', customer:'Maersk Line',       size:'40ft HC Reefer', type:'standard', expected:daysFromNowISO(3),  depot:HOME_DEPOT, grade:'B', notes:'Minor door seal wear, exterior paint fade — redelivery survey attached.'},
+  {id:'OL-1043', customer:'MSC',                size:'40ft HC Reefer', type:'anteroom', expected:daysFromNowISO(5),  depot:HOME_DEPOT, grade:'C', notes:'Anteroom door dented, mantrap wiring flagged at redelivery inspection.'},
+  {id:'OL-1044', customer:'CMA CGM',            size:'20ft Reefer',    type:'standard', expected:daysFromNowISO(2),  depot:'Mundra Depot', grade:'A', notes:'Like-new, PTI already current from redelivery port.'},
+  {id:'OL-1045', customer:'Cool Carriers Ltd',  size:'40ft HC Reefer', type:'double',   expected:daysFromNowISO(7),  depot:HOME_DEPOT, grade:'D', notes:'Compressor #2 reported faulty at redelivery, roof corrosion noted.'},
+  {id:'OL-1046', customer:'Evergreen Marine',   size:'20ft Reefer',    type:'standard', expected:daysFromNowISO(4),  depot:'Chennai Depot', grade:'B', notes:'T-floor slats worn, cosmetic scratches only.'},
+];
+
+/* Customer orders needing inventory mapped against them — Sitaram's
+   dashboard shows what specific readiness requirement each order needs
+   so he can see the gap on whatever container gets matched. */
+const ORDERS = [
+  {id:'ORD-501', customer:'Hapag-Lloyd',      size:'40ft HC Reefer', type:'standard', qty:2, needBy:daysFromNowISO(5),  requirement:'Full PTI pass and clean interior — cosmetic condition not critical.'},
+  {id:'ORD-502', customer:'ONE',               size:'40ft HC Reefer', type:'anteroom', qty:1, needBy:daysFromNowISO(3),  requirement:'Mantrap alarm certified, anteroom seal tested, logo re-stenciled to ONE livery.'},
+  {id:'ORD-503', customer:'MSC',               size:'20ft Reefer',    type:'standard', qty:3, needBy:daysFromNowISO(10), requirement:'Standard PTI only — cosmetic condition not critical.'},
+  {id:'ORD-504', customer:'Seaboard Marine',   size:'40ft HC Reefer', type:'double',   qty:1, needBy:daysFromNowISO(2),  requirement:'Both compressors load-tested and failover verified before release.'},
+  {id:'ORD-505', customer:'CMA CGM',           size:'40ft HC Reefer', type:'standard', qty:1, needBy:daysFromNowISO(1),  requirement:'Urgent — full exterior paint and logo, PTI complete.'},
+];
+
+function uid(){return 'C'+Math.random().toString(36).slice(2,8).toUpperCase();}
+function stageIdx(id){return STAGES.findIndex(s=>s.id===id);}
+
+function buildChecklist(type){
+  const list=[];
+  STAGES.forEach(st=>{
+    STAGE_TASKS[st.id].forEach(([label,hrs,onlyFor])=>{
+      if(onlyFor && !onlyFor.includes(type)) return;
+      list.push({stage:st.id,label,hrs,onlyFor:onlyFor||null,done:false});
+    });
+  });
+  return list;
+}
+
+function seedContainers(){
+  const data=[];
+  // id, size, type, anteroomVariant, customer, priority, assignee, stageIndex, fractionDoneInStage, depot
+  const scenarios = [
+    ['RFCU 445 129-8','40ft HC Reefer','standard',null,'Maersk Line','High','R. Fernandes',6,.75, DEPOTS[0]],
+    ['MSCU 771 004-2','40ft HC Reefer','anteroom','internal','MSC','Urgent','A. Costa',4,.5, DEPOTS[0]],
+    ['CMAU 228 815-6','20ft Reefer','standard',null,'CMA CGM','Standard','S. Menon',8,1, DEPOTS[1]],
+    ['HLXU 903 442-1','40ft HC Reefer','double',null,'Hapag-Lloyd','Standard','J. Alvares',1,0, DEPOTS[0]],
+    ['ONEU 556 271-9','40ft HC Reefer','anteroom','external','ONE','High','P. Dias',9,.6, DEPOTS[2]],
+    ['EGHU 118 903-4','20ft Reefer','standard',null,'Evergreen Marine','Standard','K. Rao',2,.3, DEPOTS[3]],
+    ['CCLU 340 672-3','40ft HC Reefer','double',null,'Cool Carriers Ltd','Urgent','T. Silva',3,.9, DEPOTS[1]],
+    ['SEBU 662 210-7','40ft HC Reefer','anteroom','internal','Seaboard Marine','Standard','M. Pinto',0,0, DEPOTS[0]],
+    ['MSCU 884 330-5','20ft Reefer','standard',null,'MSC','Standard','R. Fernandes',5,.4, DEPOTS[2]],
+    ['CMAU 771 552-0','40ft HC Reefer','double',null,'CMA CGM','High','A. Costa',7,.85, DEPOTS[3]],
+  ];
+  scenarios.forEach(([id,size,type,anteroomVariant,customer,priority,assignee,stageI,frac,depot])=>{
+    const checklist=buildChecklist(type);
+    const stage=STAGES[stageI].id;
+    checklist.forEach(t=>{
+      const ti=stageIdx(t.stage);
+      if(ti<stageI) t.done=true;
+      else if(ti===stageI) t.done=Math.random()<frac;
+    });
+    const receivedDaysAgo = stageI*2 + Math.round(Math.random()*3)+1;
+    data.push({
+      id, size, type, anteroomVariant, customer, priority, assignee, stage, depot,
+      received: daysAgoISO(receivedDaysAgo),
+      stageEntered: daysAgoISO(Math.round(Math.random()*2)+ (STAGES[stageI].days>1?1:0)),
+      notes:'',
+      checklist,
+    });
+  });
+  return data;
+}
+
+function daysAgoISO(n){const d=new Date();d.setDate(d.getDate()-n);return d.toISOString().slice(0,10);}
+function todayISO(){return new Date().toISOString().slice(0,10);}
+function daysBetween(a,b){return Math.round((new Date(b)-new Date(a))/86400000);}
+
+/* Some browsers block localStorage entirely for file:// pages (opaque origin).
+   Wrap every access so a blocked store never crashes the app — it just
+   falls back to in-memory-only persistence for that session. */
+const safeStore = {
+  _mem:{},
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return this._mem[k]||null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){ this._mem[k]=v; } },
+};
+let STATE = JSON.parse(safeStore.get('reefer-pms-data-v3')||'null') || seedContainers();
+function persist(){ safeStore.set('reefer-pms-data-v3', JSON.stringify(STATE)); }
+
+/* ============================================================
+   DERIVED HELPERS
+   ============================================================ */
+function extraDaysForStage(c, stageId){
+  if(c.type==='double' && stageId==='mechanical') return 1;
+  if(c.type==='anteroom' && stageId==='electrical') return 1;
+  return 0;
+}
+function totalPlanDays(c){
+  let d=0;
+  STAGES.forEach(st=> d += st.days + extraDaysForStage(c, st.id));
+  return d;
+}
+function stageProgress(c){
+  const items = c.checklist.filter(t=>t.stage===c.stage);
+  const done = items.filter(t=>t.done).length;
+  return items.length? Math.round(done/items.length*100):100;
+}
+function overallProgress(c){
+  const done=c.checklist.filter(t=>t.done).length;
+  return c.checklist.length? Math.round(done/c.checklist.length*100):0;
+}
+function daysInStage(c){return daysBetween(c.stageEntered, todayISO());}
+function stageBudget(c){
+  const st = STAGES.find(s=>s.id===c.stage);
+  return st.days + extraDaysForStage(c, c.stage);
+}
+function isLate(c){
+  return daysInStage(c) > stageBudget(c) && c.stage!=='qc';
+}
+function isReady(c){return c.stage==='qc' && overallProgress(c)===100;}
+function initials(name){return name.split(' ').map(p=>p[0]).join('').slice(0,2);}
+function typePill(c){
+  const t=TYPES[c.type];
+  let extra = c.type==='anteroom' ? ` · ${c.anteroomVariant==='external'?'External':'Internal'}` : '';
+  return `<span class="pill ${t.pill}">${t.label}${extra}</span>`;
+}
+
+/* ---------- BACKUP / COVER MAP ----------
+   Buddy pairs so every technician has a named backup if unavailable. */
+const BACKUP_MAP = {
+  'R. Fernandes':'A. Costa', 'A. Costa':'R. Fernandes',
+  'S. Menon':'J. Alvares',   'J. Alvares':'S. Menon',
+  'P. Dias':'K. Rao',        'K. Rao':'P. Dias',
+  'T. Silva':'M. Pinto',     'M. Pinto':'T. Silva',
+};
+function backupFor(name){
+  if(BACKUP_MAP[name]) return BACKUP_MAP[name];
+  const i = NAMES.indexOf(name);
+  if(i>=0) return NAMES[(i+1)%NAMES.length];
+  return NAMES[Math.floor(Math.random()*NAMES.length)];
+}
+function avgHoursForLabel(label){
+  const all=[];
+  STATE.forEach(c=>c.checklist.forEach(t=>{ if(t.label===label) all.push(t.hrs); }));
+  if(!all.length) return 0;
+  return Math.round((all.reduce((a,b)=>a+b,0)/all.length)*10)/10;
+}
+function tomorrowTasks(){
+  const out=[];
+  STATE.forEach(c=>{
+    if(isReady(c)) return;
+    c.checklist.filter(t=>t.stage===c.stage && !t.done).forEach(t=>{ out.push({container:c, task:t}); });
+  });
+  const rank={Urgent:0,High:1,Standard:2};
+  out.sort((a,b)=>{
+    const lateA=isLate(a.container)?0:1, lateB=isLate(b.container)?0:1;
+    if(lateA!==lateB) return lateA-lateB;
+    return (rank[a.container.priority]??2)-(rank[b.container.priority]??2);
+  });
+  return out;
+}
+
+/* ============================================================
+   VIEW ROUTING
+   ============================================================ */
+let VIEW='depot';
+const TITLES={
+  depot:['Depot Command','Sitaram’s home-depot readiness, network condition, off-lease look & feel, and order mapping — one view'],
+  dashboard:['Dashboard','Fleet readiness overview'],
+  tomorrow:["Tomorrow's Work","Tasks required next, who owns them, who covers"],
+  pipeline:['Readiness Pipeline','Kanban across all readiness stages'],
+  timeline:['Stage Timeline','Average duration & throughput per stage'],
+  fleet:['All Containers','Full container register'],
+  checklist:['Checklist Library','Standard task templates by stage & type'],
+  overdue:['Delayed / At Risk','Containers exceeding stage time budget'],
+};
+
+document.querySelectorAll('.navitem').forEach(n=>{
+  n.addEventListener('click',()=>{
+    document.querySelectorAll('.navitem').forEach(x=>x.classList.remove('on'));
+    n.classList.add('on');
+    VIEW=n.dataset.view;
+    document.getElementById('searchwrap').style.display = (VIEW==='fleet')?'flex':'none';
+    render();
+  });
+});
+
+function render(){
+  document.getElementById('pagetitle').textContent=TITLES[VIEW][0];
+  document.getElementById('pagesub').textContent=TITLES[VIEW][1];
+  document.getElementById('tally-pipe').textContent = STATE.filter(c=>!isReady(c)).length;
+  document.getElementById('tally-late').textContent = STATE.filter(isLate).length;
+  document.getElementById('tally-tom').textContent = tomorrowTasks().length;
+  const el=document.getElementById('content');
+  el.innerHTML='';
+  if(VIEW==='depot') el.appendChild(renderDepotCommand());
+  else if(VIEW==='dashboard') el.appendChild(renderDashboard());
+  else if(VIEW==='tomorrow') el.appendChild(renderTomorrow());
+  else if(VIEW==='pipeline') el.appendChild(renderPipeline());
+  else if(VIEW==='timeline') el.appendChild(renderTimeline());
+  else if(VIEW==='fleet') el.appendChild(renderFleet());
+  else if(VIEW==='checklist') el.appendChild(renderChecklistLib());
+  else if(VIEW==='overdue') el.appendChild(renderOverdue());
+}
+
+/* ---------- KANBAN (shared by dashboard + pipeline) ---------- */
+function buildKanban(){
+  const board=document.createElement('div');
+  board.className='kanban';
+  STAGES.forEach(st=>{
+    const inStage = STATE.filter(c=>c.stage===st.id);
+    const col=document.createElement('div');
+    col.className='kcol';
+    const extraNote = st.id==='mechanical'?' +1d':st.id==='electrical'?' +1d':'';
+    col.innerHTML=`<div class="kcol-head"><div class="t"><b>${st.name}</b><span class="n">${inStage.length}</span></div><div class="d">${st.days}d${extraNote}</div></div>
+      <div class="kcol-body"></div>`;
+    const body=col.querySelector('.kcol-body');
+    if(!inStage.length){
+      body.innerHTML=`<div style="text-align:center;padding:10px 3px;color:var(--text-3);font-size:9px">—</div>`;
+    }
+    inStage.forEach(c=>{
+      const prog=stageProgress(c);
+      const din=daysInStage(c);
+      const budget=stageBudget(c);
+      const card=document.createElement('div');
+      card.className='kcard type-'+c.type;
+      card.title=`${c.id} — ${TYPES[c.type].label}${c.type==='anteroom'?' ('+(c.anteroomVariant==='external'?'External':'Internal')+')':''} — ${c.customer}`;
+      card.innerHTML=`
+        <div class="top">
+          ${c.priority==='Urgent'?'<span class="dot urgent"></span>':c.priority==='High'?'<span class="dot high"></span>':''}
+          <span class="id">${c.id}</span>
+        </div>
+        <div class="progress"><div class="fill" style="width:${prog}%"></div></div>
+        <div class="foot">
+          <div class="avatar">${initials(c.assignee)}</div>
+          <div class="daysbadge ${din>budget?'late':''}">${din}/${budget}d</div>
+        </div>`;
+      card.addEventListener('click',()=>openDrawer(c.id));
+      body.appendChild(card);
+    });
+    board.appendChild(col);
+  });
+  return board;
+}
+function renderPipeline(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  wrap.appendChild(buildKanban());
+  return wrap;
+}
+
+/* ---------- ORDER-TO-INVENTORY MATCHING ----------
+   Greedy match: for each order, pick the home-depot container of the
+   right type/size with the most progress already made. If none exists
+   at home, flag it and note how many exist elsewhere in the network
+   that could be transferred in. */
+function computeOrderMatches(){
+  const used=new Set();
+  return ORDERS.map(o=>{
+    const homeCandidates=STATE.filter(c=>c.type===o.type && c.size===o.size && c.depot===HOME_DEPOT && !used.has(c.id))
+      .sort((a,b)=>overallProgress(b)-overallProgress(a));
+    const best=homeCandidates[0];
+    if(best){
+      used.add(best.id);
+      const remaining=best.checklist.filter(t=>!t.done);
+      return {order:o, container:best, remaining, ready:isReady(best)};
+    }
+    const elsewhere=STATE.filter(c=>c.type===o.type && c.size===o.size && c.depot!==HOME_DEPOT && !used.has(c.id));
+    return {order:o, container:null, remaining:null, ready:false, elsewhereCount:elsewhere.length};
+  });
+}
+
+/* ---------- DEPOT COMMAND (Sitaram's dashboard) ---------- */
+function renderDepotCommand(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+
+  const homeFleet=STATE.filter(c=>c.depot===HOME_DEPOT);
+  const homeLate=homeFleet.filter(isLate).length;
+  const homeReady=homeFleet.filter(isReady).length;
+  const matches=computeOrderMatches();
+  const matchedReady=matches.filter(m=>m.ready).length;
+  const unmatched=matches.filter(m=>!m.container).length;
+
+  wrap.innerHTML=`
+    <div class="cardgrid">
+      <div class="card"><div class="klabel">Home depot fleet</div><div class="kval">${homeFleet.length}</div><div class="kfoot">${homeReady} ready · ${homeLate} delayed</div></div>
+      <div class="card"><div class="klabel">Network-wide fleet</div><div class="kval">${STATE.length}</div><div class="kfoot">across ${DEPOTS.length} depots</div></div>
+      <div class="card"><div class="klabel">Off-lease incoming</div><div class="kval">${OFFLEASE.length}</div><div class="kfoot">${OFFLEASE.filter(o=>o.grade==='C'||o.grade==='D').length} graded C/D — plan repair capacity</div></div>
+      <div class="card"><div class="klabel">Orders needing mapping</div><div class="kval">${ORDERS.length}</div><div class="kfoot ${unmatched?'down':''}">${matchedReady} ready now · ${unmatched} unmatched at home</div></div>
+    </div>
+
+    <div class="depotgrid">
+      <div class="depotpanel" id="dp-home"></div>
+      <div class="depotpanel" id="dp-other"></div>
+      <div class="depotpanel" id="dp-offlease"></div>
+      <div class="depotpanel" id="dp-orders"></div>
+    </div>
+  `;
+
+  /* Panel A — My Depot Inventory Readiness */
+  const dpHome=wrap.querySelector('#dp-home');
+  dpHome.innerHTML=`<div class="depotpanel-head"><h3>My Depot — ${HOME_DEPOT}</h3><span class="sub">${homeFleet.length} units</span></div><div class="depotpanel-body" id="dpHomeBody"></div>`;
+  const dpHomeBody=dpHome.querySelector('#dpHomeBody');
+  if(!homeFleet.length) dpHomeBody.innerHTML=`<div class="empty" style="padding:16px"><svg class="ic"><use href="#i-box"/></svg>No inventory at home depot.</div>`;
+  homeFleet.forEach(c=>{
+    const st=STAGES.find(s=>s.id===c.stage);
+    const prog=overallProgress(c);
+    const row=document.createElement('div');
+    row.className='listrow';
+    row.style.cursor='pointer';
+    row.innerHTML=`<span class="rid">${c.id}</span>
+      <div class="col flex1">
+        <span>${isReady(c)?'<span class="pill success">Ready</span>':st.name}${c.type!=='standard'?' '+typePill(c):''}</span>
+        <div class="progress" style="margin-top:4px;width:140px"><div class="fill ${isReady(c)?'':''}" style="width:${prog}%"></div></div>
+      </div>
+      <span class="muted ${isLate(c)?'daysbadge late':''}">${isLate(c)?'delayed':prog+'%'}</span>`;
+    row.addEventListener('click',()=>openDrawer(c.id));
+    dpHomeBody.appendChild(row);
+  });
+
+  /* Panel B — Other Depots condition visibility */
+  const dpOther=wrap.querySelector('#dp-other');
+  dpOther.innerHTML=`<div class="depotpanel-head"><h3>Other Depots — Network Condition</h3><span class="sub">read-only visibility</span></div><div class="depotpanel-body" id="dpOtherBody"></div>`;
+  const dpOtherBody=dpOther.querySelector('#dpOtherBody');
+  DEPOTS.filter(d=>d!==HOME_DEPOT).forEach(depot=>{
+    const fleet=STATE.filter(c=>c.depot===depot);
+    const avgProg = fleet.length? Math.round(fleet.reduce((a,c)=>a+overallProgress(c),0)/fleet.length):0;
+    const late=fleet.filter(isLate).length;
+    const row=document.createElement('div');
+    row.className='listrow';
+    row.innerHTML=`<span class="rid" style="width:120px">${depot}</span>
+      <div class="col flex1">
+        <span class="muted">${fleet.length} units · avg ${avgProg}% ready</span>
+        <div class="progress" style="margin-top:4px;width:160px"><div class="fill" style="width:${avgProg}%"></div></div>
+      </div>
+      <span class="${late?'daysbadge late':'muted'}">${late} delayed</span>`;
+    dpOtherBody.appendChild(row);
+  });
+
+  /* Panel C — Off-lease incoming, look & feel */
+  const dpOff=wrap.querySelector('#dp-offlease');
+  dpOff.innerHTML=`<div class="depotpanel-head"><h3>Off-Lease Incoming — Look &amp; Feel</h3><span class="sub">IICL grade A-D</span></div><div class="depotpanel-body" id="dpOffBody"></div>`;
+  const dpOffBody=dpOff.querySelector('#dpOffBody');
+  OFFLEASE.slice().sort((a,b)=>a.expected.localeCompare(b.expected)).forEach(o=>{
+    const g=GRADES[o.grade];
+    const row=document.createElement('div');
+    row.className='listrow';
+    row.innerHTML=`<span class="rid">${o.id}</span>
+      <div class="col flex1">
+        <span>${o.customer} — ${o.size}${o.type!=='standard'?' · '+TYPES[o.type].label:''}${o.depot===HOME_DEPOT?'<span class="depothome-badge">HOME</span>':' · '+o.depot}</span>
+        <span class="req">${o.notes}</span>
+      </div>
+      <div class="col" style="align-items:flex-end;gap:3px">
+        <span class="pill ${g.pill}">${o.grade}</span>
+        <span class="muted">ETA ${o.expected}</span>
+      </div>`;
+    dpOffBody.appendChild(row);
+  });
+
+  /* Panel D — Order-to-inventory mapping */
+  const dpOrd=wrap.querySelector('#dp-orders');
+  dpOrd.innerHTML=`<div class="depotpanel-head"><h3>Orders — Mapped to Inventory</h3><span class="sub">${unmatched} unmatched</span></div><div class="depotpanel-body" id="dpOrdBody"></div>`;
+  const dpOrdBody=dpOrd.querySelector('#dpOrdBody');
+  matches.forEach(m=>{
+    const o=m.order;
+    const row=document.createElement('div');
+    row.className='listrow';
+    row.style.cursor=m.container?'pointer':'default';
+    let statusHtml, gapHtml;
+    if(m.container && m.ready){
+      statusHtml='<span class="pill success">Matched · Ready</span>';
+      gapHtml=`<span class="muted">${m.container.id} — nothing outstanding</span>`;
+    } else if(m.container){
+      statusHtml='<span class="pill navy">Matched · In Progress</span>';
+      gapHtml=`<span class="muted">${m.container.id} — ${m.remaining.length} task(s) left</span>`;
+    } else {
+      statusHtml='<span class="pill error">Unmatched</span>';
+      gapHtml=`<span class="muted">${m.elsewhereCount? m.elsewhereCount+' candidate(s) at other depots — consider transfer':'none in network — needs sourcing'}</span>`;
+    }
+    row.innerHTML=`<span class="rid">${o.id}</span>
+      <div class="col flex1">
+        <span>${o.customer} — ${o.qty}× ${o.size}${o.type!=='standard'?' · '+TYPES[o.type].label:''} · needed by ${o.needBy}</span>
+        <span class="req">${o.requirement}</span>
+        ${gapHtml}
+      </div>
+      <div class="col" style="align-items:flex-end">${statusHtml}</div>`;
+    if(m.container) row.addEventListener('click',()=>openDrawer(m.container.id));
+    dpOrdBody.appendChild(row);
+  });
+
+  return wrap;
+}
+
+/* ---------- DASHBOARD ---------- */
+function renderDashboard(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  const active = STATE.filter(c=>!isReady(c));
+  const late = STATE.filter(isLate).length;
+  const avgTurn = Math.round(STATE.reduce((a,c)=>a+totalPlanDays(c),0)/STATE.length);
+  const counts = {standard:0,double:0,anteroom:0};
+  STATE.forEach(c=>counts[c.type]++);
+
+  wrap.innerHTML = `
+  <div class="hero">
+    <div class="hero-grid"></div>
+    <div class="eyebrow">CONTAINER READINESS · PMS</div>
+    <h1>Get every reefer from <em>gate-in</em> to <em>gate-out ready</em> — on schedule.</h1>
+    <div class="hero-stats">
+      <div class="hero-stat"><b>${active.length}</b><span>IN PROGRESS</span></div>
+      <div class="hero-stat"><b>${avgTurn}d</b><span>AVG PLANNED TURNAROUND</span></div>
+      <div class="hero-stat"><b>${counts.double}</b><span>DOUBLE COMPRESSOR</span></div>
+      <div class="hero-stat"><b>${counts.anteroom}</b><span>WITH ANTEROOM</span></div>
+      <div class="hero-stat"><b style="color:${late?'var(--amber)':'#fff'}">${late}</b><span>DELAYED / AT RISK</span></div>
+    </div>
+  </div>
+  <div id="dashKanbanHost" style="flex:1;min-height:0;display:flex;flex-direction:column;"></div>
+  `;
+  wrap.querySelector('#dashKanbanHost').appendChild(buildKanban());
+  return wrap;
+}
+
+/* ---------- TOMORROW'S WORK ---------- */
+function renderTomorrow(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  const items=tomorrowTasks();
+  const totalHrs=Math.round(items.reduce((a,i)=>a+i.task.hrs,0)*10)/10;
+  const byTech={};
+  items.forEach(i=>{ byTech[i.container.assignee]=(byTech[i.container.assignee]||0)+i.task.hrs; });
+  const maxHrs=Math.max(1,...Object.values(byTech));
+  const techRows=Object.entries(byTech).sort((a,b)=>b[1]-a[1])
+    .map(([name,hrs])=>`<div class="stagebar-row"><div class="stagebar-name">${name} <span style="color:var(--text-3)">(backup: ${backupFor(name)})</span></div>
+      <div class="stagebar-track"><div class="stagebar-fill" style="width:${Math.round(hrs/maxHrs*100)}%"><span>${hrs}h</span></div></div>
+      <div style="font-family:var(--f-mono);font-size:10px;color:var(--text-3);width:80px">${items.filter(i=>i.container.assignee===name).length} tasks</div></div>`).join('');
+
+  wrap.innerHTML=`
+    <div class="cardgrid">
+      <div class="card"><div class="klabel">Open tasks required next</div><div class="kval">${items.length}</div><div class="kfoot">across ${new Set(items.map(i=>i.container.id)).size} containers</div></div>
+      <div class="card"><div class="klabel">Estimated labor</div><div class="kval">${totalHrs}h</div><div class="kfoot">sum of task avg-time estimates</div></div>
+      <div class="card"><div class="klabel">Technicians needed</div><div class="kval">${Object.keys(byTech).length}</div><div class="kfoot">+ named backups on call</div></div>
+      <div class="card"><div class="klabel">Already overdue</div><div class="kval">${items.filter(i=>isLate(i.container)).length}</div><div class="kfoot ${items.some(i=>isLate(i.container))?'down':''}">tasks in delayed containers</div></div>
+    </div>
+    <div style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden">
+      <div class="grouphead"><h2>TASK QUEUE — WHO DOES IT, WHO COVERS, HOW LONG IT TAKES</h2><div class="rule"></div></div>
+      <div class="tablewrap">
+        <div class="tablescroll"><table class="dt">
+          <thead><tr><th>Container</th><th>Stage</th><th>Task</th><th>Primary</th><th>Backup</th><th>Avg. Time</th><th>Status</th></tr></thead>
+          <tbody id="tomBody"></tbody>
+        </table></div>
+      </div>
+    </div>
+  `;
+  const tbody=wrap.querySelector('#tomBody');
+  if(!items.length){
+    tbody.innerHTML=`<tr><td colspan="7"><div class="empty"><svg class="ic"><use href="#i-check"/></svg>Nothing outstanding — every container's current-stage checklist is complete.</div></td></tr>`;
+  }
+  items.forEach(({container:c,task:t})=>{
+    const st=STAGES.find(s=>s.id===t.stage);
+    const late=isLate(c);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-family:var(--f-mono);font-weight:600">${c.id}${c.type!=='standard'?' '+typePill(c):''}</td>
+      <td>${st.name}</td>
+      <td>${t.label}${t.onlyFor?`<span class="typeflag ${t.onlyFor[0]}">${t.onlyFor[0]}</span>`:''}</td>
+      <td><span style="display:inline-flex;align-items:center;gap:6px"><span class="avatar" style="width:20px;height:20px;font-size:8.5px">${initials(c.assignee)}</span>${c.assignee}</span></td>
+      <td>${backupFor(c.assignee)}</td>
+      <td style="font-family:var(--f-mono)">${t.hrs}h <span style="color:var(--text-3)">(avg ${avgHoursForLabel(t.label)}h)</span></td>
+      <td>${late?'<span class="pill error">Delayed</span>':c.priority==='Urgent'?'<span class="pill error">Urgent</span>':c.priority==='High'?'<span class="pill warn">High</span>':'<span class="pill neutral">On track</span>'}</td>`;
+    tr.addEventListener('click',()=>openDrawer(c.id));
+    tbody.appendChild(tr);
+  });
+  return wrap;
+}
+
+/* ---------- TIMELINE ---------- */
+function renderTimeline(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  const maxDays=Math.max(...STAGES.map(s=>s.days))+1;
+  let rows='';
+  STAGES.forEach(st=>{
+    const count=STATE.filter(c=>c.stage===st.id).length;
+    const w=Math.max(6,Math.round(st.days/maxDays*100));
+    rows+=`<div class="stagebar-row">
+      <div class="stagebar-name">${st.name}</div>
+      <div class="stagebar-track"><div class="stagebar-fill" style="width:${w}%"><span>${st.days}d</span></div></div>
+      <div style="font-family:var(--f-mono);font-size:10px;color:var(--text-3);width:80px">${count} container${count!==1?'s':''}</div>
+    </div>`;
+  });
+  const totalStd = STAGES.reduce((a,s)=>a+s.days,0);
+  const totalDouble = STAGES.reduce((a,s)=>a+s.days+(s.id==='mechanical'?1:0),0);
+  const totalAnteroom = STAGES.reduce((a,s)=>a+s.days+(s.id==='electrical'?1:0),0);
+  wrap.innerHTML=`
+    <div class="cardgrid">
+      <div class="card"><div class="klabel">Standard Reefer — full path</div><div class="kval">${totalStd}d</div><div class="kfoot">gate-in through release</div></div>
+      <div class="card"><div class="klabel">Double Compressor — full path</div><div class="kval">${totalDouble}d</div><div class="kfoot">+1d for 2nd compressor & failover test</div></div>
+      <div class="card"><div class="klabel">Reefer + Anteroom — full path</div><div class="kval">${totalAnteroom}d</div><div class="kfoot">+1d for mantrap/anteroom systems</div></div>
+    </div>
+    <div class="scrollpane">
+      <div class="grouphead"><h2>PLANNED DURATION PER STAGE</h2><div class="rule"></div></div>
+      <div class="card">${rows}</div>
+    </div>
+  `;
+  return wrap;
+}
+
+/* ---------- FLEET TABLE ---------- */
+function renderFleet(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  wrap.innerHTML=`<div class="tablewrap"><div class="tablescroll"><table class="dt">
+    <thead><tr><th>Container</th><th>Type</th><th>Stage</th><th>Progress</th><th>Days in Stage</th><th>Customer</th><th>Assignee</th><th>Priority</th></tr></thead>
+    <tbody id="fleetBody"></tbody>
+  </table></div></div>`;
+  const q=(document.getElementById('searchbox').value||'').toLowerCase();
+  const rows=STATE.filter(c=> !q || c.id.toLowerCase().includes(q) || c.customer.toLowerCase().includes(q));
+  const tbody=wrap.querySelector('#fleetBody');
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="8"><div class="empty"><svg class="ic"><use href="#i-search"/></svg>No containers match "${q}"</div></td></tr>`;
+  }
+  rows.forEach(c=>{
+    const st=STAGES.find(s=>s.id===c.stage);
+    const prog=overallProgress(c);
+    const din=daysInStage(c);
+    const late=isLate(c);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-family:var(--f-mono);font-weight:600">${c.id}</td>
+      <td>${typePill(c)}</td>
+      <td>${isReady(c)?'<span class="pill success">Ready for Release</span>':st.name}</td>
+      <td style="width:130px"><div class="progress ${isReady(c)?'ok':''}"><div class="fill" style="width:${prog}%"></div></div></td>
+      <td><span class="${late?'daysbadge late':''}">${din}d</span></td>
+      <td>${c.customer}</td>
+      <td>${c.assignee}</td>
+      <td>${c.priority==='Urgent'?'<span class="pill error">Urgent</span>':c.priority==='High'?'<span class="pill warn">High</span>':'<span class="pill neutral">Standard</span>'}</td>`;
+    tr.addEventListener('click',()=>openDrawer(c.id));
+    tbody.appendChild(tr);
+  });
+  return wrap;
+}
+document.getElementById('searchbox')?.addEventListener('input',()=>{ if(VIEW==='fleet') render(); });
+
+/* ---------- OVERDUE ---------- */
+function renderOverdue(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  const late=STATE.filter(isLate);
+  if(!late.length){
+    wrap.innerHTML=`<div class="empty"><svg class="ic"><use href="#i-check"/></svg>Nothing delayed — every container is within its stage time budget.</div>`;
+    return wrap;
+  }
+  wrap.innerHTML=`<div class="tablewrap"><div class="tablescroll"><table class="dt">
+    <thead><tr><th>Container</th><th>Type</th><th>Stage</th><th>Days in Stage</th><th>Budget</th><th>Over by</th><th>Assignee</th></tr></thead>
+    <tbody id="lateBody"></tbody></table></div></div>`;
+  const tbody=wrap.querySelector('#lateBody');
+  late.forEach(c=>{
+    const st=STAGES.find(s=>s.id===c.stage);
+    const din=daysInStage(c), bud=stageBudget(c);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="font-family:var(--f-mono);font-weight:600">${c.id}</td><td>${typePill(c)}</td><td>${st.name}</td><td>${din}d</td><td>${bud}d</td>
+      <td><span class="pill error">+${din-bud}d</span></td><td>${c.assignee}</td>`;
+    tr.addEventListener('click',()=>openDrawer(c.id));
+    tbody.appendChild(tr);
+  });
+  return wrap;
+}
+
+/* ---------- CHECKLIST LIBRARY ---------- */
+function renderChecklistLib(){
+  const wrap=document.createElement('div');
+  wrap.className='viewroot';
+  const scroller=document.createElement('div');
+  scroller.className='scrollpane';
+  STAGES.forEach(st=>{
+    const g=document.createElement('div');
+    g.className='stagegroup';
+    const tasks=STAGE_TASKS[st.id];
+    g.innerHTML=`<div class="stagegroup-head"><span class="n">${st.name}</span><span class="cnt">${tasks.length} tasks · ${st.days}d budget</span></div>
+      <div class="checklist">${tasks.map(([label,hrs,onlyFor])=>`<div class="chkrow"><input type="checkbox" disabled><label>${label}${onlyFor?`<span class="typeflag ${onlyFor[0]}">${onlyFor[0]}</span>`:''}</label><span class="hrs">${hrs}h</span></div>`).join('')}</div>`;
+    scroller.appendChild(g);
+  });
+  wrap.appendChild(scroller);
+  return wrap;
+}
+
+/* ============================================================
+   DRAWER (container detail + checklist interaction)
+   ============================================================ */
+function openDrawer(id){
+  const c=STATE.find(x=>x.id===id);
+  if(!c) return;
+  document.getElementById('dwId').textContent=c.id;
+  const st=STAGES.find(s=>s.id===c.stage);
+  document.getElementById('dwPills').innerHTML=`
+    ${typePill(c)}
+    ${isReady(c)?'<span class="pill success">Ready for Release</span>':`<span class="pill navy">${st.name}</span>`}
+    ${c.priority==='Urgent'?'<span class="pill error">Urgent</span>':c.priority==='High'?'<span class="pill warn">High</span>':''}
+  `;
+  const body=document.getElementById('dwBody');
+  const prog=overallProgress(c);
+  body.innerHTML=`
+    <div class="infogrid">
+      <div><div class="k">Size / Type</div><div class="v">${c.size}</div></div>
+      <div><div class="k">Container Type</div><div class="v">${TYPES[c.type].label}${c.type==='anteroom'?' — '+(c.anteroomVariant==='external'?'External':'Internal'):''}</div></div>
+      <div><div class="k">Customer</div><div class="v">${c.customer}</div></div>
+      <div><div class="k">Depot</div><div class="v">${c.depot}${c.depot===HOME_DEPOT?' (Sitaram)':''}</div></div>
+      <div><div class="k">Assigned Technician</div><div class="v">${c.assignee}</div></div>
+      <div><div class="k">Days in Current Stage</div><div class="v">${daysInStage(c)}d of ${stageBudget(c)}d budget</div></div>
+      <div><div class="k">Planned Total Turnaround</div><div class="v">${totalPlanDays(c)}d</div></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-2);margin-bottom:5px"><span>Overall readiness</span><span>${prog}%</span></div>
+      <div class="progress ${prog===100?'ok':''}"><div class="fill" style="width:${prog}%"></div></div>
+    </div>
+    <div id="dwChecklist"></div>
+  `;
+  const host=body.querySelector('#dwChecklist');
+  STAGES.forEach(st2=>{
+    const items=c.checklist.filter(t=>t.stage===st2.id);
+    if(!items.length) return;
+    const done=items.filter(t=>t.done).length;
+    const g=document.createElement('div');
+    g.className='stagegroup';
+    g.innerHTML=`<div class="stagegroup-head"><span class="n">${st2.name}</span><span class="cnt">${done}/${items.length} done</span></div><div class="checklist"></div>`;
+    const cl=g.querySelector('.checklist');
+    items.forEach((t)=>{
+      const globalIdx=c.checklist.indexOf(t);
+      const row=document.createElement('div');
+      row.className='chkrow'+(t.done?' done':'');
+      row.innerHTML=`<input type="checkbox" ${t.done?'checked':''} id="ck-${globalIdx}"><label for="ck-${globalIdx}">${t.label}${t.onlyFor?`<span class="typeflag ${t.onlyFor[0]}">${t.onlyFor[0]}</span>`:''}</label><span class="hrs">${t.hrs}h</span>`;
+      row.querySelector('input').addEventListener('change',e=>{
+        c.checklist[globalIdx].done=e.target.checked;
+        persist();
+        openDrawer(c.id);
+        render();
+      });
+      cl.appendChild(row);
+    });
+    host.appendChild(g);
+  });
+  document.getElementById('dwFootProgress').textContent=`${prog}% complete · ${c.checklist.filter(t=>t.done).length}/${c.checklist.length} tasks`;
+  document.getElementById('dwAdvance').onclick=()=>advanceStage(c);
+  document.getElementById('dwAdvance').disabled = isReady(c);
+  document.getElementById('dwAdvance').style.opacity = isReady(c)?.5:1;
+  document.getElementById('dwDelete').onclick=()=>{
+    if(confirm(`Remove ${c.id} from the pipeline?`)){
+      STATE=STATE.filter(x=>x.id!==c.id);
+      persist();
+      closeDrawer();
+      render();
+    }
+  };
+  document.getElementById('drawerOverlay').classList.add('show');
+}
+function advanceStage(c){
+  const items=c.checklist.filter(t=>t.stage===c.stage);
+  const incomplete=items.filter(t=>!t.done).length;
+  if(incomplete>0 && !confirm(`${incomplete} task(s) still open in this stage. Advance anyway?`)) return;
+  const idx=stageIdx(c.stage);
+  if(idx<STAGES.length-1){
+    c.stage=STAGES[idx+1].id;
+    c.stageEntered=todayISO();
+    persist();
+    openDrawer(c.id);
+    render();
+  }
+}
+function closeDrawer(){document.getElementById('drawerOverlay').classList.remove('show');}
+document.getElementById('closeDrawer').addEventListener('click',closeDrawer);
+document.getElementById('drawerOverlay').addEventListener('click',e=>{if(e.target.id==='drawerOverlay')closeDrawer();});
+
+/* ============================================================
+   ADD CONTAINER MODAL
+   ============================================================ */
+const addOverlay=document.getElementById('addOverlay');
+const TYPE_HINTS = {
+  standard:'Full base checklist: lights, casing paint, alarm, light switch, T-floor, strip curtains, ISO plugs, logo, painting, PTI.',
+  double:'Everything in the standard checklist, plus a second compressor: function test, refrigerant/leak test and dual-compressor failover test.',
+  anteroom:'Everything in the standard checklist, plus anteroom access/seal check, mantrap alarm test and mantrap interlock test.',
+};
+document.getElementById('f-type').addEventListener('change',e=>{
+  document.getElementById('f-type-hint').textContent = TYPE_HINTS[e.target.value];
+  document.getElementById('f-anteroom-wrap').style.display = e.target.value==='anteroom' ? 'flex':'none';
+});
+const f_depot=document.getElementById('f-depot');
+f_depot.innerHTML = DEPOTS.map(d=>`<option value="${d}"${d===HOME_DEPOT?' selected':''}>${d}${d===HOME_DEPOT?' — Sitaram':''}</option>`).join('');
+document.getElementById('btnAddContainer').addEventListener('click',()=>{
+  ['f-id','f-customer','f-assignee'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-type').value='standard';
+  document.getElementById('f-type-hint').textContent=TYPE_HINTS.standard;
+  document.getElementById('f-anteroom-wrap').style.display='none';
+  f_depot.value=HOME_DEPOT;
+  addOverlay.classList.add('show');
+});
+document.getElementById('closeAdd').addEventListener('click',()=>addOverlay.classList.remove('show'));
+document.getElementById('cancelAdd').addEventListener('click',()=>addOverlay.classList.remove('show'));
+addOverlay.addEventListener('click',e=>{if(e.target.id==='addOverlay')addOverlay.classList.remove('show');});
+document.getElementById('submitAdd').addEventListener('click',()=>{
+  const id=document.getElementById('f-id').value.trim() || uid();
+  const size=document.getElementById('f-size').value;
+  const type=document.getElementById('f-type').value;
+  const anteroomVariant = type==='anteroom' ? document.getElementById('f-anteroom-variant').value : null;
+  const priority=document.getElementById('f-priority').value;
+  const customer=document.getElementById('f-customer').value.trim() || 'Unassigned';
+  const depot=document.getElementById('f-depot').value || HOME_DEPOT;
+  const assignee=document.getElementById('f-assignee').value.trim() || NAMES[Math.floor(Math.random()*NAMES.length)];
+  const c={id,size,type,anteroomVariant,customer,priority,assignee,depot,stage:'gatein',received:todayISO(),stageEntered:todayISO(),notes:'',checklist:buildChecklist(type)};
+  STATE.unshift(c);
+  persist();
+  addOverlay.classList.remove('show');
+  render();
+  openDrawer(c.id);
+});
+
+/* init */
+persist();
+render();
+</script>
+</body>
+</html>
