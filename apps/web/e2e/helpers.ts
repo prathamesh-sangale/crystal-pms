@@ -30,6 +30,15 @@ export async function setTheme(page: Page, theme: 'light' | 'dark'): Promise<voi
   await page.waitForTimeout(150);
 }
 
+/**
+ * Asserts a toast appeared. Scoped to `.toast` because the toast primitive
+ * also renders a hidden copy into a live region for screen readers, so the
+ * text legitimately exists twice in the document.
+ */
+export async function expectToast(page: Page, text: string): Promise<void> {
+  await expect(page.locator('.toast', { hasText: text })).toBeVisible();
+}
+
 /** Opens a specific container's drawer by unit number. */
 export async function openContainer(page: Page, query: string): Promise<void> {
   await page.goto('/fleet');

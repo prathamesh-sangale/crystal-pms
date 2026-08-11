@@ -6,6 +6,8 @@ const API = 'http://localhost:4000';
 export default defineConfig({
   testDir: './e2e',
   outputDir: './test-results',
+  // The suite writes to the database, so it starts from the fixed seed.
+  globalSetup: './e2e/globalSetup.ts',
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

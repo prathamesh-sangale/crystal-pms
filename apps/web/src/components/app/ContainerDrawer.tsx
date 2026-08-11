@@ -21,6 +21,7 @@ import {
   useContainer,
   useRemoveContainer,
   useToggleTask,
+  useUpdateContainer,
 } from '../../lib/queries';
 import { Button } from '../crystal/Button';
 import { CategoryBadge, Progress, StatusPill } from '../crystal/Data';
@@ -28,6 +29,7 @@ import { AsyncRegion, Skeleton, useToast } from '../crystal/Feedback';
 import { CheckboxField } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Drawer } from '../crystal/Overlay';
+import { RichText } from '../crystal/RichText';
 
 /** Opens whenever `?container=<id>` is in the URL, so a unit is linkable. */
 export function ContainerDrawer(): React.ReactElement | null {
@@ -185,7 +187,15 @@ export function ContainerDrawer(): React.ReactElement | null {
           }
         >
           {container && detail && (
-            <DrawerBody container={container} today={today} events={detail.events} backup={detail.backup} onToggle={onToggle} canEdit={can('container:task')} />
+            <DrawerBody
+              container={container}
+              today={today}
+              events={detail.events}
+              backup={detail.backup}
+              onToggle={onToggle}
+              canEdit={can('container:task')}
+              canWriteNotes={can('container:update')}
+            />
           )}
         </AsyncRegion>
       </Drawer>
@@ -256,6 +266,7 @@ function DrawerBody({
   backup,
   onToggle,
   canEdit,
+  canWriteNotes,
 }: {
   container: Container;
   today: string;
@@ -263,8 +274,11 @@ function DrawerBody({
   backup: string | null;
   onToggle: (task: ChecklistItem, next: boolean) => void;
   canEdit: boolean;
+  canWriteNotes: boolean;
 }): React.ReactElement {
   const progress = overallProgress(container);
+  const saveNote = useUpdateContainer();
+  const toast = useToast();
 
   return (
     <div className="stack stack-loose">
@@ -361,6 +375,26 @@ function DrawerBody({
             </section>
           );
         })}
+      </div>
+
+      <div className="stack stack-tight">
+        <span className="lbl">Handover note</span>
+        <RichText
+          label={`Handover note for ${container.id}`}
+          value={container.notes}
+          readOnly={!canWriteNotes}
+          saving={saveNote.isPending}
+          placeholder="What should the next shift know about this unit?"
+          onSave={(html) =>
+            saveNote.mutate(
+              { id: container.id, input: { notes: html } },
+              {
+                onSuccess: () => toast.ok('Note saved', `Recorded against ${container.id}.`),
+                onError: (error) => toast.error('Could not save the note', error.message),
+              }
+            )
+          }
+        />
       </div>
 
       <div className="stack stack-tight">

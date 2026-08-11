@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openContainer, sel, signIn } from './helpers';
+import { expectToast, openContainer, sel, signIn } from './helpers';
 
 test('opening a container from the board deep-links to it', async ({ page }) => {
   await page.goto('/pipeline');
@@ -65,7 +65,7 @@ test('registering and removing a container, end to end', async ({ page }) => {
   await modal.getByRole('button', { name: 'Add to pipeline' }).click();
 
   // A toast confirms it, and the new unit's drawer opens.
-  await expect(page.getByText('Container registered')).toBeVisible();
+  await expectToast(page, 'Container registered');
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByText(id)).toBeVisible();
   await expect(drawer.getByText('Mantrap alarm system test')).toBeVisible();
@@ -76,10 +76,43 @@ test('registering and removing a container, end to end', async ({ page }) => {
   await expect(confirm.getByRole('button', { name: `Remove ${id}` })).toBeVisible();
   await confirm.getByRole('button', { name: `Remove ${id}` }).click();
 
-  await expect(page.getByText('Container removed')).toBeVisible();
+  await expectToast(page, 'Container removed');
   await page.goto('/fleet');
   await sel.fleetSearch(page).fill('TSTU');
   await expect(page.getByText('No containers match this view')).toBeVisible();
+});
+
+test('the handover note formats and saves', async ({ page }) => {
+  await openContainer(page, 'SEBU');
+  const drawer = page.getByRole('dialog');
+
+  const editor = drawer.getByRole('textbox', { name: /Handover note/ });
+  await editor.click();
+  await editor.fill('');
+  await page.keyboard.type('Compressor cycling every 40 minutes');
+
+  // Select the text and bold it through the toolbar.
+  await page.keyboard.press('ControlOrMeta+a');
+  await drawer.getByRole('button', { name: 'Bold' }).click();
+  await expect(drawer.getByRole('button', { name: 'Bold' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(editor.locator('strong')).toHaveText('Compressor cycling every 40 minutes');
+
+  await drawer.getByRole('button', { name: 'Save note' }).click();
+  await expectToast(page, 'Note saved');
+
+  // It survives a reload, so it really reached the server.
+  await page.reload();
+  await expect(
+    page.getByRole('dialog').getByRole('textbox', { name: /Handover note/ }).locator('strong')
+  ).toHaveText('Compressor cycling every 40 minutes');
+
+  // Leave the fixture as the screenshots expect it.
+  const restored = page.getByRole('dialog').getByRole('textbox', { name: /Handover note/ });
+  await restored.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.press('Backspace');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save note' }).click();
+  await expectToast(page, 'Note saved');
 });
 
 test('the theme survives a reload with no hand-written dark styling', async ({ page }) => {

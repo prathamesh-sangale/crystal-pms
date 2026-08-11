@@ -1308,6 +1308,12 @@ button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);bord
   <a href="#s34"><span>34</span> Dividers</a>
   <a href="#s35"><span>35</span> Accordion &amp; carousel</a>
   <a href="#s36"><span>36</span> Do / Don't</a>
+  <div class="toc-group">Patterns</div>
+  <a href="#s37"><span>37</span> Kanban board</a>
+  <a href="#s38"><span>38</span> Responsive table</a>
+  <a href="#s39"><span>39</span> Mobile navigation</a>
+  <a href="#s40"><span>40</span> Data panel</a>
+  <a href="#s41"><span>41</span> Headless bindings</a>
 </nav>
 
 <main class="main">
@@ -1673,10 +1679,16 @@ button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);bord
       <div class="contrastrow" style="background:#FFFFFF;color:#010101;border:1px solid var(--line)">Black on white <b>19.9:1 · AAA</b></div>
       <div class="contrastrow" style="background:#052379;color:#FFFFFF">White on navy <b>13.6:1 · AAA</b></div>
       <div class="contrastrow" style="background:#FBC213;color:#010101">Black on amber <b>11.7:1 · AAA</b></div>
-      <div class="contrastrow" style="background:#FFFFFF;color:#6B7280;border:1px solid var(--line)">Grey on white <b>4.8:1 · AA</b></div>
+      <div class="contrastrow" style="background:#FFFFFF;color:#4B5563;border:1px solid var(--line)">Secondary text on white <b>7.6:1 · AAA</b></div>
+      <div class="contrastrow" style="background:#F2F4F8;color:#656C7A;border:1px solid var(--line)">Tertiary text on surface-2 <b>4.8:1 · AA</b></div>
       <div class="contrastrow" style="background:#052379;color:#FBC213">Amber on navy <b>5.7:1 · AA</b></div>
       <div class="contrastrow" style="background:#FBC213;color:#FFFFFF">White on amber <b>1.7:1 · FAIL</b></div>
-      <div class="spec" style="margin-top:12px"><b>Banned pairing ·</b> white text on amber. Amber always takes black text.</div>
+      <span class="lbl" style="margin-top:16px">Status colours, each on its own tint</span>
+      <div class="contrastrow" style="background:#E8F5EA;color:#157A33">Success <b>4.8:1 · AA</b></div>
+      <div class="contrastrow" style="background:#FDECEA;color:#C5221A">Error <b>5.1:1 · AA</b></div>
+      <div class="contrastrow" style="background:#FFF6DD;color:#8A6400">Warning <b>5.0:1 · AA</b></div>
+      <div class="contrastrow" style="background:#E8F0FE;color:#1565C0">Info <b>5.0:1 · AA</b></div>
+      <div class="spec" style="margin-top:12px"><b>Banned pairing ·</b> white text on amber. Amber always takes black text. <b>Measured, not assumed ·</b> every pair is checked against the surface it actually sits on, not against white. Seven were under the floor before v3.1 — the worst, tertiary text, was 2.5:1.</div>
     </div>
     <div class="panel" data-theme="dark"><span class="ptag">Interaction</span>
       <table class="tokentable">
@@ -2135,6 +2147,7 @@ button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);bord
           <button class="btn btn-primary btn-sm" style="margin-left:auto" data-act="toast-ok" data-msg="Note posted to the shift log">Post note</button>
         </div>
       </div>
+      <div class="spec" style="margin-top:14px"><b>Engine ·</b> the demo on this page still drives formatting with <code>document.execCommand</code>, which browsers have deprecated and are removing. Products must not. Build this on a current editor engine — ProseMirror via TipTap is the one in use — and attach <code class="tok">.rte-area</code> to the editor's own editable element rather than a wrapper, so every rule on this page still applies to the element it was written for. Nothing about the appearance changes.</div>
     </div>
   </div>
 </section>
@@ -2703,9 +2716,155 @@ button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);bord
   </div>
 </section>
 
+<div class="grouphead"><h2>Patterns</h2><span class="rule"></span><span class="count">37 — 41</span></div>
+
+<!-- ============================ 37 KANBAN BOARD ============================ -->
+<section class="sec" id="s37">
+  <div class="sechead"><span class="secnum">37</span><h3>Kanban Board</h3><span class="tag">scroll it sideways</span></div>
+  <p class="secdesc">A pipeline with a fixed set of stages. Columns keep a readable width and the board scrolls sideways — the type never shrinks to fit more columns on screen, because anything under 12px in the display face disappears at 200% zoom. Below 768px the columns stack instead.</p>
+  <div class="pair stack" data-clone>
+    <div class="panel" data-theme="light"><span class="ptag">Light</span>
+      <div class="kanban" role="list" aria-label="Example pipeline">
+        <section class="kcol" role="listitem" aria-label="Gate-in">
+          <header class="kcol-head"><h4>Gate-In &amp; Intake</h4>
+            <div class="kmeta"><span>1d budget</span><span class="kcount">2</span></div></header>
+          <div class="kcol-body">
+            <button class="kcard"><span class="kcard-id">RFCU 445 129-8</span><span class="kcard-sub">Maersk Line</span>
+              <div class="progress" style="margin-top:8px"><div class="fill" style="width:20%"></div></div>
+              <div class="kcard-row"><span class="pill info"><svg class="ic"><use href="#i-refresh"/></svg> On track</span><span class="kcard-days">0/1d</span></div></button>
+            <button class="kcard is-double"><span class="kcard-id">HLXU 903 442-1</span><span class="kcard-sub">Hapag-Lloyd</span>
+              <div class="progress" style="margin-top:8px"><div class="fill" style="width:8%"></div></div>
+              <div class="kcard-row"><span class="pill warn"><svg class="ic"><use href="#i-clock"/></svg> Due today</span><span class="kcard-days">1/1d</span></div></button>
+          </div>
+        </section>
+        <section class="kcol" role="listitem" aria-label="Structural repair">
+          <header class="kcol-head"><h4>Structural &amp; IICL Repair</h4>
+            <div class="kmeta"><span>3d budget</span><span class="kcount">1</span></div></header>
+          <div class="kcol-body">
+            <button class="kcard is-anteroom"><span class="kcard-id">MSCU 771 004-2</span><span class="kcard-sub">MSC</span>
+              <div class="progress" style="margin-top:8px"><div class="fill" style="width:52%"></div></div>
+              <div class="kcard-row"><span class="pill bad"><svg class="ic"><use href="#i-alert"/></svg> Delayed 2d</span><span class="kcard-days">5/3d</span></div></button>
+          </div>
+        </section>
+        <section class="kcol" role="listitem" aria-label="T-floor repair">
+          <header class="kcol-head"><h4>T-Floor Repair</h4>
+            <div class="kmeta"><span>2d budget</span><span class="kcount">0</span></div></header>
+          <div class="kcol-body"><p class="kcol-empty">Nothing here</p></div>
+        </section>
+        <section class="kcol" role="listitem" aria-label="Painting">
+          <header class="kcol-head"><h4>Sandblast &amp; Painting</h4>
+            <div class="kmeta"><span>2d budget</span><span class="kcount">0</span></div></header>
+          <div class="kcol-body"><p class="kcol-empty">Nothing here</p></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <div class="spec"><b>Column ·</b> 200px fixed, surface-2, heading 12.5px Manrope 700 — never smaller. <b>Card ·</b> a real button, so a keyboard reaches every record; 3px left edge encodes the variant and always repeats it in words elsewhere. <b>Board ·</b> <code>min-width:0</code> and <code>overflow-x:auto</code>, so the board scrolls and the page never does. <b>Positioning ·</b> columns and cards are <code>position:relative</code> — an absolutely placed child (a visually-hidden description) that escapes to the page from column nine drags the whole document sideways.</div>
+</section>
+
+<!-- ============================ 38 RESPONSIVE TABLE ============================ -->
+<section class="sec" id="s38">
+  <div class="sechead"><span class="secnum">38</span><h3>Responsive Table</h3><span class="tag">narrow the window past 768px</span></div>
+  <p class="secdesc">A data table is a grid on a desktop and a list of cards on a phone — one component, one set of markup. Each cell carries the label it loses when the header row disappears, the column that names the record becomes the card heading, and columns marked secondary drop out rather than wrapping. Three or four key fields per card, tapping through to the full record.</p>
+  <div class="pair stack">
+    <div class="panel" data-theme="light"><span class="ptag">Add <code class="tok">cards</code> to the wrap</span>
+      <div class="tablewrap cards">
+        <div class="tablescroll">
+          <table class="dt">
+            <caption class="sr-only">Example register</caption>
+            <thead><tr><th scope="col">Container</th><th scope="col">Stage</th><th scope="col">Customer</th><th scope="col">Depot</th><th scope="col">Status</th></tr></thead>
+            <tbody>
+              <tr class="linked">
+                <td data-label="Container" data-lead><button class="dt-rowlink">RFCU 445 129-8</button></td>
+                <td data-label="Stage">Logo, Stencil &amp; Decals</td>
+                <td data-label="Customer">Maersk Line</td>
+                <td data-label="Depot" data-secondary>JNPT Depot</td>
+                <td data-label="Status"><span class="pill bad"><svg class="ic"><use href="#i-alert"/></svg> Delayed 1d</span></td>
+              </tr>
+              <tr class="linked">
+                <td data-label="Container" data-lead><button class="dt-rowlink">ONEU 556 271-9</button></td>
+                <td data-label="Stage">Final QC &amp; Release</td>
+                <td data-label="Customer">ONE</td>
+                <td data-label="Depot" data-secondary>Nhava Sheva Depot</td>
+                <td data-label="Status"><span class="pill ok"><svg class="ic"><use href="#i-check-circle"/></svg> Ready for release</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="spec"><b>Markup ·</b> every <code>&lt;td&gt;</code> carries <code>data-label</code>; exactly one carries <code>data-lead</code>; anything not needed on a card carries <code>data-secondary</code>. <b>Row navigation ·</b> a real <code>&lt;button class="dt-rowlink"&gt;</code> in the leading cell, stretched over the row by its <code>::after</code> — the whole row is clickable and the record is still reachable by keyboard. <b>Never ·</b> a click handler on a bare <code>&lt;tr&gt;</code>.</div>
+</section>
+
+<!-- ============================ 39 MOBILE NAVIGATION ============================ -->
+<section class="sec" id="s39">
+  <div class="sechead"><span class="secnum">39</span><h3>Mobile Navigation</h3><span class="tag">open the sheet</span></div>
+  <p class="secdesc">Below 1024px the sidebar slides in over the content instead of sitting beside it. Same nav items, same active treatment, same group labels — a sheet, not a second navigation. The trigger only exists below the breakpoint.</p>
+  <div class="pair">
+    <div class="panel" data-theme="light"><span class="ptag">Light</span>
+      <div class="row"><button class="iconbtn" id="navSheetOpen" aria-label="Open navigation"><svg class="ic"><use href="#i-list"/></svg></button><span style="font-size:12.5px;color:var(--text-2)">The trigger carries <code class="tok">navtoggle</code>, which is <code>display:none</code> above 1024px.</span></div>
+    </div>
+    <div class="panel" data-theme="dark"><span class="ptag">Rules</span>
+      <div class="alert a-warn"><svg class="ic"><use href="#i-alert"/></svg><div><b>Never just hide the sidebar</b><p>A breakpoint that removes navigation without replacing it leaves a phone with no way to reach any screen but the one it landed on.</p></div></div>
+      <div class="alert a-info"><svg class="ic"><use href="#i-info"/></svg><div><b>272px, left, over a scrim</b><p>Escape and a scrim click close it; selecting an item closes it too. Focus is trapped while it is open and returns to the trigger when it closes.</p></div></div>
+    </div>
+  </div>
+  <div class="spec"><b>Sheet ·</b> 272px / 86vw max, surface background, elevation 4, slides 340ms ease-out from the left. <b>Trigger ·</b> icon button in the top bar, visible only below 1024px.</div>
+</section>
+
+<!-- ============================ 40 DATA PANEL ============================ -->
+<section class="sec" id="s40">
+  <div class="sechead"><span class="secnum">40</span><h3>Data Panel</h3><span class="tag">scroll the body</span></div>
+  <p class="secdesc">A card that owns a scrolling list: a fixed head, its own scrollbar, and a body that never pushes the page taller. Used wherever several lists share one screen.</p>
+  <div class="pair" data-clone>
+    <div class="panel" data-theme="light"><span class="ptag">Light</span>
+      <section class="datapanel" style="max-height:220px" aria-labelledby="dp-demo">
+        <header class="datapanel-head"><h3 id="dp-demo">Off-lease incoming</h3><span class="sub">IICL grade A–D</span></header>
+        <div class="datapanel-body" tabindex="0" role="group" aria-labelledby="dp-demo">
+          <div class="listrow"><span class="listrow-id">OL-1044</span>
+            <span class="listrow-main"><span>CMA CGM — 20ft Reefer</span><span class="listrow-note">Like-new, PTI already current from redelivery port.</span></span>
+            <span class="listrow-end"><span class="pill ok"><svg class="ic"><use href="#i-check-circle"/></svg> Grade A</span><span class="listrow-meta">in 2 days</span></span></div>
+          <div class="listrow"><span class="listrow-id">OL-1042</span>
+            <span class="listrow-main"><span>Maersk Line — 40ft HC Reefer</span><span class="listrow-note">Minor door seal wear, exterior paint fade.</span></span>
+            <span class="listrow-end"><span class="pill info"><svg class="ic"><use href="#i-info"/></svg> Grade B</span><span class="listrow-meta">in 3 days</span></span></div>
+          <div class="listrow"><span class="listrow-id">OL-1045</span>
+            <span class="listrow-main"><span>Cool Carriers — 40ft HC Reefer</span><span class="listrow-note">Compressor #2 faulty at redelivery, roof corrosion noted.</span></span>
+            <span class="listrow-end"><span class="pill bad"><svg class="ic"><use href="#i-breach"/></svg> Grade D</span><span class="listrow-meta">in 7 days</span></span></div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <div class="spec"><b>Body ·</b> <code>tabindex="0"</code> and labelled by the panel heading. A pane that scrolls but cannot be focused is unreachable without a mouse, and an accessibility checker reports it as serious. <b>Row ·</b> use <code>&lt;button class="listrow"&gt;</code> when the row opens something, a <code>&lt;div&gt;</code> when it does not — never a div with a click handler.</div>
+</section>
+
+<!-- ============================ 41 HEADLESS BINDINGS ============================ -->
+<section class="sec" id="s41">
+  <div class="sechead"><span class="secnum">41</span><h3>Headless Bindings</h3><span class="tag">for apps built on behaviour primitives</span></div>
+  <p class="secdesc">Everything above was written for class toggling, which is how this page works. A product built on unstyled behaviour primitives — for focus traps, keyboard handling and ARIA it should not be reimplementing — signals state with a <code class="tok">data-state</code> attribute instead, and positions floating layers itself. These rules let the same classes serve both, so there is never a second visual definition of a menu or a drawer.</p>
+  <div class="pair">
+    <div class="panel" data-theme="light"><span class="ptag">What the bindings do</span>
+      <table class="tokentable">
+        <tr><th>Class</th><th>Bound behaviour</th></tr>
+        <tr><td><code class="tok">.dd-menu</code> <code class="tok">.pop-panel</code> <code class="tok">.ms-panel</code> <code class="tok">.ac-panel</code></td><td>Drops the design system's own offsets when something else is positioning the layer; keeps every visual property</td></tr>
+        <tr><td><code class="tok">.scrim</code> <code class="tok">.modal</code> <code class="tok">.drawer</code> <code class="tok">.sheet</code> <code class="tok">.navdrawer</code></td><td>Animates in and out on <code>data-state</code>, so the panel finishes leaving before it unmounts</td></tr>
+        <tr><td><code class="tok">.acc-body</code> <code class="tok">.acc-head</code></td><td>Opens on <code>data-state</code> rather than a parent <code>.open</code> class</td></tr>
+        <tr><td><code class="tok">.cmdk-item</code></td><td>Cursor row follows <code>data-selected</code></td></tr>
+        <tr><td><code class="tok">.check</code> <code class="tok">.switch</code></td><td>Accepts a button reporting <code>role</code> and <code>data-state</code> where a native input would be</td></tr>
+        <tr><td><code class="tok">.toast</code></td><td>Honours swipe-to-dismiss gestures</td></tr>
+      </table>
+    </div>
+    <div class="panel" data-theme="dark"><span class="ptag">Rules</span>
+      <div class="alert a-ok"><svg class="ic"><use href="#i-check-circle"/></svg><div><b>The classes stay the source of truth</b><p>A binding may neutralise a position or add an animation. It may never change a colour, a size, a radius or a weight — if it does, two definitions of the component now exist.</p></div></div>
+      <div class="alert a-info"><svg class="ic"><use href="#i-info"/></svg><div><b>Tooltip arrows</b><p>The CSS arrow on <code>.bubble</code> is switched off when a primitive positions the bubble, because the arrow has to follow the side it lands on. Use the primitive's own arrow with <code class="tok">.tip-arrow</code>.</p></div></div>
+    </div>
+  </div>
+  <div class="spec"><b>Rule ·</b> a component gets bindings, not a second stylesheet. If a primitive cannot be made to wear these classes, that is an argument against the primitive, not for a new set of classes.</div>
+</section>
+
 <footer class="pagefoot">
-  <div><b>Dashboard Design System v3.0</b> — one token set, light and dark, every component live.</div>
-  <div>36 sections · 4 core colours · 60/25/10/5 · WCAG AA floor</div>
+  <div><b>Dashboard Design System v3.1</b> — one token set, light and dark, every component live.</div>
+  <div>41 sections · 4 core colours · 60/25/10/5 · WCAG AA floor, measured</div>
 </footer>
 
 </main>
