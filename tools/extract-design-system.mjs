@@ -45,6 +45,12 @@ const COMPONENT_SECTIONS = [
   'FEEDBACK · ALERTS · TOASTS',
   'OVERLAYS',
   'STATES · LOADERS · MISC',
+  // Added to the design system while building the PMS — see the report.
+  'KANBAN BOARD',
+  'RESPONSIVE TABLE',
+  'MOBILE NAVIGATION',
+  'DATA PANEL',
+  'HEADLESS BINDINGS',
 ];
 
 /** Sections that hold the theme contract. */

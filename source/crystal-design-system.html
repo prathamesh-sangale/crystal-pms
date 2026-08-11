@@ -955,6 +955,180 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
   .drawer{width:100%;}
 }
 @media (max-width:640px){.ddgrid{grid-template-columns:1fr;}.dp-top{flex-direction:column;}.dp-presets{width:auto;border-right:none;border-bottom:1px solid var(--line);}.dp-months{flex-direction:column;}}
+
+/* ============================================================
+   KANBAN BOARD
+   A pipeline with a fixed set of stages. Columns keep their
+   width and the board scrolls sideways — the type never shrinks
+   to make more columns fit, because 8px type fails at 200% zoom.
+   ============================================================ */
+.kanban{display:flex;gap:var(--s-3);align-items:stretch;overflow-x:auto;overflow-y:hidden;padding-bottom:var(--s-2);scroll-snap-type:x proximity;}
+.kcol{background:var(--surface-2);border-radius:var(--r-md);display:flex;flex-direction:column;flex:0 0 200px;min-width:0;scroll-snap-align:start;}
+.kcol-head{padding:var(--s-3);border-bottom:1px solid var(--line);flex:none;}
+.kcol-head h4{font-family:var(--f-display);font-weight:700;font-size:12.5px;line-height:1.3;margin:0 0 var(--s-1);color:var(--text);}
+.kcol-head .kmeta{display:flex;align-items:center;gap:var(--s-2);font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);}
+.kcol-head .kcount{margin-left:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 8px;color:var(--text-2);font-weight:600;}
+.kcol-body{padding:var(--s-2);display:flex;flex-direction:column;gap:var(--s-2);overflow-y:auto;flex:1;min-height:0;}
+.kcol-empty{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);text-align:center;padding:var(--s-4) var(--s-2);}
+.kcard{display:block;width:100%;text-align:left;font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);
+  border-left:3px solid var(--line-strong);border-radius:var(--r-sm);padding:var(--s-3);cursor:pointer;
+  transition:border-color var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out),transform var(--dur-instant) var(--ease-out);}
+.kcard:hover{border-color:var(--accent);box-shadow:var(--shadow-2);}
+.kcard:active{transform:translateY(1px);}
+.kcard:focus-visible{outline:none;box-shadow:0 0 0 3px var(--surface-2),0 0 0 5px var(--focus);}
+/* The left edge encodes the container variant. It is a repeat of information
+   the card also states in words — never the only carrier of meaning. */
+.kcard.is-double{border-left-color:var(--accent);}
+.kcard.is-anteroom{border-left-color:var(--amber-c);}
+.kcard-id{font-family:var(--f-mono);font-weight:600;font-size:12px;color:var(--text);display:block;}
+.kcard-sub{font-size:11.5px;color:var(--text-2);margin-top:2px;display:block;}
+.kcard-row{display:flex;align-items:center;justify-content:space-between;gap:var(--s-2);margin-top:var(--s-3);}
+.kcard-days{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);}
+.kanban-hint{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:var(--s-2);margin-bottom:var(--s-2);}
+@media (max-width:767px){
+  .kanban{flex-direction:column;overflow-x:visible;}
+  .kcol{flex:none;}
+  .kcol-body{max-height:none;}
+}
+
+/* ============================================================
+   RESPONSIVE TABLE
+   A data table is a grid on a desktop and a list of cards on a
+   phone. Same markup, same component — each cell carries the
+   label it loses when the header row goes away, and columns not
+   marked as key fields drop out rather than wrapping.
+   ============================================================ */
+/* Whole-row navigation that a keyboard can reach: the button in the first
+   cell is the real control, stretched across the row by its ::after. */
+table.dt tr.linked{position:relative;}
+.dt-rowlink{background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;text-align:left;cursor:pointer;}
+.dt-rowlink::after{content:"";position:absolute;inset:0;}
+.dt-rowlink:focus-visible{outline:none;}
+table.dt tr.linked:has(.dt-rowlink:focus-visible) td{background:var(--accent-soft);box-shadow:inset 0 2px 0 var(--focus),inset 0 -2px 0 var(--focus);}
+table.dt tr.linked:has(.dt-rowlink:focus-visible) td:first-child{box-shadow:inset 2px 0 0 var(--focus),inset 0 2px 0 var(--focus),inset 0 -2px 0 var(--focus);}
+table.dt tr.linked:has(.dt-rowlink:focus-visible) td:last-child{box-shadow:inset -2px 0 0 var(--focus),inset 0 2px 0 var(--focus),inset 0 -2px 0 var(--focus);}
+@media (max-width:767px){
+  .tablewrap.cards .tablescroll{max-height:none;overflow:visible;}
+  .tablewrap.cards table.dt,.tablewrap.cards table.dt tbody,.tablewrap.cards table.dt tr,.tablewrap.cards table.dt td{display:block;width:100%;}
+  .tablewrap.cards table.dt thead{display:none;}
+  .tablewrap.cards table.dt tr{border-bottom:1px solid var(--line);padding:var(--s-3) var(--s-4);}
+  .tablewrap.cards table.dt tr:last-child{border-bottom:none;}
+  .tablewrap.cards table.dt td{border:none;padding:3px 0;display:flex;align-items:baseline;gap:var(--s-3);justify-content:space-between;text-align:right;}
+  .tablewrap.cards table.dt td::before{content:attr(data-label);font-family:var(--f-display);font-weight:700;font-size:9.5px;letter-spacing:.9px;
+    text-transform:uppercase;color:var(--text-3);flex:none;text-align:left;}
+  /* The record's own name leads the card, full width, with no label. */
+  .tablewrap.cards table.dt td[data-lead]{display:block;text-align:left;font-family:var(--f-display);font-weight:700;font-size:14px;padding-bottom:var(--s-2);}
+  .tablewrap.cards table.dt td[data-lead]::before{display:none;}
+  .tablewrap.cards table.dt td[data-secondary]{display:none;}
+  .tablewrap.cards table.dt td.num{text-align:right;}
+}
+
+/* ============================================================
+   MOBILE NAVIGATION
+   Below the sidebar breakpoint the nav slides in over the
+   content instead of sitting beside it. Same nav items, same
+   active treatment — a sheet, not a second navigation.
+   ============================================================ */
+.navdrawer{position:fixed;top:0;left:0;bottom:0;width:272px;max-width:86vw;background:var(--surface);color:var(--text);
+  border-right:1px solid var(--line);box-shadow:var(--shadow-4);z-index:var(--z-drawer);display:flex;flex-direction:column;padding:var(--s-3);overflow-y:auto;}
+.navdrawer-head{display:flex;align-items:center;gap:var(--s-3);padding-bottom:var(--s-3);margin-bottom:var(--s-2);border-bottom:1px solid var(--line);}
+.navdrawer-head .close{margin-left:auto;}
+.navtoggle{display:none;}
+@media (max-width:1023px){
+  .navtoggle{display:inline-grid;}
+}
+
+/* ============================================================
+   DATA PANEL
+   A card that owns a scrolling list: fixed head, its own
+   scrollbar, and a body that never pushes the page taller.
+   Used wherever several lists share one screen.
+   ============================================================ */
+.datapanel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.datapanel-head{padding:var(--s-3) var(--s-4);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:var(--s-3);flex:none;}
+.datapanel-head h3{font-family:var(--f-display);font-weight:700;font-size:13px;margin:0;color:var(--text);}
+.datapanel-head .sub{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);margin-left:auto;white-space:nowrap;}
+.datapanel-body{flex:1;min-height:0;overflow-y:auto;padding:0 var(--s-4);}
+.listrow{display:flex;align-items:flex-start;gap:var(--s-3);padding:var(--s-3) 0;border-bottom:1px solid var(--line);font-size:12.5px;}
+.listrow:last-child{border-bottom:none;}
+.listrow-id{font-family:var(--f-mono);font-weight:600;font-size:12px;color:var(--text);flex:none;}
+.listrow-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.listrow-note{font-size:11.5px;color:var(--text-2);line-height:1.5;}
+.listrow-end{display:flex;flex-direction:column;align-items:flex-end;gap:var(--s-1);flex:none;}
+.listrow-meta{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+button.listrow{width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  transition:background var(--dur-fast) var(--ease-out);}
+button.listrow:hover{background:var(--surface-2);}
+button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);border-radius:var(--r-sm);}
+
+/* ============================================================
+   HEADLESS BINDINGS
+   The classes above were written for class toggling. An app
+   built on unstyled behaviour primitives signals state with a
+   `data-state` attribute instead, and positions floating layers
+   itself. These rules let the same classes serve both, so there
+   is never a second visual definition of a menu or a drawer.
+   ============================================================ */
+/* A floating layer that something else is positioning: drop the design
+   system's own offsets, keep every visual property. */
+.dd-menu[data-state],.ms-panel[data-state],.pop-panel[data-state],.ac-panel[data-state]{display:block;position:static;top:auto;left:auto;right:auto;}
+.dd-menu[data-state="open"],.ms-panel[data-state="open"],.pop-panel[data-state="open"],.ac-panel[data-state="open"]{animation:pop var(--dur-base) var(--ease-out);}
+.dd-menu[data-state="closed"],.ms-panel[data-state="closed"],.pop-panel[data-state="closed"],.ac-panel[data-state="closed"]{animation:pop var(--dur-fast) var(--ease-in-out) reverse;}
+.dd-trigger[data-state="open"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+.dd-trigger[data-state="open"] .caret{transform:translateY(-50%) rotate(180deg);}
+
+.bubble[data-state]{position:static;opacity:1;transform:none;pointer-events:none;}
+.bubble[data-state]::after{display:none;}
+.bubble[data-state="open"]{animation:pop var(--dur-fast) var(--ease-out);}
+.tip-arrow{fill:var(--text);}
+
+.scrim[data-state],.overlay-scrim[data-state]{display:flex;opacity:1;pointer-events:auto;}
+.overlay-scrim[data-state]{display:block;}
+.scrim[data-state="open"],.overlay-scrim[data-state="open"]{animation:fade var(--dur-base) var(--ease-out);}
+.scrim[data-state="closed"],.overlay-scrim[data-state="closed"]{animation:fade var(--dur-fast) var(--ease-in-out) reverse;}
+
+.modal[data-state="open"]{animation:rise var(--dur-base) var(--ease-spring);}
+.modal[data-state="closed"]{animation:rise var(--dur-fast) var(--ease-in-out) reverse;}
+
+.drawer[data-state]{transform:none;transition:none;}
+.drawer[data-state="open"]{animation:drawer-in var(--dur-slow) var(--ease-out);}
+.drawer[data-state="closed"]{animation:drawer-out var(--dur-base) var(--ease-in-out) forwards;}
+@keyframes drawer-in{from{transform:translateX(100%);}to{transform:none;}}
+@keyframes drawer-out{from{transform:none;}to{transform:translateX(100%);}}
+
+.navdrawer[data-state="open"]{animation:navdrawer-in var(--dur-slow) var(--ease-out);}
+.navdrawer[data-state="closed"]{animation:navdrawer-out var(--dur-base) var(--ease-in-out) forwards;}
+@keyframes navdrawer-in{from{transform:translateX(-100%);}to{transform:none;}}
+@keyframes navdrawer-out{from{transform:none;}to{transform:translateX(-100%);}}
+
+.sheet[data-state]{transform:none;transition:none;}
+.sheet[data-state="open"]{animation:sheet-in var(--dur-slow) var(--ease-out);}
+.sheet[data-state="closed"]{animation:sheet-out var(--dur-base) var(--ease-in-out) forwards;}
+@keyframes sheet-in{from{transform:translateY(100%);}to{transform:none;}}
+@keyframes sheet-out{from{transform:none;}to{transform:translateY(100%);}}
+
+.toast[data-state="closed"]{animation:slideout var(--dur-base) var(--ease-in-out) forwards;}
+.toast[data-swipe="move"]{transform:translateX(var(--radix-toast-swipe-move-x,0));}
+.toast[data-swipe="cancel"]{transform:translateX(0);transition:transform var(--dur-fast) var(--ease-out);}
+.toast[data-swipe="end"]{animation:slideout var(--dur-fast) var(--ease-out) forwards;}
+
+/* Native inputs restyled by the system keep working when a headless
+   primitive replaces them with a button that reports its own state. */
+.check button[role="checkbox"]{appearance:none;margin:0;width:18px;height:18px;border:1.5px solid var(--line-strong);border-radius:5px;
+  background:var(--surface);display:grid;place-items:center;cursor:pointer;flex:none;padding:0;transition:all var(--dur-fast) var(--ease-out);}
+.check button[role="checkbox"][data-state="checked"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);}
+.check button[role="checkbox"]:hover:not(:disabled){border-color:var(--accent);}
+.check button[role="checkbox"]:focus-visible{outline:none;box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--focus);}
+.check button[role="checkbox"]:disabled{background:var(--surface-2);border-color:var(--line);cursor:not-allowed;}
+.check button[role="checkbox"] .ic{width:12px;height:12px;stroke-width:3;}
+.switch button[role="switch"]{appearance:none;margin:0;padding:0;border:none;width:40px;height:22px;border-radius:999px;background:var(--line-strong);
+  position:relative;cursor:pointer;flex:none;transition:background var(--dur-base) var(--ease-out);}
+.switch button[role="switch"] > span{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;display:block;
+  box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform var(--dur-base) var(--ease-spring);}
+.switch button[role="switch"][data-state="checked"]{background:var(--accent);}
+.switch button[role="switch"][data-state="checked"] > span{transform:translateX(18px);}
+.switch button[role="switch"]:focus-visible{outline:none;box-shadow:0 0 0 3px var(--bg),0 0 0 5px var(--focus);}
+.switch button[role="switch"]:disabled{opacity:.45;cursor:not-allowed;}
 </style>
 </head>
 <body class="specs-on">
