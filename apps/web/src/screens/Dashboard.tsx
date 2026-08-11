@@ -22,7 +22,7 @@ export function Dashboard(): React.ReactElement {
       skeleton={
         <div className="stack stack-loose">
           <Skeleton height={168} radius={14} />
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             {[0, 1, 2, 3].map((i) => (
               <StatCard key={i} label="" value="" loading />
             ))}
@@ -52,7 +52,7 @@ export function Dashboard(): React.ReactElement {
             </p>
           </HeroCard>
 
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             <StatCard
               icon="alert"
               label="Delayed / at risk"

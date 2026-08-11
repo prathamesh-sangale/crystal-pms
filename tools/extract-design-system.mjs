@@ -46,6 +46,9 @@ const COMPONENT_SECTIONS = [
   'OVERLAYS',
   'STATES · LOADERS · MISC',
   // Added to the design system while building the PMS — see the report.
+  'SCROLLBAR',
+  'CHECKLIST',
+  'ENTRANCE MOTION',
   'KANBAN BOARD',
   'RESPONSIVE TABLE',
   'MOBILE NAVIGATION',

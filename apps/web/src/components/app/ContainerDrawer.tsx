@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { isStageIncomplete, RequestError, type ContainerEvent } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { cx } from '../../lib/cx';
 import { formatDate, formatDateTime, formatHours } from '../../lib/format';
 import {
   useAdvanceStage,
@@ -128,6 +129,7 @@ export function ContainerDrawer(): React.ReactElement | null {
     <>
       <Drawer
         open
+        wide
         onOpenChange={(next) => !next && close()}
         onCloseAutoFocus={restoreFocus}
         title={<span className="mono">{container?.id ?? id}</span>}
@@ -336,17 +338,17 @@ function DrawerBody({
           return (
             <section
               key={stage.id}
-              className="accordion"
-              style={isCurrent ? { borderColor: 'var(--accent)' } : undefined}
+              className={cx('checklist-group', isCurrent && 'current')}
+              aria-label={`${stage.name} — ${done} of ${items.length} complete`}
             >
-              <h3 className="acc-head" style={{ cursor: 'default' }}>
+              <h3 className="checklist-head">
                 {isCurrent && <Icon name="pin" size="sm" />}
                 {stage.name}
-                <span className="kbd" style={{ marginLeft: 'auto' }}>
+                <span className="count">
                   {done}/{items.length}
                 </span>
               </h3>
-              <div style={{ padding: 'var(--s-1) var(--s-2) var(--s-2)' }}>
+              <div className="checklist">
                 {items.map((task) => (
                   <CheckboxField
                     key={task.key}

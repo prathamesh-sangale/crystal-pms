@@ -143,6 +143,7 @@ export function Drawer({
   badges,
   footer,
   onCloseAutoFocus,
+  wide,
   children,
 }: {
   open: boolean;
@@ -151,6 +152,8 @@ export function Drawer({
   subtitle?: React.ReactNode;
   badges?: React.ReactNode;
   footer?: React.ReactNode;
+  /** For a panel holding a working list rather than a summary. */
+  wide?: boolean;
   /**
    * Where focus lands when this closes. Without it the primitive returns focus
    * to its trigger — but a drawer opened from a URL has no trigger, so the
@@ -163,7 +166,7 @@ export function Drawer({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="overlay-scrim" />
-        <Dialog.Content className="drawer" onCloseAutoFocus={onCloseAutoFocus}>
+        <Dialog.Content className={cx('drawer', wide && 'wide')} onCloseAutoFocus={onCloseAutoFocus}>
           <div className="modal-head" style={{ borderBottom: '1px solid var(--line)' }}>
             <div style={{ minWidth: 0 }}>
               <Dialog.Title asChild>

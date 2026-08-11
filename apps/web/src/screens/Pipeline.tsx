@@ -28,7 +28,7 @@ export function Pipeline(): React.ReactElement {
           </EmptyState>
         ) : (
           <>
-            <div className="cardgrid">
+            <div className="cardgrid stagger">
               <StatCard label="In the pipeline" value={o.totals.active} foot="not yet released" />
               <StatCard
                 label="Busiest stage"

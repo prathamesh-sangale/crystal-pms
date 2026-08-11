@@ -21,7 +21,7 @@ export function ChecklistLibrary(): React.ReactElement {
       onRetry={() => void query.refetch()}
       skeleton={
         <div className="stack stack-loose">
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             {[0, 1, 2].map((i) => (
               <StatCard key={i} label="" value="" loading />
             ))}
@@ -32,7 +32,7 @@ export function ChecklistLibrary(): React.ReactElement {
     >
       {library && (
         <>
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             <StatCard
               icon="doc"
               label="Tasks in the library"

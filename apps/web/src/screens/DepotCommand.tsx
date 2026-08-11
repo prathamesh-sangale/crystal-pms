@@ -37,12 +37,12 @@ export function DepotCommand(): React.ReactElement {
       onRetry={() => void query.refetch()}
       skeleton={
         <div className="stack stack-loose">
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             {[0, 1, 2, 3].map((i) => (
               <StatCard key={i} label="" value="" loading />
             ))}
           </div>
-          <div className="quadgrid">
+          <div className="quadgrid stagger">
             {[0, 1, 2, 3].map((i) => (
               <div className="datapanel" key={i} style={{ height: '340px', padding: 'var(--s-4)' }}>
                 <Skeleton height={14} width={160} />
@@ -60,7 +60,7 @@ export function DepotCommand(): React.ReactElement {
     >
       {o && (
         <>
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             <StatCard
               icon="warehouse"
               label="Home depot fleet"
@@ -87,7 +87,7 @@ export function DepotCommand(): React.ReactElement {
             />
           </div>
 
-          <div className="quadgrid">
+          <div className="quadgrid stagger">
             {/* Panel 1 — what is physically here */}
             <DataPanel title={o.homeDepot} meta={plural(o.totals.home, 'unit')}>
               {o.containers.filter((c) => c.depot === o.homeDepot).length === 0 ? (
@@ -107,14 +107,20 @@ export function DepotCommand(): React.ReactElement {
                         <span className="listrow-id">{container.id}</span>
                         <span className="listrow-main">
                           <span className="truncate">{container.customer}</span>
-                          <Progress
-                            value={overallProgress(container)}
-                            label={`${container.id} readiness`}
-                          />
+                          {/* The bar and its number belong together — split
+                              across the row they read as two facts. */}
+                          <span className="cluster" style={{ flexWrap: 'nowrap' }}>
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <Progress
+                                value={overallProgress(container)}
+                                label={`${container.id} readiness`}
+                              />
+                            </span>
+                            <span className="listrow-meta">{overallProgress(container)}%</span>
+                          </span>
                         </span>
                         <span className="listrow-end">
                           <StatusPill status={containerStatus(container, o.today)} />
-                          <span className="listrow-meta">{overallProgress(container)}%</span>
                         </span>
                       </button>
                     ))

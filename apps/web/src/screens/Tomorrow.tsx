@@ -125,7 +125,7 @@ export function Tomorrow(): React.ReactElement {
       onRetry={() => void query.refetch()}
       skeleton={
         <div className="stack stack-loose">
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             {[0, 1, 2, 3].map((i) => (
               <StatCard key={i} label="" value="" loading />
             ))}
@@ -136,7 +136,7 @@ export function Tomorrow(): React.ReactElement {
     >
       {o && (
         <>
-          <div className="cardgrid">
+          <div className="cardgrid stagger">
             <StatCard
               icon="list"
               label="Open tasks required next"

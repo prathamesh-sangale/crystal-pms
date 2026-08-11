@@ -138,7 +138,10 @@ export function AppShell(): React.ReactElement {
           )}
         </header>
 
-        <main className="appcontent" id="main" tabIndex={-1}>
+        {/* Keyed on the route so the entrance replays on every navigation —
+            220ms, ease-out, 6px. Enough to say "this is new", not enough to
+            wait for. Collapses to nothing under prefers-reduced-motion. */}
+        <main className="appcontent rise-in" id="main" tabIndex={-1} key={pathname}>
           {current && (
             <div className="pagehead">
               <div className="pagehead-text">

@@ -90,7 +90,10 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="tablewrap cards">
+    // `cards` is the phone treatment; `fill` lets the table use the height it
+    // has instead of stopping at the 330px a table embedded in other content
+    // should stop at.
+    <div className="tablewrap cards fill">
       {toolbar && <div className="tabletop">{toolbar}</div>}
       <div className="tablescroll">
         <table className="dt">

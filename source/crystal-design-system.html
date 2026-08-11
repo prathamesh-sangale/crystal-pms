@@ -672,6 +672,9 @@ code.tok{font-family:var(--f-mono);background:var(--surface-2);color:var(--accen
 .tablewrap{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden;}
 .tabletop{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--line);flex-wrap:wrap;}
 .tablescroll{max-height:330px;overflow:auto;}
+/* The cap above suits a table sitting among other content. A table that is
+   the screen should use its height instead of leaving the page half empty. */
+.tablewrap.fill .tablescroll{max-height:none;}
 table.dt{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;}
 table.dt th{position:sticky;top:0;z-index:2;background:var(--surface-2);text-align:left;font-family:var(--f-display);font-weight:700;
   font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--text-2);padding:10px 13px;white-space:nowrap;
@@ -686,7 +689,13 @@ table.dt th[data-dir="asc"] .sortic i.up,table.dt th[data-dir="desc"] .sortic i.
 table.dt th[data-dir]{color:var(--accent);}
 table.dt td{padding:11px 13px;border-bottom:1px solid var(--line);color:var(--text);vertical-align:middle;}
 table.dt tbody tr{transition:background var(--dur-fast) var(--ease-out);}
+table.dt tbody td{transition:background var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);}
 table.dt tbody tr:hover td{background:var(--surface-2);}
+/* A row that opens something says so on hover: the tint lifts to the accent
+   and an edge appears down the left. Ambiguous hover is worse than none. */
+table.dt tbody tr.linked{cursor:pointer;}
+table.dt tbody tr.linked:hover td{background:var(--accent-soft);}
+table.dt tbody tr.linked:hover td:first-child{box-shadow:inset 3px 0 0 var(--accent);}
 table.dt tbody tr.sel td{background:var(--accent-soft);}
 table.dt .cellmain{font-weight:600;}
 table.dt .cellsub{font-size:10.5px;color:var(--text-3);font-family:var(--f-mono);margin-top:2px;}
@@ -799,6 +808,11 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
   box-shadow:var(--shadow-4);transform:translateX(100%);transition:transform var(--dur-slow) var(--ease-out);display:flex;flex-direction:column;
   border-left:1px solid var(--line);}
 .drawer.on{transform:none;}
+/* 390px is right for a summary. A panel that has to hold a working list —
+   a checklist, a long history — needs the wider variant, or every label
+   wraps and the eye has nowhere to rest. */
+.drawer.wide{width:560px;}
+@media (max-width:640px){.drawer.wide{width:100%;}}
 .sheet{position:fixed;left:0;right:0;bottom:0;background:var(--surface);color:var(--text);z-index:var(--z-drawer);border-radius:18px 18px 0 0;
   box-shadow:var(--shadow-4);transform:translateY(100%);transition:transform var(--dur-slow) var(--ease-out);border:1px solid var(--line);border-bottom:none;}
 .sheet.on{transform:none;}
@@ -988,6 +1002,73 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
 @media (max-width:640px){.ddgrid{grid-template-columns:1fr;}.dp-top{flex-direction:column;}.dp-presets{width:auto;border-right:none;border-bottom:1px solid var(--line);}.dp-months{flex-direction:column;}}
 
 /* ============================================================
+   SCROLLBAR
+   The browser default is a different width, colour and shape on
+   every platform, and on a dark surface it is a bright grey bar
+   that reads as content. One thin scrollbar, drawn from tokens,
+   so it recedes in both themes.
+   ============================================================ */
+[data-theme],html{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;}
+::-webkit-scrollbar{width:11px;height:11px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{
+  background:var(--line-strong);border-radius:var(--r-full);
+  /* transparent border + background-clip leaves the thumb inset from the
+     track, so it reads as a floating pill rather than a filled gutter */
+  border:3px solid transparent;background-clip:content-box;
+  transition:background var(--dur-fast) var(--ease-out);
+}
+::-webkit-scrollbar-thumb:hover{background:var(--text-3);background-clip:content-box;}
+::-webkit-scrollbar-thumb:active{background:var(--accent);background-clip:content-box;}
+::-webkit-scrollbar-corner{background:transparent;}
+
+/* ============================================================
+   CHECKLIST
+   A list of things to tick, each with a time estimate. The
+   checkbox itself is section 13; this is the row around it.
+   ============================================================ */
+.checklist-group{border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);overflow:hidden;
+  transition:border-color var(--dur-base) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);}
+.checklist-group + .checklist-group{margin-top:var(--s-3);}
+/* the stage the work is actually in */
+.checklist-group.current{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+.checklist-head{display:flex;align-items:center;gap:var(--s-2);padding:var(--s-3) var(--s-4);
+  background:var(--surface-2);border-bottom:1px solid var(--line);
+  font-family:var(--f-display);font-weight:700;font-size:12.5px;color:var(--text);}
+.checklist-head .ic{color:var(--accent);}
+.checklist-head .count{margin-left:auto;font-family:var(--f-mono);font-size:10.5px;color:var(--text-2);
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-full);padding:1px 8px;}
+.checklist{padding:var(--s-2);display:flex;flex-direction:column;}
+.chkrow{display:flex;align-items:center;gap:var(--s-3);padding:var(--s-2) var(--s-3);border-radius:var(--r-sm);
+  transition:background var(--dur-fast) var(--ease-out);}
+.chkrow:hover{background:var(--surface-2);}
+.chkrow > .check{flex:none;min-height:0;}
+.chkrow label{flex:1;min-width:0;font-size:12.5px;line-height:1.5;color:var(--text);cursor:pointer;}
+.chkrow .hrs{flex:none;font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;}
+.chkrow.done label{color:var(--text-3);text-decoration:line-through;text-decoration-thickness:1px;}
+.chkrow:has(button[role="checkbox"]:disabled) label,.chkrow:has(input:disabled) label{cursor:not-allowed;color:var(--text-3);}
+
+/* ============================================================
+   ENTRANCE MOTION
+   Rule 14: quick and subtle. A screen settles in under 220ms and
+   nothing bounces. These exist so every screen enters the same
+   way instead of each one inventing its own.
+   ============================================================ */
+@keyframes rise-in{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes fade-in{from{opacity:0;}to{opacity:1;}}
+.rise-in{animation:rise-in var(--dur-base) var(--ease-out) both;}
+.fade-in{animation:fade-in var(--dur-base) var(--ease-out) both;}
+/* Children enter in sequence, no index to thread through the markup. The
+   ladder stops at six so the last card is always in under a quarter second,
+   however many there are. */
+.stagger > *{animation:rise-in var(--dur-base) var(--ease-out) both;}
+.stagger > *:nth-child(2){animation-delay:40ms;}
+.stagger > *:nth-child(3){animation-delay:80ms;}
+.stagger > *:nth-child(4){animation-delay:120ms;}
+.stagger > *:nth-child(5){animation-delay:160ms;}
+.stagger > *:nth-child(n+6){animation-delay:200ms;}
+
+/* ============================================================
    KANBAN BOARD
    A pipeline with a fixed set of stages. Columns keep their
    width and the board scrolls sideways — the type never shrinks
@@ -1094,8 +1175,12 @@ table.dt tr.linked:has(.dt-rowlink:focus-visible) td:last-child{box-shadow:inset
 .listrow-end{display:flex;flex-direction:column;align-items:flex-end;gap:var(--s-1);flex:none;}
 .listrow-meta{font-family:var(--f-mono);font-size:10.5px;color:var(--text-3);white-space:nowrap;}
 button.listrow{width:100%;background:none;border-left:none;border-right:none;border-top:none;text-align:left;font:inherit;color:inherit;cursor:pointer;
-  transition:background var(--dur-fast) var(--ease-out);}
-button.listrow:hover{background:var(--surface-2);}
+  position:relative;transition:background var(--dur-fast) var(--ease-out),box-shadow var(--dur-fast) var(--ease-out);}
+/* Same hover language as a table row that opens something: accent tint, edge
+   on the left. The negative inline margin lets the tint reach the panel edge
+   while the text stays aligned with everything above it. */
+button.listrow{margin:0 calc(var(--s-3) * -1);padding-left:var(--s-3);padding-right:var(--s-3);width:calc(100% + var(--s-5));}
+button.listrow:hover{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent);}
 button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);border-radius:var(--r-sm);}
 
 /* ============================================================

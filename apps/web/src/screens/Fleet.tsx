@@ -81,8 +81,13 @@ export function Fleet(): React.ReactElement {
         header: 'Readiness',
         meta: { label: 'Readiness' },
         cell: (info) => (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)', minWidth: '120px' }}>
-            <Progress value={info.getValue()} label={`${info.row.original.id} readiness`} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)', minWidth: '132px' }}>
+            {/* The bar is a flex item with no intrinsic width, so it needs to
+                be told to grow — otherwise it collapses and only the number
+                shows. */}
+            <span style={{ flex: 1, minWidth: '56px' }}>
+              <Progress value={info.getValue()} label={`${info.row.original.id} readiness`} />
+            </span>
             <span className="mono subtle" style={{ fontSize: '11px' }}>
               {info.getValue()}%
             </span>
