@@ -41,10 +41,14 @@ export function AppShell(): React.ReactElement {
               key={item.to}
               to={item.to}
               onClick={onNavigate}
+              // Drives the dot on the icon while the rail is collapsed.
+              data-tally={tally ? '' : undefined}
               className={({ isActive }) => cx('navitem', isActive && 'on')}
             >
               <Icon name={item.icon} size="sm" />
-              {item.label}
+              {/* Faded rather than removed when collapsed, so the item keeps
+                  its accessible name at every width. */}
+              <span className="navitem-label">{item.label}</span>
               {tally !== null && tally !== undefined && (
                 <span className="tally">
                   {tally}
@@ -63,29 +67,33 @@ export function AppShell(): React.ReactElement {
         Skip to content
       </a>
 
-      <aside className="side" aria-label="Sections">
-        <div className="side-brand">
-          <span className="mark" aria-hidden="true">
-            <i />
-          </span>
-          ReeferReady
-        </div>
-        <nav>{navItems()}</nav>
-        <div className="side-foot">
-          <Avatar name={user?.name ?? '—'} size="sm" />
-          <div style={{ minWidth: 0 }}>
-            <div
-              className="truncate"
-              style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px' }}
-            >
-              {user?.name}
-            </div>
-            <div className="truncate" style={{ fontSize: '10px', color: 'var(--text-3)' }}>
-              {user?.role}
+      {/* The slot holds the collapsed width; the rail floats above the content
+          when it expands, so hovering it never reflows the page. */}
+      <div className="rail-slot">
+        <aside className="side rail" aria-label="Sections">
+          <div className="side-brand">
+            <span className="mark" aria-hidden="true">
+              <i />
+            </span>
+            <span className="side-brand-label">ReeferReady</span>
+          </div>
+          <nav>{navItems()}</nav>
+          <div className="side-foot">
+            <Avatar name={user?.name ?? '—'} size="sm" />
+            <div className="side-foot-label" style={{ minWidth: 0 }}>
+              <div
+                className="truncate"
+                style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px' }}
+              >
+                {user?.name}
+              </div>
+              <div className="truncate" style={{ fontSize: '10px', color: 'var(--text-3)' }}>
+                {user?.role}
+              </div>
             </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
       <NavSheet open={navOpen} onOpenChange={setNavOpen} title="ReeferReady">
         <nav>{navItems(() => setNavOpen(false))}</nav>

@@ -9,7 +9,7 @@ test.describe('phone', () => {
     await page.goto('/depot');
 
     // The permanent rail is gone, not just hidden with nothing to replace it.
-    await expect(page.locator('aside.side')).toBeHidden();
+    await expect(page.locator('.rail-slot')).toBeHidden();
 
     await page.getByRole('button', { name: 'Open navigation' }).click();
     const sheet = page.getByRole('dialog', { name: 'ReeferReady' });
@@ -60,6 +60,45 @@ test.describe('phone', () => {
 
 test.describe('desktop', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('the sidebar rail expands on hover without moving the content', async ({ page }) => {
+    await page.goto('/depot');
+    const rail = page.locator('aside.side.rail');
+    const heading = page.getByRole('heading', { level: 1, name: 'Depot Command' });
+    await expect(heading).toBeVisible();
+
+    const collapsed = await rail.evaluate((el: HTMLElement) => el.getBoundingClientRect().width);
+    const contentBefore = await heading.evaluate((el: HTMLElement) => el.getBoundingClientRect().left);
+    expect(collapsed).toBe(64);
+
+    await rail.hover();
+    await expect
+      .poll(() => rail.evaluate((el: HTMLElement) => Math.round(el.getBoundingClientRect().width)))
+      .toBe(212);
+
+    // The panel floats over the page; nothing underneath may shift.
+    const contentAfter = await heading.evaluate((el: HTMLElement) => el.getBoundingClientRect().left);
+    expect(contentAfter).toBe(contentBefore);
+  });
+
+  test('a keyboard reaches the nav, and the labels are always announced', async ({ page }) => {
+    await page.goto('/depot');
+    await expect(page.getByRole('heading', { level: 1, name: 'Depot Command' })).toBeVisible();
+
+    // Collapsed, the label is faded — but it must still be the item's name.
+    const link = page.getByRole('link', { name: /Readiness Pipeline/ });
+    await expect(link).toBeVisible();
+
+    // Focus opens the rail, so a keyboard user sees what a mouse user sees.
+    await link.focus();
+    await expect
+      .poll(() =>
+        page
+          .locator('aside.side.rail')
+          .evaluate((el: HTMLElement) => Math.round(el.getBoundingClientRect().width))
+      )
+      .toBe(212);
+  });
 
   test('the kanban scrolls inside itself, never the page', async ({ page }) => {
     await page.goto('/pipeline');

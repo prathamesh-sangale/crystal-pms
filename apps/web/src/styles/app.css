@@ -27,22 +27,16 @@ body {
   background: var(--bg);
 }
 
-.appshell > .side {
-  height: 100dvh;
-  position: sticky;
-  top: 0;
-  overflow-y: auto;
-}
-
 .appshell > .appmain {
   min-width: 0;
   min-height: 100dvh;
 }
 
 /* Below the sidebar breakpoint the nav becomes a sheet (design system:
- * mobile navigation), so the permanent rail is removed from the flow. */
+ * mobile navigation), so the rail is removed from the flow — the design
+ * system hides `.rail-slot` there and this hides the panel with it. */
 @media (max-width: 1023px) {
-  .appshell > .side {
+  .appshell > .rail-slot .side {
     display: none;
   }
 }

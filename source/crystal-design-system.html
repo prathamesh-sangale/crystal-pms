@@ -537,6 +537,17 @@ code.tok{font-family:var(--f-mono);background:var(--surface-2);color:var(--accen
 .navitem:hover{background:var(--surface-2);color:var(--text);}
 .navitem.on{background:var(--accent-soft);color:var(--accent);}
 .navitem.on .ic{color:var(--accent);}
+/* An edge that grows in from the left on hover and stays for the active item.
+   It is drawn on a pseudo-element rather than a border so nothing shifts by a
+   pixel when it appears. */
+.navitem::before{
+  content:"";position:absolute;left:0;top:50%;width:3px;height:0;border-radius:0 var(--r-sm) var(--r-sm) 0;
+  background:var(--accent);transform:translateY(-50%);
+  transition:height var(--dur-fast) var(--ease-out);
+}
+.navitem{position:relative;}
+.navitem:hover::before{height:16px;}
+.navitem.on::before{height:22px;}
 .navitem .ic{width:17px;height:17px;color:var(--text-3);}
 .navitem .tally{margin-left:auto;font-family:var(--f-mono);font-size:9.5px;background:var(--amber-c);color:var(--on-amber);
   padding:1px 6px;border-radius:999px;font-weight:600;}
@@ -1008,9 +1019,24 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
    that reads as content. One thin scrollbar, drawn from tokens,
    so it recedes in both themes.
    ============================================================ */
-[data-theme],html{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;}
-::-webkit-scrollbar{width:11px;height:11px;}
+/* Two engines, and they must not be addressed at the same time.
+ *
+ * `scrollbar-width` does NOT inherit; `scrollbar-color` DOES. Setting both on
+ * a root element therefore gives every scroll container the colour but not the
+ * width — and in Chromium the mere presence of `scrollbar-color` switches the
+ * ::-webkit-scrollbar rules off. The result is the platform default scrollbar,
+ * arrow buttons and all, which is what this is here to remove.
+ *
+ * So: the standard properties are quarantined behind a feature query for
+ * engines that have no ::-webkit-scrollbar, and Chromium/WebKit gets the
+ * pseudo-elements with nothing competing. */
+@supports not selector(::-webkit-scrollbar){
+  *{scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;}
+}
+::-webkit-scrollbar{width:12px;height:12px;}
 ::-webkit-scrollbar-track{background:transparent;}
+/* No stepper arrows — they are a platform habit, not a control anyone uses. */
+::-webkit-scrollbar-button{display:none;width:0;height:0;}
 ::-webkit-scrollbar-thumb{
   background:var(--line-strong);border-radius:var(--r-full);
   /* transparent border + background-clip leaves the thumb inset from the
@@ -1021,6 +1047,46 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
 ::-webkit-scrollbar-thumb:hover{background:var(--text-3);background-clip:content-box;}
 ::-webkit-scrollbar-thumb:active{background:var(--accent);background-clip:content-box;}
 ::-webkit-scrollbar-corner{background:transparent;}
+
+/* ============================================================
+   SIDEBAR RAIL
+   The sidebar collapsed to its icons, expanding over the content
+   on hover or keyboard focus. The slot it sits in keeps the
+   collapsed width, so expanding never reflows the page — the
+   panel floats above it and the content underneath stays still.
+   Labels stay in the accessible tree throughout; they are faded,
+   not removed, so a screen reader always reads a named item.
+   ============================================================ */
+.rail-slot{flex:none;width:64px;}
+.side.rail{
+  position:fixed;top:0;bottom:0;left:0;width:64px;overflow:hidden;z-index:var(--z-dropdown);
+  transition:width var(--dur-base) var(--ease-out),box-shadow var(--dur-base) var(--ease-out);
+}
+.side.rail:hover,.side.rail:focus-within{width:212px;box-shadow:var(--shadow-4);}
+/* Icons must not move when the panel opens — only the labels arrive. */
+.side.rail .navitem{white-space:nowrap;position:relative;}
+.side.rail .navitem-label,.side.rail .side-group,.side.rail .side-brand-label,.side.rail .side-foot-label,
+.side.rail .navitem .tally{
+  opacity:0;transition:opacity var(--dur-fast) var(--ease-out);
+}
+.side.rail:hover .navitem-label,.side.rail:focus-within .navitem-label,
+.side.rail:hover .side-group,.side.rail:focus-within .side-group,
+.side.rail:hover .side-brand-label,.side.rail:focus-within .side-brand-label,
+.side.rail:hover .side-foot-label,.side.rail:focus-within .side-foot-label,
+.side.rail:hover .navitem .tally,.side.rail:focus-within .navitem .tally{opacity:1;}
+/* Collapsed, a count becomes a dot on the icon — something waiting for the
+   user must never be invisible just because the panel is narrow. */
+.side.rail .navitem[data-tally]::after{
+  content:"";position:absolute;left:27px;top:7px;width:8px;height:8px;border-radius:50%;
+  background:var(--amber-c);border:2px solid var(--surface);
+  transition:opacity var(--dur-fast) var(--ease-out);
+}
+.side.rail:hover .navitem[data-tally]::after,.side.rail:focus-within .navitem[data-tally]::after{opacity:0;}
+.side.rail .side-group{height:14px;overflow:hidden;}
+.side.rail .side-foot{overflow:hidden;}
+@media (max-width:1023px){
+  .rail-slot{display:none;}
+}
 
 /* ============================================================
    CHECKLIST
@@ -1240,6 +1306,20 @@ button.listrow:focus-visible{outline:none;box-shadow:0 0 0 2px var(--focus);bord
    data-selected and labels its own groups, rather than a .cursor class. */
 .cmdk-scrim[data-state]{display:flex;}
 .cmdk-scrim[data-state="open"]{animation:fade var(--dur-fast) var(--ease-out);}
+/* The palette primitive renders its panel as a SIBLING of the scrim, not a
+   child, so the scrim's centring never reaches it and it lands in normal flow
+   at the foot of the page. It has to position itself. */
+/* Centred with auto margins, not `left:50%` + a translate: the entrance
+   animation below finishes on `transform:none`, and an animation beats a
+   normal declaration — a translate used for centring would be wiped the
+   moment the panel finished arriving. */
+.cmdk[data-state]{
+  position:fixed;left:0;right:0;top:12vh;margin-inline:auto;
+  z-index:calc(var(--z-modal) + 1);max-height:76vh;display:flex;flex-direction:column;
+}
+.cmdk[data-state="open"]{animation:rise var(--dur-base) var(--ease-spring);}
+.cmdk[data-state="closed"]{animation:rise var(--dur-fast) var(--ease-in-out) reverse;}
+@media (max-width:640px){.cmdk[data-state]{top:6vh;}}
 .cmdk-item[data-selected="true"]{background:var(--accent-soft);color:var(--accent);}
 .cmdk-item[aria-disabled="true"]{opacity:.5;pointer-events:none;}
 [cmdk-group-heading]{font-family:var(--f-mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);padding:9px 11px 4px;}
