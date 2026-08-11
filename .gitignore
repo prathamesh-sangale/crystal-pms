@@ -24,6 +24,8 @@ playwright-report/
 test-results/
 apps/web/screenshots/
 coverage/
+# saved browser session from the Playwright sign-in step — contains a token
+apps/web/e2e/.auth/
 
 # editor / os
 .DS_Store
