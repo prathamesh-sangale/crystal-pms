@@ -133,9 +133,9 @@ export const STAGES: readonly Stage[] = [
   },
 ] as const;
 
-export const STAGE_BY_ID: Record<StageId, Stage> = Object.fromEntries(
-  STAGES.map((s) => [s.id, s])
-) as Record<StageId, Stage>;
+const stageById = {} as Record<StageId, Stage>;
+for (const stage of STAGES) stageById[stage.id] = stage;
+export const STAGE_BY_ID: Record<StageId, Stage> = stageById;
 
 export interface TaskTemplate {
   /** Stable identifier, e.g. `mechanical.07`. Survives label edits. */
@@ -238,9 +238,9 @@ export const TASK_TEMPLATES: readonly TaskTemplate[] = STAGE_IDS.flatMap((stage)
   }))
 );
 
-export const TASKS_BY_STAGE: Record<StageId, readonly TaskTemplate[]> = Object.fromEntries(
-  STAGE_IDS.map((s) => [s, TASK_TEMPLATES.filter((t) => t.stage === s)])
-) as Record<StageId, readonly TaskTemplate[]>;
+const tasksByStage = {} as Record<StageId, readonly TaskTemplate[]>;
+for (const id of STAGE_IDS) tasksByStage[id] = TASK_TEMPLATES.filter((t) => t.stage === id);
+export const TASKS_BY_STAGE: Record<StageId, readonly TaskTemplate[]> = tasksByStage;
 
 /** The task list a container of this type actually carries. */
 export function checklistFor(type: ContainerType): readonly TaskTemplate[] {

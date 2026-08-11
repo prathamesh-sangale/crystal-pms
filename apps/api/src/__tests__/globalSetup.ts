@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,15 +13,17 @@ const API_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
  * table itself, so a plain sync gives the same clean slate without handing a
  * destructive flag to an automated run. A push that cannot proceed without
  * dropping data should fail loudly rather than quietly wipe a database.
+ *
+ * Commands are fixed strings with no interpolation — `execSync` rather than an
+ * argument array because Windows will not spawn `npx.cmd` without a shell.
  */
 export default function setup(): void {
-  const env = { ...process.env, DATABASE_URL: 'file:./test.db' };
-  // `npx.cmd` directly rather than `shell: true`, so arguments stay escaped.
-  const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  const run = (args: string[]): void => {
-    execFileSync(npx, args, { cwd: API_DIR, env, stdio: 'pipe' });
-  };
+  const options = {
+    cwd: API_DIR,
+    env: { ...process.env, DATABASE_URL: 'file:./test.db' },
+    stdio: 'pipe',
+  } as const;
 
-  run(['prisma', 'db', 'push', '--skip-generate']);
-  run(['tsx', 'prisma/seed.ts']);
+  execSync('npx prisma db push --skip-generate', options);
+  execSync('npx tsx prisma/seed.ts', options);
 }

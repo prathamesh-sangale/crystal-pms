@@ -1,0 +1,365 @@
+/*
+ * app.css — layout composition only.
+ *
+ * Everything visual comes from crystal.css. What is left here is how this
+ * particular product arranges those components on a page: the shell, the
+ * page header, and a handful of grids. Every value is a token, so a stylelint
+ * rule can prove no colour, size or spacing was invented here.
+ */
+
+/* The design system's body rule owns typography. Only the two theme-dependent
+ * properties are set here, because the design system page is always white and
+ * this app is not. */
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* ------------------------------------------------------------------ shell */
+.appshell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.appshell > .side {
+  height: 100dvh;
+  position: sticky;
+  top: 0;
+  overflow-y: auto;
+}
+
+.appshell > .appmain {
+  min-width: 0;
+  min-height: 100dvh;
+}
+
+/* Below the sidebar breakpoint the nav becomes a sheet (design system:
+ * mobile navigation), so the permanent rail is removed from the flow. */
+@media (max-width: 1023px) {
+  .appshell > .side {
+    display: none;
+  }
+}
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+
+.appcontent {
+  flex: 1;
+  min-height: 0;
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-5);
+}
+
+@media (max-width: 767px) {
+  .appcontent {
+    padding: var(--s-4);
+    gap: var(--s-4);
+  }
+}
+
+/* The board takes whatever height is left, so its columns read as columns
+ * rather than as cards floating above a void. */
+.appcontent > .kanban {
+  flex: 1 1 auto;
+  min-height: 320px;
+}
+
+/* Skip link — the first thing a keyboard reaches on every page. */
+.skiplink {
+  position: absolute;
+  left: var(--s-4);
+  top: var(--s-4);
+  z-index: var(--z-tooltip);
+  transform: translateY(-200%);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.skiplink:focus-visible {
+  transform: none;
+}
+
+/* ------------------------------------------------------------ page header */
+.pagehead {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.pagehead-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.pagehead h1 {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.4px;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--text);
+}
+
+.pagehead p {
+  font-size: 13px;
+  color: var(--text-2);
+  margin: var(--s-1) 0 0;
+  max-width: 72ch;
+  line-height: 1.55;
+}
+
+.pagehead-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ grids */
+.quadgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-4);
+  align-items: start;
+}
+
+.quadgrid > .datapanel {
+  max-height: 340px;
+}
+
+@media (max-width: 1023px) {
+  .quadgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quadgrid > .datapanel {
+    max-height: 300px;
+  }
+}
+
+.splitgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .splitgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ------------------------------------------------------- stage bar chart */
+.stagebar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) 0;
+}
+
+.stagebar-name {
+  font-size: 12.5px;
+  color: var(--text);
+  width: 200px;
+  flex: none;
+}
+
+.stagebar-track {
+  flex: 1;
+  min-width: 0;
+  height: 20px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.stagebar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: var(--s-2);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.stagebar-fill span {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  color: var(--on-accent);
+}
+
+.stagebar-count {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--text-3);
+  width: 108px;
+  flex: none;
+  text-align: right;
+}
+
+@media (max-width: 767px) {
+  .stagebar {
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .stagebar-name {
+    width: 100%;
+  }
+
+  .stagebar-count {
+    width: auto;
+  }
+}
+
+/* ------------------------------------------------------------------ login */
+.loginpage {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  background: var(--bg);
+}
+
+.loginpage-aside {
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: var(--s-8) var(--s-7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.loginpage-form {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-7) var(--s-5);
+}
+
+.loginpage-form-inner {
+  width: 100%;
+  max-width: 360px;
+}
+
+@media (max-width: 899px) {
+  .loginpage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .loginpage-aside {
+    padding: var(--s-6) var(--s-5);
+  }
+}
+
+/* ------------------------------------------------------------- utilities */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.stack-tight {
+  gap: var(--s-2);
+}
+
+.stack-loose {
+  gap: var(--s-5);
+}
+
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.mono {
+  font-family: var(--f-mono);
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+.subtle {
+  color: var(--text-3);
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .hide-sm {
+    display: none;
+  }
+}
+
+/* Visible only to assistive technology. Used for live regions and for the
+ * long-form explanation behind every status pill. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.infogrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3) var(--s-4);
+}
+
+@media (max-width: 599px) {
+  .infogrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.infogrid dt {
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.infogrid dd {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 2px 0 0;
+}

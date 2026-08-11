@@ -79,12 +79,10 @@ export interface SessionUser {
   depotId: string | null;
 }
 
-declare module 'fastify' {
-  interface FastifyRequest {
-    user?: SessionUser;
-  }
-}
-
+/**
+ * `@fastify/jwt` augments FastifyRequest with `user` for us — declaring it a
+ * second time on `fastify` itself conflicts. This is the only declaration.
+ */
 declare module '@fastify/jwt' {
   interface FastifyJWT {
     payload: SessionUser;

@@ -1,0 +1,34 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "ignoreFiles": [
+    "apps/web/src/styles/tokens.css",
+    "apps/web/src/styles/crystal.css",
+    "**/dist/**",
+    "**/node_modules/**"
+  ],
+  "rules": {
+    "color-no-hex": [
+      true,
+      {
+        "message": "No colour literals. Every colour is a design system token — use var(--…). If the colour you need does not exist, it belongs in source/crystal-design-system.html first."
+      }
+    ],
+    "declaration-property-value-disallowed-list": [
+      {
+        "/^(color|background|background-color|border|border-color|fill|stroke|box-shadow|outline)$/": [
+          "/rgba?\\(/",
+          "/hsla?\\(/",
+          "/^(red|blue|green|black|white|grey|gray|orange|yellow|purple|pink)$/"
+        ]
+      },
+      {
+        "message": "No colour literals. Use a design system token — var(--surface), var(--text-2), var(--accent)."
+      }
+    ],
+    "media-feature-range-notation": "prefix",
+    "custom-property-pattern": null,
+    "selector-class-pattern": null,
+    "declaration-empty-line-before": null,
+    "no-descending-specificity": null
+  }
+}

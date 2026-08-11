@@ -30,12 +30,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(jwt, { secret: env.JWT_SECRET });
 
   /** Every failure leaves as the same shape, so the UI has one thing to render. */
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error: unknown, request, reply) => {
     if (error instanceof ZodError) return reply.code(422).send(zodToApiError(error));
-    if (error.statusCode && error.statusCode < 500) {
-      return reply.code(error.statusCode).send({
-        error: error.code ?? 'request_failed',
-        message: error.message,
+
+    const failure = error as { statusCode?: number; code?: string; message?: string };
+    // 4xx is something the caller can fix, so its message is safe to pass on.
+    // 5xx is ours, and its message may leak internals — so it never leaves.
+    if (failure.statusCode && failure.statusCode >= 400 && failure.statusCode < 500) {
+      return reply.code(failure.statusCode).send({
+        error: failure.code ?? 'request_failed',
+        message: failure.message ?? 'That request could not be completed.',
       });
     }
     request.log.error({ err: error }, 'unhandled error');

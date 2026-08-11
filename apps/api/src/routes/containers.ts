@@ -14,6 +14,7 @@ import {
   totalPlanDays,
   updateContainerSchema,
   type Container,
+  type StageId,
 } from '@pms/shared';
 import type { FastifyInstance } from 'fastify';
 import { authenticate, requirePermission } from '../auth.js';
@@ -116,7 +117,7 @@ export async function containerRoutes(app: FastifyInstance): Promise<void> {
       if (existing) {
         return reply.code(409).send({
           error: 'conflict',
-          message: `${body.id} is already in the pipeline, at ${STAGE_BY_ID[existing.stage as never]?.name ?? existing.stage}.`,
+          message: `${body.id} is already in the pipeline, at ${STAGE_BY_ID[existing.stage as StageId]?.name ?? existing.stage}.`,
           fields: { id: 'This container is already registered' },
         });
       }
