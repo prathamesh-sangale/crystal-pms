@@ -11,12 +11,17 @@ Built entirely on the Crystal Design System in
 
 ## Run it
 
-```bash
-npm install
-cp apps/api/.env.example apps/api/.env    # then change JWT_SECRET
-npm run setup                             # tokens + schema + seed
-npm run dev                               # api :4000, web :5173
+One command per line — Windows PowerShell 5.1 does not accept `&&` as a
+statement separator, and these are meant to be readable on every shell.
+
 ```
+npm install
+npm run setup      # generates tokens, syncs the schema, seeds the database
+npm run dev        # api on :4000, web on :5173
+```
+
+`npm run setup` creates `apps/api/.env` from the example if it is missing.
+**Change `JWT_SECRET` before this is deployed anywhere.**
 
 Open http://localhost:5173.
 
