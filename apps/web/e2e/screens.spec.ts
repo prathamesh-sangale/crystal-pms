@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openContainer } from './helpers';
 
 const SCREENS = [
   { path: '/depot', heading: 'Depot Command' },
@@ -89,6 +90,42 @@ test('the command palette opens centred, not at the foot of the page', async ({ 
   expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(4);
   expect(box.y).toBeLessThan(viewport.height * 0.25);
   expect(box.y).toBeGreaterThan(0);
+});
+
+test('the container gauge is a true measurement, not a picture of one', async ({ page }) => {
+  // A container part-way through, so a wrong fill cannot pass by landing on 0.
+  await openContainer(page, 'RFCU');
+  const drawer = page.getByRole('dialog');
+
+  const geometry = await drawer.locator('.cgauge svg').first().evaluate((svg) => {
+    const track = svg.querySelector('.cg-track') as SVGRectElement;
+    const fill = svg.querySelector('.cg-fill') as SVGRectElement;
+    return {
+      trackWidth: track.width.baseVal.value,
+      fillWidth: fill.width.baseVal.value,
+      ribs: svg.querySelectorAll('.cg-rib line').length,
+      label: svg.querySelector('title')?.textContent ?? '',
+    };
+  });
+
+  // The label is the graphic's own statement of the value — the contract that
+  // stops it being a picture only a sighted user can read.
+  const stated = Number(/readiness: (\d+) per cent/.exec(geometry.label)?.[1]);
+  expect(stated, `gauge label did not state a value: "${geometry.label}"`).toBeGreaterThan(0);
+
+  // One continuous linear fill, so its share of the track IS the value — not
+  // an approximation of it, and not a count of completed stages.
+  const share = (geometry.fillWidth / geometry.trackWidth) * 100;
+  expect(
+    Math.abs(share - stated),
+    `fill ${share.toFixed(1)}% vs stated ${stated}%`
+  ).toBeLessThan(1);
+
+  // Nine ribs for ten stages: the shell draws the final edge.
+  expect(geometry.ribs).toBe(9);
+
+  // And the number is printed, never carried by the drawing alone.
+  await expect(drawer.getByText(`${stated}%`, { exact: true }).first()).toBeVisible();
 });
 
 test('status is never colour alone — every pill carries an icon and a word', async ({ page }) => {

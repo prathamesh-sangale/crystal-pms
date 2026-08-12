@@ -1,11 +1,6 @@
-import {
-  GRADE_LABELS,
-  TYPE_LABELS,
-  containerStatus,
-  gradeStatus,
-  overallProgress,
-} from '@pms/shared';
+import { GRADE_LABELS, TYPE_LABELS, containerStatus, gradeStatus } from '@pms/shared';
 import { useSearchParams } from 'react-router-dom';
+import { ContainerGauge } from '../components/app/ContainerGauge';
 import { DataPanel, Progress, StatCard, StatusPill } from '../components/crystal/Data';
 import { AsyncRegion, EmptyState, Skeleton } from '../components/crystal/Feedback';
 import { Icon } from '../components/crystal/Icon';
@@ -107,17 +102,7 @@ export function DepotCommand(): React.ReactElement {
                         <span className="listrow-id">{container.id}</span>
                         <span className="listrow-main">
                           <span className="truncate">{container.customer}</span>
-                          {/* The bar and its number belong together — split
-                              across the row they read as two facts. */}
-                          <span className="cluster" style={{ flexWrap: 'nowrap' }}>
-                            <span style={{ flex: 1, minWidth: 0 }}>
-                              <Progress
-                                value={overallProgress(container)}
-                                label={`${container.id} readiness`}
-                              />
-                            </span>
-                            <span className="listrow-meta">{overallProgress(container)}%</span>
-                          </span>
+                          <ContainerGauge container={container} size="sm" />
                         </span>
                         <span className="listrow-end">
                           <StatusPill status={containerStatus(container, o.today)} />

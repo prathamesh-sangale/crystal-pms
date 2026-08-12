@@ -48,6 +48,7 @@ const COMPONENT_SECTIONS = [
   // Added to the design system while building the PMS — see the report.
   'SCROLLBAR',
   'SIDEBAR RAIL',
+  'CONTAINER GAUGE',
   'CHECKLIST',
   'ENTRANCE MOTION',
   'KANBAN BOARD',

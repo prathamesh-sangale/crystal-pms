@@ -4,14 +4,14 @@ import {
   containerStatus,
   daysInStage,
   overallProgress,
-  stageProgress,
   type Container,
 } from '@pms/shared';
 import { useSearchParams } from 'react-router-dom';
 import { cx } from '../../lib/cx';
 import { plural } from '../../lib/format';
-import { Progress, StatusPill } from '../crystal/Data';
+import { StatusPill } from '../crystal/Data';
 import { Icon } from '../crystal/Icon';
+import { ContainerGauge } from './ContainerGauge';
 
 /**
  * The readiness pipeline.
@@ -99,11 +99,10 @@ function KanbanCard({
       <span className="kcard-id">{container.id}</span>
       <span className="kcard-sub truncate">{container.customer}</span>
 
+      {/* Overall readiness, not stage progress: the gauge already shows where
+          in the ten stages it sits, so the stage number was the redundant one. */}
       <div style={{ marginTop: 'var(--s-2)' }}>
-        <Progress
-          value={stageProgress(container)}
-          label={`${container.id} progress in this stage`}
-        />
+        <ContainerGauge container={container} size="sm" />
       </div>
 
       <div className="kcard-row">

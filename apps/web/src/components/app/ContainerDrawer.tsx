@@ -25,12 +25,13 @@ import {
   useUpdateContainer,
 } from '../../lib/queries';
 import { Button } from '../crystal/Button';
-import { CategoryBadge, Progress, StatusPill } from '../crystal/Data';
+import { CategoryBadge, StatusPill } from '../crystal/Data';
 import { AsyncRegion, Skeleton, useToast } from '../crystal/Feedback';
 import { CheckboxField } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Drawer } from '../crystal/Overlay';
 import { RichText } from '../crystal/RichText';
+import { ContainerGauge } from './ContainerGauge';
 
 /** Opens whenever `?container=<id>` is in the URL, so a unit is linkable. */
 export function ContainerDrawer(): React.ReactElement | null {
@@ -317,15 +318,26 @@ function DrawerBody({
       </dl>
 
       <div className="stack stack-tight">
-        <div className="cluster" style={{ justifyContent: 'space-between' }}>
-          <span className="lbl" style={{ marginBottom: 0 }}>
-            Overall readiness
-          </span>
-          <span className="mono" style={{ fontSize: '11.5px' }}>
-            {progress}%
-          </span>
+        <span className="lbl">Overall readiness</span>
+        <div className="cluster" style={{ gap: 'var(--s-4)' }}>
+          <ContainerGauge container={container} showValue={false} />
+          <div className="stack" style={{ gap: '2px' }}>
+            <span
+              style={{
+                fontFamily: 'var(--f-display)',
+                fontWeight: 800,
+                fontSize: '22px',
+                letterSpacing: '-0.5px',
+              }}
+            >
+              {progress}%
+            </span>
+            <span className="subtle" style={{ fontSize: '11.5px' }}>
+              {container.checklist.filter((t) => t.done).length} of {container.checklist.length}{' '}
+              tasks · ribs mark the ten stages
+            </span>
+          </div>
         </div>
-        <Progress value={progress} label={`${container.id} overall readiness`} />
       </div>
 
       <div className="stack stack-tight">
