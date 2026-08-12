@@ -96,14 +96,15 @@ export function DepotCommand(): React.ReactElement {
                       <button
                         key={container.id}
                         type="button"
-                        className="listrow"
+                        // One line: unit, customer, readiness, status. Stacking
+                        // the gauge under the customer left a dead strip
+                        // beneath the unit number and made the row 76px tall.
+                        className="listrow single"
                         onClick={() => open(container.id)}
                       >
                         <span className="listrow-id">{container.id}</span>
-                        <span className="listrow-main">
-                          <span className="truncate">{container.customer}</span>
-                          <ContainerGauge container={container} size="sm" />
-                        </span>
+                        <span className="grow truncate">{container.customer}</span>
+                        <ContainerGauge container={container} size="sm" />
                         <span className="listrow-end">
                           <StatusPill status={containerStatus(container, o.today)} />
                         </span>
