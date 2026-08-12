@@ -1116,38 +1116,38 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
 
 /* ============================================================
    CONTAINER GAUGE
-   Readiness drawn as the object itself. One continuous linear
-   fill, so it equals the number printed beside it exactly — a
-   shape that fills unevenly would make 50% stop looking like
-   50%, so only the body rectangle is ever filled and the
-   refrigeration unit stays outline.
+   Readiness drawn as the object itself: a rounded rectangle
+   with vertical ribs — the same drawing as the `i-container`
+   icon in section 06, at a larger size. One container shape in
+   the system, not two. No machinery unit, no door furniture;
+   an irregular silhouette would mean 50% stopped looking like
+   50%, and the extra detail only competed with the reading.
 
    The ribs are the container's corrugations, placed at
-   cumulative task counts rather than at even intervals. A
-   boundary between two ribs is therefore a real stage boundary
-   and a heavier stage is visibly wider — so where the fill
-   lands reads as the stage, without a second number that could
+   cumulative task counts rather than at even intervals. The
+   span between two ribs is therefore a real stage, and a
+   heavier stage is visibly wider — so where the fill lands
+   reads as the stage, without a second number that could
    disagree with the first.
 
    The graphic never carries the value alone: it is always
    labelled, and the percentage is printed next to it.
    ============================================================ */
 .cgauge{display:inline-flex;align-items:center;gap:var(--s-2);min-width:0;}
-.cgauge svg{display:block;flex:none;overflow:visible;}
+.cgauge svg{display:block;flex:none;}
 .cg-track{fill:var(--surface-2);}
 .cg-fill{fill:var(--accent);transition:width var(--dur-slow) var(--ease-out);}
 /* Cleared for release is a status, so it takes the status colour. */
 .cgauge.is-ready .cg-fill{fill:var(--success);}
 /* Corrugations, drawn over the fill. Light enough to read as a seam rather
    than as a division of the measurement. */
-.cg-rib line{stroke:var(--surface);stroke-width:1.4;opacity:.5;}
-.cg-shell,.cg-unit{fill:none;stroke:var(--line-strong);stroke-width:1.7;stroke-linejoin:round;}
-.cg-grille line{stroke:var(--line-strong);stroke-width:1.2;stroke-linecap:round;opacity:.7;}
+.cg-rib line{stroke:var(--surface);stroke-width:1.4;opacity:.45;}
+.cg-shell{fill:none;stroke:var(--line-strong);stroke-width:1.7;stroke-linejoin:round;
+  transition:stroke var(--dur-fast) var(--ease-out);}
 .cg-value{font-family:var(--f-mono);font-size:11px;color:var(--text-2);white-space:nowrap;}
 .cgauge.sm .cg-value{font-size:10.5px;}
-/* On a board card the gauge sits inside a control that already reacts. */
-.kcard:hover .cg-shell,.kcard:hover .cg-unit{stroke:var(--accent);}
-.cg-shell,.cg-unit{transition:stroke var(--dur-fast) var(--ease-out);}
+/* Inside a control that already reacts, the outline follows it. */
+.kcard:hover .cg-shell,tr.linked:hover .cg-shell,button.listrow:hover .cg-shell{stroke:var(--accent);}
 
 /* ============================================================
    CHECKLIST

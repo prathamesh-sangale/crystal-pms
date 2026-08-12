@@ -11,7 +11,8 @@ import {
 import { createColumnHelper } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CategoryBadge, Person, Progress, StatusPill } from '../components/crystal/Data';
+import { ContainerGauge } from '../components/app/ContainerGauge';
+import { CategoryBadge, Person, StatusPill } from '../components/crystal/Data';
 import { DataTable } from '../components/crystal/DataTable';
 import { AsyncRegion, EmptyState, TableSkeleton } from '../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../components/crystal/Form';
@@ -80,19 +81,7 @@ export function Fleet(): React.ReactElement {
         id: 'progress',
         header: 'Readiness',
         meta: { label: 'Readiness' },
-        cell: (info) => (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--s-2)', minWidth: '132px' }}>
-            {/* The bar is a flex item with no intrinsic width, so it needs to
-                be told to grow — otherwise it collapses and only the number
-                shows. */}
-            <span style={{ flex: 1, minWidth: '56px' }}>
-              <Progress value={info.getValue()} label={`${info.row.original.id} readiness`} />
-            </span>
-            <span className="mono subtle" style={{ fontSize: '11px' }}>
-              {info.getValue()}%
-            </span>
-          </div>
-        ),
+        cell: (info) => <ContainerGauge container={info.row.original} size="sm" />,
       }),
       column.accessor('customer', {
         header: 'Customer',

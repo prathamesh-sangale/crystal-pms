@@ -3,18 +3,30 @@ import { useId, useMemo } from 'react';
 import { cx } from '../../lib/cx';
 
 /*
- * The geometry, in the SVG's own units. The body is the fill track; the
- * machinery unit hangs off the right-hand end and is never filled — filling an
- * irregular silhouette would mean 50% no longer looks like 50%.
+ * Geometry, in the SVG's own units. A 40ft container's proportions, and
+ * nothing else: no machinery unit, no door furniture. The design system's
+ * `i-container` icon is a rounded rectangle with vertical ribs, and this is
+ * the same drawing at a different size — one container shape in the system,
+ * not two.
  */
-const BOX = { w: 104, h: 40 };
-const BODY = { x: 1.5, y: 6, w: 74, h: 28, r: 2.5 };
-const UNIT = { x: 78, y: 2.5, w: 24, h: 35, r: 2.5 };
-const TRACK = { x: BODY.x + 1.2, y: BODY.y + 1.2, w: BODY.w - 2.4, h: BODY.h - 2.4 };
+const BOX = { w: 96, h: 30 };
+const BODY = { x: 1.5, y: 1.5, w: 93, h: 27, r: 3 };
+const INSET = 1.5;
+const TRACK = {
+  x: BODY.x + INSET,
+  y: BODY.y + INSET,
+  w: BODY.w - INSET * 2,
+  h: BODY.h - INSET * 2,
+};
+
+const SIZES = {
+  sm: { w: 84, h: 26 },
+  md: { w: 132, h: 41 },
+} as const;
 
 interface GaugeProps {
   container: Container;
-  size?: 'sm' | 'md';
+  size?: keyof typeof SIZES;
   /** Hide the number only where it is already printed alongside. */
   showValue?: boolean;
   className?: string;
@@ -25,9 +37,9 @@ interface GaugeProps {
  *
  * One continuous linear fill, so it equals the printed percentage exactly.
  * The ribs are placed at cumulative task counts rather than evenly, so the
- * boundary between two ribs is a real stage boundary and a heavier stage is
- * visibly wider. Where the fill lands therefore reads as the stage, without
- * introducing a second number that could disagree with the first.
+ * span between two ribs is a real stage and a heavier stage is visibly wider.
+ * Where the fill lands therefore reads as the stage, without a second number
+ * that could disagree with the first.
  */
 export function ContainerGauge({
   container,
@@ -41,15 +53,17 @@ export function ContainerGauge({
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   const titleId = `${uid}-t`;
   const clipId = `${uid}-clip`;
+
   const percent = overallProgress(container);
   const ready = isReady(container);
+  const done = container.checklist.filter((t) => t.done).length;
 
   const ribs = useMemo(() => {
     const total = container.checklist.length;
     if (!total) return [];
     let seen = 0;
     const positions: number[] = [];
-    // One rib per stage boundary — the last stage needs no closing rib, the
+    // One rib per stage boundary. The last stage needs no closing rib — the
     // shell already draws that edge.
     for (const stage of STAGES.slice(0, -1)) {
       seen += container.checklist.filter((t) => t.stage === stage.id).length;
@@ -58,36 +72,21 @@ export function ContainerGauge({
     return positions;
   }, [container.checklist]);
 
-  // Small enough for a board card, large enough that ten ribs still resolve.
-  const width = size === 'sm' ? 78 : 130;
-  const height = size === 'sm' ? 30 : 50;
+  const { w, h } = SIZES[size];
   const label = ready
     ? `${container.id} is ready for release, all ${container.checklist.length} tasks complete`
-    : `${container.id} readiness: ${percent} per cent, ${container.checklist.filter((t) => t.done).length} of ${container.checklist.length} tasks complete`;
+    : `${container.id} readiness: ${percent} per cent, ${done} of ${container.checklist.length} tasks complete`;
 
   return (
     <span className={cx('cgauge', size === 'sm' && 'sm', ready && 'is-ready', className)}>
-      <svg
-        width={width}
-        height={height}
-        viewBox={`0 0 ${BOX.w} ${BOX.h}`}
-        role="img"
-        aria-labelledby={titleId}
-      >
+      <svg width={w} height={h} viewBox={`0 0 ${BOX.w} ${BOX.h}`} role="img" aria-labelledby={titleId}>
         <title id={titleId}>{label}</title>
 
         <clipPath id={clipId}>
-          <rect x={TRACK.x} y={TRACK.y} width={TRACK.w} height={TRACK.h} rx={1.5} />
+          <rect x={TRACK.x} y={TRACK.y} width={TRACK.w} height={TRACK.h} rx={1.6} />
         </clipPath>
 
-        <rect
-          className="cg-track"
-          x={TRACK.x}
-          y={TRACK.y}
-          width={TRACK.w}
-          height={TRACK.h}
-          rx={1.5}
-        />
+        <rect className="cg-track" x={TRACK.x} y={TRACK.y} width={TRACK.w} height={TRACK.h} rx={1.6} />
         <rect
           className="cg-fill"
           x={TRACK.x}
@@ -97,6 +96,7 @@ export function ContainerGauge({
           clipPath={`url(#${clipId})`}
         />
 
+        {/* Corrugations, at the real stage boundaries. */}
         <g className="cg-rib" clipPath={`url(#${clipId})`}>
           {ribs.map((x) => (
             <line key={x} x1={x} y1={TRACK.y} x2={x} y2={TRACK.y + TRACK.h} />
@@ -104,23 +104,10 @@ export function ContainerGauge({
         </g>
 
         <rect className="cg-shell" x={BODY.x} y={BODY.y} width={BODY.w} height={BODY.h} rx={BODY.r} />
-
-        {/* The refrigeration unit. Outline only — it is not part of the track. */}
-        <rect className="cg-unit" x={UNIT.x} y={UNIT.y} width={UNIT.w} height={UNIT.h} rx={UNIT.r} />
-        <g className="cg-grille">
-          <line x1={UNIT.x + 5} y1={UNIT.y + 9} x2={UNIT.x + UNIT.w - 5} y2={UNIT.y + 9} />
-          <line x1={UNIT.x + 5} y1={UNIT.y + 15} x2={UNIT.x + UNIT.w - 5} y2={UNIT.y + 15} />
-          <line x1={UNIT.x + 5} y1={UNIT.y + 21} x2={UNIT.x + UNIT.w - 5} y2={UNIT.y + 21} />
-          <line x1={UNIT.x + 5} y1={UNIT.y + 27} x2={UNIT.x + UNIT.w - 5} y2={UNIT.y + 27} />
-        </g>
       </svg>
 
-      {showValue && (
-        <span className="cg-value">
-          {percent}%
-          {/* The graphic is a quantity, never the only carrier of it. */}
-        </span>
-      )}
+      {/* The drawing is never the only carrier of the value. */}
+      {showValue && <span className="cg-value">{percent}%</span>}
     </span>
   );
 }

@@ -12,7 +12,8 @@ import {
 import { createColumnHelper } from '@tanstack/react-table';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Person, Progress, StatusPill } from '../components/crystal/Data';
+import { ContainerGauge } from '../components/app/ContainerGauge';
+import { Person, StatusPill } from '../components/crystal/Data';
 import { DataTable } from '../components/crystal/DataTable';
 import { AsyncRegion, EmptyState, TableSkeleton } from '../components/crystal/Feedback';
 import { useOverview } from '../lib/queries';
@@ -64,11 +65,7 @@ export function Delayed(): React.ReactElement {
         id: 'progress',
         header: 'Readiness',
         meta: { label: 'Readiness', secondary: true },
-        cell: (info) => (
-          <div style={{ minWidth: '110px' }}>
-            <Progress value={info.getValue()} label={`${info.row.original.id} readiness`} />
-          </div>
-        ),
+        cell: (info) => <ContainerGauge container={info.row.original} size="sm" />,
       }),
       column.accessor('assignee', {
         header: 'Owner',
