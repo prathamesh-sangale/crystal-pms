@@ -21,6 +21,7 @@
     "dev:api": "npm run dev -w @pms/api",
     "dev:web": "npm run dev -w @pms/web",
     "build": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/api && npm run build -w @pms/web",
+    "vercel-build": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/web",
     "start": "npm run start -w @pms/api",
     "test": "npm run test -w @pms/shared && npm run test -w @pms/api",
     "typecheck": "tsc -b packages/shared apps/api apps/web",

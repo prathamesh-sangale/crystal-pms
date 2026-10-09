@@ -1,10 +1,11 @@
 {
-  "buildCommand": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/web",
-  "outputDirectory": "apps/web/dist",
-  "functions": {
-    "api/**/*.ts": { "maxDuration": 10 }
-  },
-  "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build", "config": { "distDir": "apps/web/dist" } },
+    { "src": "api/[...path].ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/[...path].ts" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
