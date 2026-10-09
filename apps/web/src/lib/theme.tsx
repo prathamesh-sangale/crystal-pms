@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 export type Theme = 'light' | 'dark';
 
@@ -23,6 +23,10 @@ function readInitial(): Theme {
  * The design system defines both palettes as token blocks selected by
  * [data-theme], so nothing below this component knows which theme is active
  * and no component carries a dark-mode branch.
+ *
+ * Light is the default for every visitor, regardless of OS preference — the
+ * app does not follow prefers-color-scheme. Dark is opt-in only, via the
+ * toggle, and persists once chosen.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [theme, setThemeState] = useState<Theme>(readInitial);
@@ -35,27 +39,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     } catch {
       /* private mode — the choice lasts for this tab only */
     }
-  }, []);
-
-  // Follow the operating system until the person makes an explicit choice.
-  useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = localStorage.getItem(STORAGE_KEY);
-    } catch {
-      /* ignore */
-    }
-    if (stored === 'light' || stored === 'dark') return;
-
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = (): void => {
-      const next: Theme = media.matches ? 'dark' : 'light';
-      setThemeState(next);
-      document.documentElement.setAttribute('data-theme', next);
-    };
-    apply();
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
   }, []);
 
   const value = useMemo<ThemeValue>(

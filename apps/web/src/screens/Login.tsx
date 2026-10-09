@@ -2,6 +2,7 @@ import { loginSchema } from '@pms/shared';
 import { useState } from 'react';
 import { RequestError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { ADMIN_ACCOUNT, DEV_PASSWORD } from '../lib/devAccounts';
 import { Button } from '../components/crystal/Button';
 import { Alert } from '../components/crystal/Feedback';
 import { Field } from '../components/crystal/Form';
@@ -15,6 +16,24 @@ export function Login(): React.ReactElement {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [quickBusy, setQuickBusy] = useState<string | null>(null);
+
+  // Dev-only: skip typing credentials and sign straight in as any seeded
+  // role. Goes through the exact same signIn() as the form below, so
+  // permissions are enforced for real, not bypassed.
+  const quickSignIn = async (accountEmail: string): Promise<void> => {
+    setFormError(null);
+    setQuickBusy(accountEmail);
+    try {
+      await signIn(accountEmail, DEV_PASSWORD);
+    } catch (error) {
+      setFormError(
+        error instanceof RequestError ? error.message : 'Could not sign in. Try again.'
+      );
+    } finally {
+      setQuickBusy(null);
+    }
+  };
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
@@ -64,11 +83,11 @@ export function Login(): React.ReactElement {
               maxWidth: '13ch',
             }}
           >
-            Every reefer from gate-in to <em style={{ fontStyle: 'normal', color: 'var(--amber-c)' }}>release ready</em>.
+            Survey it, section it, <em style={{ fontStyle: 'normal', color: 'var(--amber-c)' }}>ready to move</em>.
           </h1>
           <p style={{ fontSize: '14px', lineHeight: 1.65, opacity: 0.82, maxWidth: '46ch', margin: 0 }}>
-            Ten repair stages, a checklist per container type, and one view of what is delayed —
-            across the whole depot network.
+            One Admin dashboard for the whole yard — a survey decides what work a container
+            actually needs, every task runs on a timer, and nothing ships until it&rsquo;s done.
           </p>
         </div>
       </aside>
@@ -154,18 +173,24 @@ export function Login(): React.ReactElement {
             </Button>
           </form>
 
-          <div className="card tint tint-navy">
-            <div className="klabel">Demo accounts</div>
-            <p style={{ fontSize: '12px', color: 'var(--text-2)', margin: 'var(--s-2) 0 0', lineHeight: 1.7 }}>
-              <span className="mono">sitaram@reeferready.example</span> — depot manager
-              <br />
-              <span className="mono">tech@reeferready.example</span> — technician
-              <br />
-              <span className="mono">viewer@reeferready.example</span> — read only
-              <br />
-              Password for all three: <span className="mono">readiness</span>
-            </p>
-          </div>
+          {import.meta.env.DEV && (
+            <div className="card tint tint-navy">
+              <div className="klabel">Quick sign-in · dev only</div>
+              <p style={{ fontSize: '12px', color: 'var(--text-2)', margin: 'var(--s-2) 0 var(--s-3)' }}>
+                One Admin account runs the whole yard now — one click, no typing.
+              </p>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="user"
+                loading={quickBusy === ADMIN_ACCOUNT.email}
+                disabled={quickBusy !== null && quickBusy !== ADMIN_ACCOUNT.email}
+                onClick={() => quickSignIn(ADMIN_ACCOUNT.email)}
+              >
+                {ADMIN_ACCOUNT.label}
+              </Button>
+            </div>
+          )}
         </div>
       </main>
     </div>

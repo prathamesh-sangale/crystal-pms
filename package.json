@@ -23,7 +23,6 @@
     "build": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/api && npm run build -w @pms/web",
     "start": "npm run start -w @pms/api",
     "test": "npm run test -w @pms/shared && npm run test -w @pms/api",
-    "test:e2e": "npm run test:e2e -w @pms/web",
     "typecheck": "tsc -b packages/shared apps/api apps/web",
     "lint": "eslint . --max-warnings 0",
     "lint:css": "stylelint \"apps/web/src/**/*.css\"",

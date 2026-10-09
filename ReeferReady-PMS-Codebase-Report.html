@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ReeferReady Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F5F6FB; --surface:#FFFFFF; --surface-2:#EEF1F8; --surface-3:#E3E8F5;
+    --text:#0E1530; --text-2:#48507A; --text-3:#7B84A8; --border:#DFE3F0;
+    --navy:#052379; --navy-2:#0B3AA6; --navy-soft:#E9EEFB;
+    --amber:#B8860B; --amber-soft:#FBF1DB;
+    --mono-bg:#EEF1FA; --mono-text:#1A3E7A;
+    --critical:#D03B3B; --critical-soft:#FBE6E4; --critical-ink:#8A1F1F;
+    --warning:#B8860B; --warning-soft:#FBF1DB; --warning-ink:#7A5B06;
+    --shadow: 0 1px 2px rgba(5,35,121,.05), 0 8px 24px -12px rgba(5,35,121,.18);
+    --font-display:'Manrope',system-ui,sans-serif;
+    --font-body:'Inter',system-ui,sans-serif;
+    --font-mono:'JetBrains Mono',ui-monospace,monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme: dark;
+      --bg:#0B1330; --surface:#121A3C; --surface-2:#172352; --surface-3:#1E2C61;
+      --text:#EAF0FB; --text-2:#B7C2E0; --text-3:#8592B8; --border:#283367;
+      --navy:#8DA2E8; --navy-2:#AFC0F2; --navy-soft:#1B2A5C;
+      --amber:#FBC213; --amber-soft:#2E2510;
+      --mono-bg:#16204A; --mono-text:#B9CCFA;
+      --critical:#FF7A66; --critical-soft:#3A1B18; --critical-ink:#FFB3A6;
+      --warning:#FBC213; --warning-soft:#332A0C; --warning-ink:#F4D77D;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --bg:#0B1330; --surface:#121A3C; --surface-2:#172352; --surface-3:#1E2C61;
+    --text:#EAF0FB; --text-2:#B7C2E0; --text-3:#8592B8; --border:#283367;
+    --navy:#8DA2E8; --navy-2:#AFC0F2; --navy-soft:#1B2A5C;
+    --amber:#FBC213; --amber-soft:#2E2510;
+    --mono-bg:#16204A; --mono-text:#B9CCFA;
+    --critical:#FF7A66; --critical-soft:#3A1B18; --critical-ink:#FFB3A6;
+    --warning:#FBC213; --warning-soft:#332A0C; --warning-ink:#F4D77D;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 30px -14px rgba(0,0,0,.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--text); font-family:var(--font-body);
+    font-size:15px; line-height:1.6; padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+  }
+  h1,h2,h3,h4{font-family:var(--font-display); color:var(--text); text-wrap:balance; margin:0;}
+  a{color:var(--navy);}
+  code, .mono{font-family:var(--font-mono);}
+  ::selection{background:var(--navy-soft);}
+
+  .shell{max-width:1240px; margin:0 auto; display:flex; gap:40px; align-items:flex-start;}
+
+  /* ---------- Sidebar / TOC ---------- */
+  #navtoggle{
+    display:none; position:fixed; z-index:40; top:calc(14px + env(safe-area-inset-top,0px)); left:16px;
+    width:42px; height:42px; border-radius:11px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); box-shadow:var(--shadow);
+    align-items:center; justify-content:center; cursor:pointer;
+  }
+  #navtoggle svg{width:18px; height:18px;}
+  #scrim{display:none; position:fixed; inset:0; background:rgba(5,10,30,.45); z-index:35;}
+  #scrim.show{display:block;}
+
+  aside.toc{
+    width:250px; flex:0 0 250px; position:sticky;
+    top:calc(28px + env(safe-area-inset-top,0px));
+    max-height:calc(100vh - 56px - env(safe-area-inset-top,0px));
+    overflow-y:auto; padding-bottom:24px;
+  }
+  aside.toc .brand{
+    display:flex; align-items:center; gap:9px; margin:4px 0 18px;
+    font-family:var(--font-display); font-weight:800; font-size:14.5px; letter-spacing:.2px;
+  }
+  aside.toc .brand .dot{width:9px; height:9px; border-radius:3px; background:var(--navy); flex:0 0 auto;}
+  aside.toc .grouplabel{
+    font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--text-3); margin:18px 0 6px; padding:0 10px;
+  }
+  aside.toc .grouplabel:first-of-type{margin-top:2px;}
+  aside.toc a{
+    display:block; font-size:13.3px; color:var(--text-2); text-decoration:none;
+    padding:6px 10px; border-radius:8px; border-left:2px solid transparent;
+    font-weight:500;
+  }
+  aside.toc a.sub{font-size:12.6px; padding-left:20px; color:var(--text-3);}
+  aside.toc a:hover{background:var(--surface-2); color:var(--text);}
+  aside.toc a.active{background:var(--navy-soft); color:var(--navy); border-left-color:var(--navy); font-weight:700;}
+  aside.toc a.sub.active{color:var(--navy); font-weight:600;}
+
+  /* ---------- Main content ---------- */
+  main{flex:1 1 auto; min-width:0; max-width:760px; padding:36px 0 90px;}
+
+  header.masthead{margin-bottom:34px;}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:7px; font-size:11.5px; font-weight:700;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--navy);
+    background:var(--navy-soft); padding:5px 11px 5px 9px; border-radius:100px; margin-bottom:16px;
+  }
+  .eyebrow svg{width:12px;height:12px;}
+  h1.title{font-size:33px; line-height:1.12; font-weight:800; letter-spacing:-.01em; margin-bottom:10px;}
+  p.dek{font-size:16.5px; color:var(--text-2); max-width:62ch; margin-bottom:20px;}
+  .metarow{display:flex; flex-wrap:wrap; gap:8px 10px; font-size:12.6px; color:var(--text-3); margin-bottom:26px;}
+  .metarow span{display:inline-flex; align-items:center; gap:6px;}
+  .metarow .sep{color:var(--border);}
+
+  .kpis{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:1px;
+    background:var(--border); border:1px solid var(--border); border-radius:14px;
+    overflow:hidden; margin-bottom:8px;
+  }
+  .kpi{background:var(--surface); padding:16px 16px 14px;}
+  .kpi .n{font-family:var(--font-display); font-weight:800; font-size:25px; color:var(--navy); font-variant-numeric:tabular-nums;}
+  .kpi .l{font-size:11.8px; color:var(--text-3); margin-top:3px; font-weight:500;}
+
+  section.rpt{padding-top:52px; scroll-margin-top:calc(24px + env(safe-area-inset-top,0px));}
+  section.rpt:first-of-type{padding-top:0;}
+  h2.h{
+    font-size:22px; font-weight:800; letter-spacing:-.005em; margin-bottom:6px;
+    display:flex; align-items:baseline; gap:10px; scroll-margin-top:calc(24px + env(safe-area-inset-top,0px));
+  }
+  h2.h .idx{font-family:var(--font-mono); font-size:14px; color:var(--text-3); font-weight:500;}
+  h3.h3{font-size:15.5px; font-weight:700; margin:26px 0 10px; scroll-margin-top:calc(24px + env(safe-area-inset-top,0px));}
+  h4.h4{font-size:13px; font-weight:700; margin:18px 0 8px; color:var(--text-2); text-transform:uppercase; letter-spacing:.05em;}
+  p{margin:0 0 13px; color:var(--text-2);}
+  p strong, li strong{color:var(--text); font-weight:650;}
+  .lede{font-size:15.5px;}
+
+  .divider{border:none; border-top:1px solid var(--border); margin:14px 0 22px;}
+
+  /* file cards */
+  .files{border:1px solid var(--border); border-radius:12px; overflow:hidden; margin:14px 0 20px; background:var(--surface);}
+  .filecard{display:flex; gap:16px; padding:12px 15px; border-bottom:1px solid var(--border);}
+  .filecard:last-child{border-bottom:none;}
+  .filecard:nth-child(even){background:var(--surface-2);}
+  .filecard .path{
+    font-family:var(--font-mono); font-size:12px; color:var(--mono-text); background:var(--mono-bg);
+    padding:3px 8px; border-radius:6px; flex:0 0 auto; height:fit-content; white-space:nowrap;
+  }
+  .filecard .desc{font-size:13.4px; color:var(--text-2); line-height:1.55;}
+  @media (max-width:640px){ .filecard{flex-direction:column; gap:6px;} .filecard .path{align-self:flex-start;} }
+
+  /* findings */
+  ul.findings{list-style:none; margin:6px 0 22px; padding:0; display:flex; flex-direction:column; gap:11px;}
+  ul.findings li{
+    position:relative; padding-left:18px; font-size:13.6px; color:var(--text-2); line-height:1.58;
+  }
+  ul.findings li::before{
+    content:""; position:absolute; left:0; top:7px; width:6px; height:6px; border-radius:2px;
+    background:var(--navy); opacity:.55;
+  }
+  .tag-bug{
+    display:inline-flex; align-items:center; gap:5px; font-family:var(--font-mono); font-size:10.5px;
+    font-weight:600; letter-spacing:.02em; color:var(--critical-ink); background:var(--critical-soft);
+    border:1px solid color-mix(in srgb, var(--critical) 35%, var(--critical-soft));
+    padding:2px 7px; border-radius:5px; margin-right:7px; vertical-align:1px;
+  }
+  .tag-bug .dot{width:5px;height:5px;border-radius:50%;background:var(--critical);}
+
+  code.k{
+    font-family:var(--font-mono); font-size:12.2px; color:var(--mono-text); background:var(--mono-bg);
+    padding:1.5px 5px; border-radius:4px;
+  }
+
+  ol.steps{margin:6px 0 22px; padding-left:0; list-style:none; counter-reset:step; display:flex; flex-direction:column; gap:14px;}
+  ol.steps li{
+    counter-increment:step; position:relative; padding-left:38px; font-size:13.6px; color:var(--text-2); line-height:1.6;
+  }
+  ol.steps li::before{
+    content:counter(step); position:absolute; left:0; top:-1px; width:26px; height:26px; border-radius:8px;
+    background:var(--navy-soft); color:var(--navy); font-family:var(--font-mono); font-weight:700; font-size:12px;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .callout{
+    background:var(--surface-2); border:1px solid var(--border); border-left:3px solid var(--navy);
+    border-radius:10px; padding:14px 16px; margin:16px 0 22px; font-size:13.6px; color:var(--text-2);
+  }
+  .callout strong{color:var(--text);}
+
+  table.datatable{width:100%; border-collapse:collapse; margin:14px 0 22px; font-size:13px;}
+  table.datatable th{
+    text-align:left; font-family:var(--font-display); font-size:11px; font-weight:700; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--surface); background:var(--navy); padding:9px 12px;
+  }
+  table.datatable th:first-child{border-radius:8px 0 0 0;}
+  table.datatable th:last-child{border-radius:0 8px 0 0;}
+  table.datatable td{padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text-2); vertical-align:top;}
+  table.datatable tr:nth-child(even) td{background:var(--surface-2);}
+  table.datatable td.num{font-family:var(--font-mono); color:var(--text-3); width:28px;}
+  table.datatable .where{font-family:var(--font-mono); font-size:11.3px; color:var(--mono-text); white-space:nowrap;}
+
+  .sev{display:inline-flex; align-items:center; gap:6px; font-size:11.2px; font-weight:700; padding:3px 9px; border-radius:100px; white-space:nowrap;}
+  .sev.high{background:var(--critical-soft); color:var(--critical-ink);}
+  .sev.high .dot{background:var(--critical);}
+  .sev.med{background:var(--warning-soft); color:var(--warning-ink);}
+  .sev.med .dot{background:var(--warning);}
+  .sev.low{background:var(--surface-3); color:var(--text-2);}
+  .sev.low .dot{background:var(--text-3);}
+  .sev .dot{width:6px;height:6px;border-radius:50%;}
+
+  .twocol{display:grid; grid-template-columns:1fr 1fr; gap:22px; margin:16px 0 8px;}
+  @media (max-width:680px){ .twocol{grid-template-columns:1fr;} }
+  .qualcard{border:1px solid var(--border); border-radius:12px; padding:18px 18px 6px; background:var(--surface);}
+  .qualcard h4{margin:0 0 8px; font-family:var(--font-display); font-size:13.5px; letter-spacing:.02em; text-transform:none;}
+  .qualcard.strong h4{color:#0ca35a;}
+  :root[data-theme="dark"] .qualcard.strong h4{color:#4ADE9A;}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]) .qualcard.strong h4{color:#4ADE9A;}
+  }
+  .qualcard.weak h4{color:var(--critical-ink);}
+
+  footer.endnote{margin-top:56px; padding-top:22px; border-top:1px solid var(--border); font-size:12.3px; color:var(--text-3);}
+  footer.endnote a{color:var(--text-3);}
+
+  @media (max-width:900px){
+    .shell{gap:0;}
+    #navtoggle{display:flex;}
+    aside.toc{
+      position:fixed; z-index:36; top:0; left:0; height:100dvh; width:270px;
+      background:var(--surface); border-right:1px solid var(--border); box-shadow:var(--shadow);
+      padding:calc(64px + env(safe-area-inset-top,0px)) 14px 24px 18px; max-height:none;
+      transform:translateX(-104%); transition:transform .22s ease;
+    }
+    aside.toc.open{transform:translateX(0);}
+    main{max-width:100%; padding-top:70px;}
+  }
+  @media (max-width:520px){
+    h1.title{font-size:26px;}
+    .kpis{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+<div id="scrim"></div>
+<button id="navtoggle" aria-label="Open contents">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+</button>
+
+<div class="shell">
+
+<aside class="toc" id="toc">
+  <div class="brand"><span class="dot"></span>ReeferReady Audit</div>
+
+  <div class="grouplabel">Overview</div>
+  <a href="#overview">What this is</a>
+  <a href="#features">Core features &amp; workflow</a>
+  <a href="#architecture">Architecture</a>
+
+  <div class="grouplabel">Backend</div>
+  <a href="#shared">packages/shared</a>
+  <a href="#api">apps/api</a>
+  <a class="sub" href="#api-core">Core plumbing</a>
+  <a class="sub" href="#api-routes">Routes &amp; tests</a>
+  <a class="sub" href="#api-data">Database &amp; seed</a>
+
+  <div class="grouplabel">Frontend</div>
+  <a href="#web">apps/web</a>
+  <a class="sub" href="#web-core">Core &amp; lib</a>
+  <a class="sub" href="#web-components">Components</a>
+  <a class="sub" href="#web-screens">Screens</a>
+
+  <div class="grouplabel">Pipeline &amp; ops</div>
+  <a href="#design-system">Design system</a>
+  <a href="#e2e">E2E tests</a>
+  <a href="#tooling">Tooling &amp; config</a>
+
+  <div class="grouplabel">Findings</div>
+  <a href="#auth">Auth model</a>
+  <a href="#risks">Cross-cutting risks</a>
+  <a href="#quality">Quality assessment</a>
+</aside>
+
+<main>
+
+<header class="masthead">
+  <span class="eyebrow">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    Codebase deep-read
+  </span>
+  <h1 class="title">ReeferReady PMS, read file by file</h1>
+  <p class="dek">A complete audit of the container-readiness monorepo &mdash; how it's built, how a request actually flows through it, and every genuine bug, inconsistency and risk a full read turned up.</p>
+  <div class="metarow">
+    <span>Generated 2026-09-25</span><span class="sep">&middot;</span>
+    <span>10 parallel subagents, one per subsystem</span><span class="sep">&middot;</span>
+    <span>175 tool calls</span><span class="sep">&middot;</span>
+    <span>+ one synthesis pass</span>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="n">10</div><div class="l">Subsystems read in full</div></div>
+    <div class="kpi"><div class="n">60+</div><div class="l">Files read, none skimmed</div></div>
+    <div class="kpi"><div class="n">12</div><div class="l">Ranked cross-cutting risks</div></div>
+    <div class="kpi"><div class="n">4</div><div class="l">Roles, 1 with zero coverage</div></div>
+  </div>
+</header>
+
+<section class="rpt" id="overview">
+  <h2 class="h"><span class="idx">00</span>What this project is</h2>
+  <p class="lede">ReeferReady PMS is a container readiness pipeline for a reefer depot network: ten repair stages from gate-in to release, a checklist that varies by container type, and one view of what's delayed across four depots. Four roles are modeled &mdash; manager, supervisor, technician, viewer &mdash; and the whole visual layer sits on a hand-authored, code-generated &ldquo;Crystal&rdquo; design system.</p>
+  <p><strong>Stack:</strong> an npm-workspaces monorepo with no Turborepo/Nx &mdash; orchestration is plain <code class="k">npm -w</code> flags plus <code class="k">concurrently</code>.</p>
+  <div class="files">
+    <div class="filecard"><span class="path">packages/shared</span><span class="desc">Dependency-free domain core (readiness rules + zod schemas), consumed as raw TypeScript by both sides.</span></div>
+    <div class="filecard"><span class="path">apps/api</span><span class="desc">Fastify 5 + Prisma 6 + SQLite backend, JWT auth, audit trail.</span></div>
+    <div class="filecard"><span class="path">apps/web</span><span class="desc">React 19 + Vite frontend: TanStack Query/Table, Radix UI, cmdk, TipTap, bound to the generated Crystal CSS/icons.</span></div>
+    <div class="filecard"><span class="path">tools/extract-design-system.mjs</span><span class="desc">The code-generation bridge from the design-system source HTML into the app's CSS/icons.</span></div>
+  </div>
+  <p>The repo's stated organizing principle, from its own README, is that <strong>&ldquo;no value is ever typed twice.&rdquo;</strong> That claim holds completely for design tokens and mostly holds for domain logic &mdash; the read found several concrete places where it's violated in practice (see <a href="#risks">&sect;10</a>).</p>
+</section>
+
+<section class="rpt" id="features">
+  <h2 class="h"><span class="idx">01</span>Core features &amp; workflow</h2>
+  <p class="lede">What the app actually does for its four kinds of users, and the pipeline every container moves through from arrival to release.</p>
+
+  <h4 class="h4">Core features</h4>
+  <ul class="findings">
+    <li><strong>Ten-stage readiness pipeline</strong> &mdash; every container moves through gate-in, structural &amp; IICL repair, T-floor repair, mechanical, electrical, sandblast &amp; paint, logo/stencil &amp; decals, cleaning, PTI, and final QC, each with a fixed day budget.</li>
+    <li><strong>Type-aware checklists</strong> &mdash; standard, double-compressor, and anteroom (internal/external mantrap) containers each get a checklist scoped to their variant, snapshotted at registration so later template edits never rewrite completed work.</li>
+    <li><strong>Live readiness gauge</strong> &mdash; every container's overall completion is drawn as the container itself (a filled outline with corrugation ribs at real stage boundaries), not a generic progress bar.</li>
+    <li><strong>Delayed / at-risk tracking</strong> &mdash; any container past its stage's day budget surfaces automatically on the Delayed screen and dashboard stat cards, computed from one shared definition of &ldquo;late.&rdquo;</li>
+    <li><strong>Kanban pipeline board</strong> &mdash; all containers laid out by current stage across a horizontally-scrolling ten-column board.</li>
+    <li><strong>Depot Command</strong> &mdash; the manager's home screen: the home depot's own fleet, a read-only view of the rest of the network, inbound off-lease units, and customer orders matched against available inventory.</li>
+    <li><strong>Tomorrow's Work queue</strong> &mdash; every outstanding checklist task across the fleet, flattened one row per task, with the assigned technician, their backup, and the fleet-average hours for that task.</li>
+    <li><strong>Order-to-inventory matching</strong> &mdash; customer orders are automatically matched to the best-progressed available container at the home depot, with cross-depot transfer suggestions when nothing local qualifies.</li>
+    <li><strong>Container detail drawer</strong> &mdash; a side panel for any container: its per-stage checklist, a stage-advance action (with a confirmation dialog if tasks are still open), a rich-text handover note, and the full event history.</li>
+    <li><strong>Role-based permissions</strong> &mdash; four roles (manager, supervisor, technician, viewer) gate who can register, edit, advance, tick tasks, or delete a container.</li>
+    <li><strong>Command palette (&#8984;K / Ctrl+K)</strong> &mdash; jump to any screen or container, or run a quick action, from anywhere in the app.</li>
+    <li><strong>Full audit trail</strong> &mdash; every registration, task completion, stage advance, and edit is logged as a timestamped event against the container.</li>
+    <li><strong>Checklist template library</strong> &mdash; a standalone reference screen showing every stage's tasks and per-variant day budgets, independent of any single container.</li>
+    <li><strong>Light/dark theming</strong> &mdash; follows the OS preference until the user picks explicitly; zero hand-written dark-mode CSS, entirely token-driven.</li>
+  </ul>
+
+  <h4 class="h4">Container lifecycle workflow</h4>
+  <ol class="steps">
+    <li><strong>Gate-in &amp; registration.</strong> A manager or supervisor registers the container &mdash; unit number, size, type, customer, depot, assignee. Its checklist is generated from the template library for its exact type/variant and snapshotted onto it; the pipeline stage is set to <code class="k">gatein</code>.</li>
+    <li><strong>Stage work.</strong> Technicians tick checklist items as work is completed in the current stage; each tick is timestamped, attributed, and logged as an audit event.</li>
+    <li><strong>Stage advance.</strong> Once a stage's checklist is complete, a supervisor or manager advances the container to the next stage. If tasks are still open, the UI blocks with a confirmation naming exactly which tasks remain &mdash; advancing anyway is a deliberate, explicit override, never a silent skip.</li>
+    <li><strong>Delay detection.</strong> Every stage carries a day budget (extended by a day for double-compressor units in mechanical, and for anteroom units in electrical). A container that overruns its budget is automatically flagged delayed everywhere it appears &mdash; dashboard, board, drawer &mdash; from one shared definition.</li>
+    <li><strong>Final QC &amp; release.</strong> Once the QC stage's checklist reaches 100%, the container is &ldquo;ready for release.&rdquo; A container sitting in QC is never counted as delayed, however long it waits for its gate pass.</li>
+    <li><strong>Order fulfilment.</strong> In parallel, open customer orders are matched against available containers (or flagged for cross-depot transfer) so a ready unit is routed to the order that needs it.</li>
+    <li><strong>Removal.</strong> Only a manager can remove a container from the system entirely &mdash; a destructive, explicitly confirmed action that also removes its task and event history.</li>
+  </ol>
+
+  <h4 class="h4">The ten pipeline stages</h4>
+  <table class="datatable">
+    <thead><tr><th style="width:26px">#</th><th>Stage</th><th style="width:64px">Budget</th><th>What happens</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>Gate-In &amp; Intake</strong></td><td>1 day</td><td>Off-hire survey, damage report, CSC plate check, job card issued.</td></tr>
+      <tr><td class="num">2</td><td><strong>Structural &amp; IICL Repair</strong></td><td>3 days</td><td>Corner post, panel, roof, frame repair and strip curtain fitting.</td></tr>
+      <tr><td class="num">3</td><td><strong>T-Floor Repair</strong></td><td>2 days</td><td>T-bar aluminum flooring inspection, slat replacement, drain clearing.</td></tr>
+      <tr><td class="num">4</td><td><strong>Refrigeration &amp; Mechanical</strong></td><td>2 days<sup>&dagger;</sup></td><td>Compressor(s), coil, fan, genset and light fixture testing.</td></tr>
+      <tr><td class="num">5</td><td><strong>Electrical, Alarm &amp; CA Systems</strong></td><td>2 days<sup>&Dagger;</sup></td><td>Alarm, light switch, ISO plugs, door switch, mantrap/anteroom systems.</td></tr>
+      <tr><td class="num">6</td><td><strong>Sandblast &amp; Painting</strong></td><td>2 days</td><td>Surface prep, anti-corrosion primer, casing paint, exterior topcoat.</td></tr>
+      <tr><td class="num">7</td><td><strong>Logo, Stencil &amp; Decals</strong></td><td>1 day</td><td>CSC plate re-stencil, owner livery, unit ID and weight markings.</td></tr>
+      <tr><td class="num">8</td><td><strong>Cleaning &amp; Sanitization</strong></td><td>1 day</td><td>Interior wash, machinery chamber clean, odor removal, fumigation.</td></tr>
+      <tr><td class="num">9</td><td><strong>PTI &mdash; Pre-Trip Inspection</strong></td><td>1 day</td><td>Pull-down test, door seal test, recorder verification, PTI decal.</td></tr>
+      <tr><td class="num">10</td><td><strong>Final QC &amp; Release</strong></td><td>1 day</td><td>Final visual/operational QC, sign-off, gate pass issued.</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12.3px; color:var(--text-3); margin-top:-8px;"><sup>&dagger;</sup> +1 day for double-compressor units &nbsp;&nbsp; <sup>&Dagger;</sup> +1 day for anteroom units &nbsp;&nbsp; Total planned turnaround: 16 days (standard), 17 days (double or anteroom).</p>
+
+  <h4 class="h4">Who can do what</h4>
+  <table class="datatable">
+    <thead><tr><th>Role</th><th>Read</th><th>Register / edit</th><th>Advance stage</th><th>Tick tasks</th><th>Delete</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Manager</strong></td><td>&check;</td><td>&check;</td><td>&check;</td><td>&check;</td><td>&check;</td></tr>
+      <tr><td><strong>Supervisor</strong></td><td>&check;</td><td>&check;</td><td>&check;</td><td>&check;</td><td>&mdash;</td></tr>
+      <tr><td><strong>Technician</strong></td><td>&check;</td><td>&mdash;</td><td>&mdash;</td><td>&check;</td><td>&mdash;</td></tr>
+      <tr><td><strong>Viewer</strong></td><td>&check;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="rpt" id="architecture">
+  <h2 class="h"><span class="idx">02</span>Architecture, traced through one real request</h2>
+  <p>A user ticks a checklist item in <code class="k">ContainerDrawer.tsx</code>. Here is exactly what happens, read directly out of the code:</p>
+  <ol class="steps">
+    <li><code class="k">useToggleTask</code> (<code class="k">lib/queries.ts</code> L56&ndash;63) fires <code class="k">api.toggleTask(id, key, done)</code>.</li>
+    <li><code class="k">lib/api.ts</code>'s <code class="k">request()</code> (L66&ndash;96) attaches the bearer token, POSTs <code class="k">/api/containers/:id/tasks</code>, and turns any non-2xx response into a typed <code class="k">RequestError</code> carrying status/code/fields/payload.</li>
+    <li>Server-side, <code class="k">routes/containers.ts</code> runs the request through <code class="k">authenticate</code> (a global preHandler hook, L27) then <code class="k">requirePermission('container:task')</code>, both from <code class="k">auth.ts</code>.</li>
+    <li>The handler (L269&ndash;307) runs a <code class="k">prisma.$transaction([...])</code> that flips the task's <code class="k">done</code>/<code class="k">doneAt</code>/<code class="k">doneBy</code> <strong>and</strong> inserts a <code class="k">ContainerEvent</code> audit row atomically &mdash; the audit line can never desync from the mutation it describes.</li>
+    <li>The container is re-fetched via <code class="k">containerInclude</code> + <code class="k">toContainer()</code> (<code class="k">mappers.ts</code>) and returned with the server's own <code class="k">today</code> (<code class="k">today.ts</code>).</li>
+    <li>The client patches/invalidates the TanStack Query cache; every screen watching <code class="k">useOverview()</code>/<code class="k">useContainer()</code> re-renders.</li>
+  </ol>
+  <div class="callout">
+    <strong>The load-bearing decision:</strong> <code class="k">packages/shared</code> is not just shared types &mdash; it's the only place business rules are <em>computed</em>. <code class="k">containers.ts</code> imports <code class="k">isLate</code>, <code class="k">isReady</code>, <code class="k">nextStage</code>, <code class="k">checklistFor</code>, <code class="k">stageBudget</code> directly rather than reimplementing them, and even filters &ldquo;late/ready&rdquo; in application code instead of SQL specifically so there is exactly one definition. The web side calls the identical functions to render status pills, progress and the work queue. That's what makes &ldquo;API and UI can never disagree&rdquo; structurally true rather than aspirational.
+  </div>
+</section>
+
+<section class="rpt" id="shared">
+  <h2 class="h"><span class="idx">03</span>packages/shared &mdash; the domain core</h2>
+  <div class="files">
+    <div class="filecard"><span class="path">index.ts</span><span class="desc">4-line barrel &mdash; <code class="k">export *</code> from the three modules below. Zero logic.</span></div>
+    <div class="filecard"><span class="path">process.ts</span><span class="desc">Static business data: 10 fixed stages + day budgets, the ~48&ndash;51-item task-template library per container type (<code class="k">checklistFor</code>), variant extra-day rules, plan totals. No imports &mdash; the leaf of the dependency graph.</span></div>
+    <div class="filecard"><span class="path">readiness.ts</span><span class="desc">Pure derivations: progress %, <code class="k">isLate</code>/<code class="k">isReady</code>, the <code class="k">Status</code> (tone+icon+label+detail) object that structurally enforces &ldquo;never colour alone,&rdquo; the prioritized work queue, and greedy order-to-inventory matching. <code class="k">today</code> is always passed in, never read from the clock.</span></div>
+    <div class="filecard"><span class="path">readiness.test.ts</span><span class="desc">Behavior-pinning Vitest suite (&ldquo;how it looks changes, what it does does not&rdquo;) &mdash; no mocks, exercises real stage/task data.</span></div>
+    <div class="filecard"><span class="path">schemas.ts</span><span class="desc">zod contracts built from process.ts's own enums, so API validation and web form types can't drift apart.</span></div>
+  </div>
+  <h4 class="h4">Findings</h4>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong><code class="k">containerId</code> doesn't validate what its own comment says it does</strong> (<code class="k">schemas.ts</code> L26&ndash;31): the comment describes real ISO&nbsp;6346 format (4 letters + 7 digits) and claims it &ldquo;normalises rather than rejects&rdquo; &mdash; the actual rule is only trim + 4&ndash;20 char length bound + whitespace collapse. No regex, no check-digit. <code class="k">"AAAA"</code> would pass straight through.</li>
+    <li>Calendar dates are never actually validated &mdash; <code class="k">isoDate</code> and <code class="k">parseISODate</code> only check the <code class="k">YYYY-MM-DD</code> shape. <code class="k">2026-02-30</code> silently rolls over to March via native <code class="k">Date</code> normalization instead of being rejected anywhere in the shared package.</li>
+    <li><code class="k">totalPlanDaysFor</code> in readiness.ts reimplements <code class="k">totalPlanDays</code> from process.ts instead of calling it &mdash; duplication inside the one package whose entire job is to prevent duplication.</li>
+    <li><strong>Latent key-collision risk:</strong> task-template keys (e.g. <code class="k">mechanical.07</code>) are positional, generated from array index, documented as &ldquo;stable&rdquo; &mdash; true only for in-place renames. Inserting or reordering a task mid-array would silently reassign every later task's key in that stage, and since <code class="k">averageHoursFor()</code> aggregates fleet-wide by key, old and new containers could end up sharing a key that means two different things &mdash; a silent, fleet-wide data corruption with nothing enforcing &ldquo;append-only&rdquo; and no test guarding it.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="api">
+  <h2 class="h"><span class="idx">04</span>apps/api &mdash; the backend</h2>
+
+  <h3 class="h3" id="api-core">Core plumbing</h3>
+  <div class="files">
+    <div class="filecard"><span class="path">app.ts</span><span class="desc">Composition root: registers CORS/rate-limit/JWT, a global error handler (Zod&rarr;422, 4xx pass-through, 5xx always generic), a uniform 404, health check, and the four route plugins.</span></div>
+    <div class="filecard"><span class="path">auth.ts</span><span class="desc">Security core: scrypt password hashing (timing-safe compare, no native deps), the role/permission table (flagged in its own comment as <strong>&ldquo;NEEDS SIGN-OFF&rdquo;</strong>), and the two Fastify preHandlers <code class="k">authenticate</code>/<code class="k">requirePermission</code>.</span></div>
+    <div class="filecard"><span class="path">db.ts</span><span class="desc">Single shared PrismaClient singleton.</span></div>
+    <div class="filecard"><span class="path">env.ts</span><span class="desc">zod-validates all env vars at import time; re-applies pre-existing <code class="k">process.env</code> values after loading <code class="k">.env</code>, so a stray file can never silently override the test runner's forced database.</span></div>
+    <div class="filecard"><span class="path">http.ts</span><span class="desc"><code class="k">zodToApiError</code>, <code class="k">parseOr422</code>, <code class="k">notFound</code>/<code class="k">conflict</code> &mdash; the one error-shape vocabulary every route uses.</span></div>
+    <div class="filecard"><span class="path">mappers.ts</span><span class="desc">Translates Prisma rows into shared DTOs; <code class="k">atLocalMidnight()</code> avoids the classic UTC-shift date bug.</span></div>
+    <div class="filecard"><span class="path">server.ts</span><span class="desc">Entry point &mdash; builds the app, listens on <code class="k">0.0.0.0:PORT</code>, graceful shutdown on SIGINT/SIGTERM.</span></div>
+    <div class="filecard"><span class="path">today.ts</span><span class="desc">Resolves &ldquo;today&rdquo; per-request; honors a client-supplied <code class="k">x-today</code> header <strong>outside production only</strong> &mdash; the deterministic-time seam the test suite depends on.</span></div>
+  </div>
+  <ul class="findings">
+    <li><strong>A placeholder <code class="k">JWT_SECRET</code> is long enough to pass validation</strong> (44 chars vs. a 16-char minimum) &mdash; a deployment that copies <code class="k">.env.example</code> without changing it boots successfully on a publicly-known signing secret.</li>
+    <li><code class="k">mappers.ts</code> does <code class="k">JSON.parse(t.onlyFor)</code> with no try/catch &mdash; a malformed column would 500 the entire container fetch.</li>
+    <li><code class="k">mappers.ts</code> casts DB strings straight to shared union types via plain <code class="k">as</code> &mdash; no runtime check.</li>
+    <li><code class="k">today.ts</code>'s escape hatch is gated on &ldquo;not production,&rdquo; not specifically &ldquo;test&rdquo; &mdash; any non-prod deployment would accept a caller-spoofed &ldquo;today.&rdquo;</li>
+    <li>No process-level <code class="k">unhandledRejection</code>/<code class="k">uncaughtException</code> handler in <code class="k">server.ts</code>.</li>
+  </ul>
+
+  <h3 class="h3" id="api-routes">Routes and integration tests</h3>
+  <div class="files">
+    <div class="filecard"><span class="path">routes/auth.ts</span><span class="desc">Login (10/min rate-limited) and &ldquo;who am I.&rdquo;</span></div>
+    <div class="filecard"><span class="path">routes/containers.ts</span><span class="desc">The workhorse &mdash; list/search, read-with-audit-trail, register (snapshots the checklist so template edits never rewrite completed work), edit, tick-task (transactional), advance-stage (force-past-open-tasks contract), delete, checklist-library.</span></div>
+    <div class="filecard"><span class="path">routes/overview.ts</span><span class="desc">One big server-computed aggregate feeding Dashboard + Depot Command.</span></div>
+    <div class="filecard"><span class="path">routes/reference.ts</span><span class="desc">Read-only form metadata &mdash; depots, active technicians, vocab.</span></div>
+    <div class="filecard"><span class="path">__tests__/api.test.ts</span><span class="desc">The whole integration suite &mdash; real seeded SQLite via <code class="k">.inject()</code>, no mocks.</span></div>
+  </div>
+  <h4 class="h4">Real bugs found</h4>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong>Login's anti-enumeration is broken by a timing side-channel.</strong> <code class="k">routes/auth.ts</code> L21: <code class="k">const ok = user ? verifyPassword(...) : false</code> &mdash; the deliberately-slow scrypt check only runs when a matching user row exists. A non-existent email short-circuits instantly with no hashing, so response <em>latency</em> leaks whether an email is registered &mdash; directly contradicting the route's own &ldquo;roughly the same work either way&rdquo; comment. The enumeration test only checks the response message, not timing.</li>
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong>Deleting a container deletes its own audit trail.</strong> <code class="k">DELETE /api/containers/:id</code> cascades <code class="k">ContainerEvent</code> rows away with the container. The only surviving record is a <code class="k">request.log.warn</code> line, not a queryable one &mdash; for a product whose headline feature is an audit trail, deletion is the one action it doesn't actually retain.</li>
+    <li><code class="k">overview.ts</code>'s docstring justifies server-side aggregation as &ldquo;the phone doesn't download the whole fleet,&rdquo; but the response still embeds the complete <code class="k">containers</code> array with full checklists &mdash; the client downloads full detail twice.</li>
+    <li><code class="k">overview.ts</code>/<code class="k">reference.ts</code> do unpaginated, unfiltered <code class="k">findMany</code> across every table on every request, with no depot-scoping despite <code class="k">SessionUser.depotId</code> existing on the JWT.</li>
+    <li><strong><code class="k">api.test.ts</code> never signs in or tests the <code class="k">supervisor</code> role at all</strong> &mdash; only manager, technician, viewer. Supervisor has zero test coverage.</li>
+    <li>The &ldquo;working a container&rdquo;/&ldquo;permissions&rdquo; test blocks are stateful and order-dependent, mutating the same container across <code class="k">it</code> blocks rather than isolated fixtures.</li>
+  </ul>
+
+  <h3 class="h3" id="api-data">Database schema and seed data</h3>
+  <div class="files">
+    <div class="filecard"><span class="path">prisma/schema.prisma</span><span class="desc">Eight models: User, Depot, Technician, Container (PK = the real ISO 6346 unit number), ContainerTask (snapshotted per-container), ContainerEvent (audit trail), OffLeaseUnit, CustomerOrder. Thoughtful <code class="k">onDelete</code> variety across relations.</span></div>
+    <div class="filecard"><span class="path">prisma/seed.ts</span><span class="desc">Deliberately hand-authored, deterministic fixture &mdash; 4 depots, 8 technicians in 4 buddy pairs, 4 users (one per role), 10 containers positioned to exercise every dashboard state.</span></div>
+  </div>
+  <ul class="findings">
+    <li><strong>No native Prisma enums anywhere</strong> &mdash; role, container type, stage, priority, event kind, grade are all plain <code class="k">String</code> columns; validity is a comment-only convention, not a DB constraint.</li>
+    <li><strong>&ldquo;Append-only&rdquo; audit trail is a documentation convention only</strong> &mdash; nothing in the schema (trigger, restricted grant, immutability) actually prevents an UPDATE/DELETE on <code class="k">ContainerEvent</code>.</li>
+    <li><strong>Audit fields are free text, not foreign keys</strong> &mdash; <code class="k">ContainerTask.doneBy</code> and <code class="k">ContainerEvent.actor</code> are plain strings.</li>
+    <li><code class="k">Depot.isHome</code>'s &ldquo;exactly one home depot&rdquo; invariant is documented, not enforced.</li>
+    <li><strong>No <code class="k">prisma/migrations</code> directory exists</strong> &mdash; the workflow is <code class="k">db push</code>, not versioned migrations, undercutting the schema's own claim that a Postgres move later is &ldquo;a provider swap plus a migration.&rdquo;</li>
+    <li><strong><code class="k">seed.ts</code> hardcodes its own stage order</strong> instead of importing it from <code class="k">packages/shared</code> &mdash; a literal duplication of the one thing the project says is defined exactly once.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="web">
+  <h2 class="h"><span class="idx">05</span>apps/web &mdash; the frontend</h2>
+
+  <h3 class="h3" id="web-core">Core and lib &mdash; the composition root</h3>
+  <div class="files">
+    <div class="filecard"><span class="path">App.tsx</span><span class="desc">Top-level route table + auth gate; hardcodes 8 route paths independently of <code class="k">lib/nav.ts</code>.</span></div>
+    <div class="filecard"><span class="path">main.tsx</span><span class="desc">Provider stack: StrictMode&rarr;Theme&rarr;QueryClient&rarr;Auth&rarr;Tooltip&rarr;Toast&rarr;Router&rarr;App. Thoughtful retry policy &mdash; never retry 4xx, retry transport failures up to 2&times;.</span></div>
+    <div class="filecard"><span class="path">lib/api.ts</span><span class="desc">The one HTTP client; typed <code class="k">RequestError</code>; localStorage token store with graceful in-memory fallback.</span></div>
+    <div class="filecard"><span class="path">lib/auth.tsx</span><span class="desc">Session context; client-side permission table explicitly commented as a UX-only mirror of the server.</span></div>
+    <div class="filecard"><span class="path">lib/queries.ts</span><span class="desc">TanStack Query hook layer over every <code class="k">api.*</code> call; every mutation invalidates overview.</span></div>
+    <div class="filecard"><span class="path">lib/format.ts</span><span class="desc">Centralized date/duration formatting.</span></div>
+    <div class="filecard"><span class="path">lib/nav.ts</span><span class="desc">The one declarative nav structure &mdash; sidebar/palette/headers all read it.</span></div>
+  </div>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong><code class="k">formatDateTime</code> violates its own module's stated invariant.</strong> <code class="k">format.ts</code>'s doc-comment says dates must render identically regardless of viewer timezone; <code class="k">formatDate</code>/<code class="k">formatDateShort</code> honor that, but <code class="k">formatDateTime</code> uses <code class="k">new Date(iso)</code> + <code class="k">.getHours()</code>/<code class="k">.getMinutes()</code> &mdash; both browser-local &mdash; so an audit-trail event's displayed time differs between two users in different timezones viewing the same event.</li>
+    <li><code class="k">App.tsx</code>'s route table and <code class="k">lib/nav.ts</code>'s config independently hardcode the same 8 paths &mdash; currently in sync, nothing enforces it stays that way.</li>
+    <li>No mutation hook in <code class="k">lib/queries.ts</code> defines an <code class="k">onError</code> handler at the hook level &mdash; error surfacing is left entirely to call sites.</li>
+  </ul>
+
+  <h3 class="h3" id="web-components">Components &mdash; app-level and the Crystal design system</h3>
+  <p><strong>App-level</strong> (<code class="k">components/app</code>): <code class="k">AddContainerDialog</code>, <code class="k">AppShell</code> (sidebar rail/nav sheet/app bar), <code class="k">CommandPalette</code> (&#8984;K, cmdk-based), <code class="k">ContainerDrawer</code> (the heaviest integration file &mdash; checklist, advance, notes, history, removal, opened via a <code class="k">?container=&lt;id&gt;</code> URL contract), <code class="k">ContainerGauge</code> (readiness drawn as the container itself), <code class="k">KanbanBoard</code> (the ten-stage board).</p>
+  <p><strong>Crystal primitives</strong> (<code class="k">components/crystal</code>): <code class="k">Button</code>, <code class="k">Data</code> (status pills structurally forced to carry tone+icon+label), <code class="k">DataTable</code> (TanStack Table + a responsive cards fallback driven by column metadata), <code class="k">Feedback</code> (alerts/toasts/AsyncRegion), <code class="k">Form</code>, <code class="k">Icon</code>, <code class="k">Overlay</code> (Radix-backed modal/drawer/menu), <code class="k">RichText</code> (TipTap-based handover-note editor).</p>
+  <h4 class="h4">Two real bugs found here</h4>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong><code class="k">Overlay.tsx</code> L39 &mdash; dead ternary.</strong> <code class="k">aria-describedby={description ? undefined : undefined}</code>. Both branches evaluate to <code class="k">undefined</code>. Harmless today since no caller passes <code class="k">description</code>, but if one ever did, this would silently suppress Radix's own automatic <code class="k">aria-describedby</code> wiring.</li>
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong><code class="k">RichText.tsx</code> L179&ndash;182 &mdash; premature &ldquo;saved&rdquo; state.</strong> The Save button calls <code class="k">setDirty(false)</code> immediately after invoking <code class="k">onSave(...)</code>, without waiting for the async mutation to succeed. If the save fails, the editor's &ldquo;&middot; unsaved&rdquo; indicator and Save button have already cleared &mdash; the UI silently reads as saved even though nothing persisted.</li>
+  </ul>
+  <p>Other findings: <code class="k">AddContainerDialog</code> always defaults the new technician to <code class="k">technicians[0]</code>, biasing every registration toward one person; <code class="k">DataTable</code> opens a row via the first visible cell, not necessarily the column flagged <code class="k">lead</code> in its own metadata contract; <code class="k">AsyncRegion</code> renders raw <code class="k">error.message</code> directly to end users of any role.</p>
+
+  <h3 class="h3" id="web-screens">Screens</h3>
+  <p>Nine route-level components, all thin &mdash; none fetch ad hoc or own business logic; seven of nine call the single <code class="k">useOverview()</code> hook and derive everything from <code class="k">@pms/shared</code>.</p>
+  <div class="files">
+    <div class="filecard"><span class="path">Dashboard.tsx</span><span class="desc">The app's one hero card (design-system rule 4) + 4 stat cards + the shared Kanban board.</span></div>
+    <div class="filecard"><span class="path">DepotCommand.tsx</span><span class="desc">Landing screen: home-fleet, network summary, off-lease inbound, order-to-inventory matching.</span></div>
+    <div class="filecard"><span class="path">Fleet.tsx</span><span class="desc">The full searchable/filterable/sortable container register.</span></div>
+    <div class="filecard"><span class="path">Delayed.tsx</span><span class="desc">Every container past its stage budget, worst offenders first.</span></div>
+    <div class="filecard"><span class="path">Tomorrow.tsx</span><span class="desc">Technician work queue &mdash; every outstanding task, flattened, with backup coverage and fleet-average hour comparisons.</span></div>
+    <div class="filecard"><span class="path">Login.tsx</span><span class="desc">Sign-in screen, validated against the shared login schema.</span></div>
+  </div>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong><code class="k">Login.tsx</code> hardcodes plaintext demo credentials in the rendered UI</strong> &mdash; three of four roles, all sharing the password <code class="k">readiness</code>. No supervisor account is shown anywhere.</li>
+    <li>Dashboard and Pipeline render the identical <code class="k">&lt;KanbanBoard&gt;</code>; Delayed/Fleet/Tomorrow each independently redefine near-identical TanStack column boilerplate.</li>
+    <li><code class="k">DepotCommand.tsx</code> has visibly irregular JSX indentation, suggesting it wasn't run through a formatter after its last edit.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="design-system">
+  <h2 class="h"><span class="idx">06</span>The design-system pipeline</h2>
+  <p><strong>The chain:</strong> <code class="k">source/crystal-design-system.html</code> (4,191 lines, the only place tokens/CSS/icons may be authored) &rarr; <code class="k">tools/extract-design-system.mjs</code> &rarr; four gitignored generated files &rarr; the running app. <code class="k">app.css</code> is the only hand-authored CSS file, mechanically policed by stylelint so no literal colour can bypass the token pipeline.</p>
+  <h4 class="h4">Two genuine bugs, found by comparing source HTML against generated output</h4>
+  <ul class="findings">
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong>A duplicated &ldquo;CONTAINER GAUGE&rdquo; section silently loses its first definition.</strong> The source HTML declares this banner section twice, with two incompatible implementations. The extractor builds its lookup as <code class="k">new Map(sections.map(s =&gt; [s.name, s.css]))</code> &mdash; a plain JS <code class="k">Map</code>, so the later duplicate silently wins with no warning. Verified directly: <code class="k">crystal.css</code> contains only the second definition; the generated manifest's unfiltered section list is the only artifact that reveals the name appears twice.</li>
+    <li><span class="tag-bug"><span class="dot"></span>bug</span><strong>The reduce-motion cherry-pick can never match, by a comma-splitting bug.</strong> The extractor's allow-list stores the manual reduce-motion escape hatch as one three-selector, comma-joined string; the matcher splits the <em>rule's own</em> selector list on commas and checks each piece against the whole joined string &mdash; which can never be equal. Verified two ways: <code class="k">crystal.css</code> contains zero <code class="k">.reduce-motion</code> selectors, and the manifest's own &ldquo;dropped&rdquo; list names the exact rule that also appears in the allow-list, in the same file.</li>
+    <li>Icon dedup uses the <strong>opposite</strong> tie-break rule from CSS-section dedup &mdash; icons keep the first occurrence of a duplicate id, sections keep the last. Same file, two contradictory silent policies for the same class of authoring mistake.</li>
+    <li>An unsigned-off contrast correction has been live for 5+ weeks: <code class="k">tokens.css</code>'s source carries a &ldquo;CONTRAST CORRECTION &mdash; 2026-08-11, awaiting sign-off&rdquo; comment describing seven token-lightness changes, with no ticket reference anywhere in the repo.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="e2e">
+  <h2 class="h"><span class="idx">07</span>End-to-end test suite</h2>
+  <p>Playwright runs fully serial against a real running API+web stack, reseeded once before the run. Auth is handled once by a dedicated setup project; five spec files cover functional/RBAC behavior, axe-core accessibility across 8 screens &times; 2 themes, responsive layout, design-system contract assertions (including a genuinely rigorous SVG-geometry check on the readiness gauge), and pure visual capture.</p>
+  <ul class="findings">
+    <li>Several tests hardcode literal computed RGB values tied to design tokens instead of comparing self-referentially &mdash; any deliberate, correct palette change will fail these for cosmetic reasons.</li>
+    <li>The &ldquo;phone&rdquo; responsive spec sets its own viewport with no project restriction, so it silently runs twice per full suite &mdash; once under desktop, once under phone &mdash; doubling its runtime for no added coverage.</li>
+    <li>A manual fixture-restoration pattern (toggle a checkbox, then toggle it back at the end) is fragile: if the test fails partway through, the &ldquo;undo&rdquo; never runs and the shared fixture stays dirtied for every subsequent test.</li>
+    <li>The screenshot-capture spec contains zero <code class="k">expect</code> calls &mdash; it always &ldquo;passes&rdquo; regardless of what the images show.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="tooling">
+  <h2 class="h"><span class="idx">08</span>Tooling and workspace config</h2>
+  <p>An unusually strict shared TypeScript baseline (<code class="k">noUncheckedIndexedAccess</code>, <code class="k">verbatimModuleSyntax</code>, hard-error unused locals/params, consistent-casing enforcement) and a flat ESLint config with project-specific Radix-aware accessibility tweaks.</p>
+  <ul class="findings">
+    <li><strong>Possible build-path mismatch:</strong> <code class="k">apps/api/tsconfig.json</code> sets <code class="k">rootDir: "."</code> while including both <code class="k">src/**</code> and <code class="k">prisma/**</code>, which should make <code class="k">tsc -b</code> emit <code class="k">dist/src/server.js</code> &mdash; but the package's <code class="k">start</code> script runs <code class="k">node dist/server.js</code>. Not empirically confirmed in this environment; worth verifying with a real build.</li>
+    <li><code class="k">packages/shared/package.json</code>'s exports point directly at <code class="k">./src/index.ts</code>, not <code class="k">dist/</code> &mdash; the package's own build output isn't actually consumed by any resolution path.</li>
+    <li>ESLint globally ignores <code class="k">apps/api/prisma/**</code>, so <code class="k">seed.ts</code> &mdash; a file that ships and executes in production &mdash; is exempt from the zero-warning lint gate everything else is held to.</li>
+    <li>No Prettier or other formatter config anywhere &mdash; style consistency relies entirely on ESLint/stylelint.</li>
+  </ul>
+</section>
+
+<section class="rpt" id="auth">
+  <h2 class="h"><span class="idx">09</span>Auth &amp; permissions model</h2>
+  <p>Four roles, six permissions. Compared directly, the server table (<code class="k">auth.ts</code>) and client table (<code class="k">lib/auth.tsx</code>) are <strong>currently identical</strong> &mdash; manager gets all six, supervisor everything but delete, technician read+task, viewer read-only &mdash; but they're two independently hand-maintained copies with <strong>no shared source enforcing sync</strong>. A server-side policy change requires remembering to hand-edit the client too, and nothing would fail a build if it drifted.</p>
+  <p>Enforcement is clean on the server (composable preHandlers on every mutating route) and explicitly UX-only on the client, per its own comment: &ldquo;the server is still the authority.&rdquo;</p>
+  <div class="callout">
+    <strong>Notably, <code class="k">supervisor</code> is a fully-specified role with zero coverage anywhere</strong> &mdash; not in the API test suite's setup, not in the login screen's demo credentials, not in the Playwright auth setup, which signs in only as manager. It's the one role nobody, test or human, ever actually exercises.
+  </div>
+</section>
+
+<section class="rpt" id="risks">
+  <h2 class="h"><span class="idx">10</span>Cross-cutting risks, ranked</h2>
+  <table class="datatable">
+    <thead><tr><th style="width:34px">#</th><th>Risk</th><th style="width:78px">Severity</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Audit trail isn't durable across deletion &mdash; <code class="k">ContainerEvent</code> cascades away with its container; only a log line survives.</td><td><span class="sev high"><span class="dot"></span>High</span></td><td class="where">routes/containers.ts</td></tr>
+      <tr><td class="num">2</td><td>Login timing side-channel contradicts its own anti-enumeration comment &mdash; non-existent emails skip the slow hash, leaking account existence via latency.</td><td><span class="sev high"><span class="dot"></span>High</span></td><td class="where">routes/auth.ts L17-22</td></tr>
+      <tr><td class="num">3</td><td>A placeholder <code class="k">JWT_SECRET</code> is long enough to pass validation &mdash; nothing rejects the well-known default at boot.</td><td><span class="sev high"><span class="dot"></span>High</span></td><td class="where">.env.example, env.ts</td></tr>
+      <tr><td class="num">4</td><td>&ldquo;No value typed twice&rdquo; is violated three times outside the design-system pipeline: hardcoded stage order in the seed, a duplicate plan-days formula, hand-duplicated permission tables.</td><td><span class="sev med"><span class="dot"></span>Medium</span></td><td class="where">seed.ts, readiness.ts, auth.tsx</td></tr>
+      <tr><td class="num">5</td><td>Checklist task-key stability trap &mdash; positional keys plus fleet-wide key-based aggregation could silently corrupt cross-container averages on a template reorder.</td><td><span class="sev med"><span class="dot"></span>Medium</span></td><td class="where">process.ts, readiness.ts</td></tr>
+      <tr><td class="num">6</td><td>Validation/documentation gap &mdash; <code class="k">containerId</code> doesn't enforce the ISO 6346 shape its own comment describes; dates accept calendar-invalid values.</td><td><span class="sev med"><span class="dot"></span>Medium</span></td><td class="where">schemas.ts L17-31</td></tr>
+      <tr><td class="num">7</td><td>DB has zero enum enforcement &mdash; every &ldquo;enum&rdquo; is a plain String column; mappers cast to union types unchecked.</td><td><span class="sev med"><span class="dot"></span>Medium</span></td><td class="where">schema.prisma, mappers.ts</td></tr>
+      <tr><td class="num">8</td><td>Supervisor role has no test or UI coverage anywhere in the stack.</td><td><span class="sev med"><span class="dot"></span>Medium</span></td><td class="where">api.test.ts, Login.tsx</td></tr>
+      <tr><td class="num">9</td><td>Design-system pipeline has two silent bugs: the duplicated gauge section and the never-matching reduce-motion cherry-pick.</td><td><span class="sev low"><span class="dot"></span>Low</span></td><td class="where">extract-design-system.mjs</td></tr>
+      <tr><td class="num">10</td><td><code class="k">formatDateTime</code> breaks its own module's stated timezone invariant &mdash; exactly where it matters most, audit-trail timestamps.</td><td><span class="sev low"><span class="dot"></span>Low</span></td><td class="where">lib/format.ts L25-30</td></tr>
+      <tr><td class="num">11</td><td>An unsigned-off contrast-correction change has been live in production tokens for 5+ weeks with no ticket trail.</td><td><span class="sev low"><span class="dot"></span>Low</span></td><td class="where">tokens.css</td></tr>
+      <tr><td class="num">12</td><td>Two small concrete component bugs: a dead ternary, and a premature &ldquo;saved&rdquo; state on a failed async save.</td><td><span class="sev low"><span class="dot"></span>Low</span></td><td class="where">Overlay.tsx, RichText.tsx</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="rpt" id="quality">
+  <h2 class="h"><span class="idx">11</span>Overall code-quality assessment</h2>
+  <div class="twocol">
+    <div class="qualcard strong">
+      <h4>What's strong</h4>
+      <p style="font-size:13.4px;">Unusually self-aware &mdash; nearly every file justifies a non-obvious choice inline. The <code class="k">packages/shared</code> boundary is genuinely disciplined: <code class="k">readiness.ts</code> is 100% pure, <code class="k">today</code>-threaded functions, and routes never reimplement a calculation they could import. The TypeScript baseline is strict well beyond typical projects this size. The design-system extractor, despite its two bugs, is well-engineered &mdash; content-hash stamping, a real CSS-aware nested-at-rule splitter, fail-fast guards. Accessibility is structural, not aspirational: status objects that can't be colour-only, required tooltip labels, correct ARIA roles on destructive confirms.</p>
+    </div>
+    <div class="qualcard weak">
+      <h4>What's weak</h4>
+      <p style="font-size:13.4px;">The recurring pattern is <em>documented intent the code doesn't fully deliver on</em> &mdash; not sloppiness, but comments written to the intended design that the implementation later diverged from. Test coverage has specific, real gaps rather than being broadly thin &mdash; no supervisor coverage anywhere, a stateful integration test file, a screenshot spec that always passes. Security posture stacks several unenforced trust boundaries on the same login path. Architecturally, the several &ldquo;single source of truth&rdquo; violations found have zero build-time or test-time protection against drifting apart &mdash; precisely the failure mode the rest of the architecture was built to prevent everywhere else.</p>
+    </div>
+  </div>
+</section>
+
+<footer class="endnote">
+  Produced by a 10-agent parallel deep read of the ReeferReady PMS repository (one subagent per subsystem, every listed file read in full) plus a cross-cutting synthesis pass. A companion PDF of this report is also available in the project folder.
+</footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  try{
+    var toc = document.getElementById('toc');
+    var toggle = document.getElementById('navtoggle');
+    var scrim = document.getElementById('scrim');
+    function openNav(){ toc.classList.add('open'); scrim.classList.add('show'); }
+    function closeNav(){ toc.classList.remove('open'); scrim.classList.remove('show'); }
+    toggle.addEventListener('click', function(){
+      toc.classList.contains('open') ? closeNav() : openNav();
+    });
+    scrim.addEventListener('click', closeNav);
+    toc.querySelectorAll('a').forEach(function(a){
+      a.addEventListener('click', function(){ if (window.innerWidth <= 900) closeNav(); });
+    });
+
+    var links = Array.prototype.slice.call(toc.querySelectorAll('a'));
+    var targets = links.map(function(a){
+      var id = a.getAttribute('href').slice(1);
+      return { a: a, el: document.getElementById(id) };
+    }).filter(function(t){ return t.el; });
+
+    var current = null;
+    function setActive(id){
+      if (id === current) return;
+      current = id;
+      links.forEach(function(a){ a.classList.remove('active'); });
+      targets.forEach(function(t){
+        if (t.el.id === id) t.a.classList.add('active');
+      });
+    }
+
+    if ('IntersectionObserver' in window){
+      var io = new IntersectionObserver(function(entries){
+        var best = null, bestTop = -Infinity;
+        entries.forEach(function(e){
+          if (e.isIntersecting && e.boundingClientRect.top <= 140 && e.boundingClientRect.top > bestTop){
+            bestTop = e.boundingClientRect.top; best = e.target.id;
+          }
+        });
+        if (best) setActive(best);
+      }, { rootMargin: '-100px 0px -70% 0px', threshold: [0, 1] });
+      targets.forEach(function(t){ io.observe(t.el); });
+      if (targets[0]) setActive(targets[0].el.id);
+    }
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

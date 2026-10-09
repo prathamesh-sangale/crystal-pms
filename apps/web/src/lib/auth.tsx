@@ -2,6 +2,15 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, setUnauthorizedHandler, token, type SessionUser } from './api';
 
+/**
+ * The manager role reads as "Admin" everywhere it's shown — the product is
+ * moving to a single Admin account (SPEC.md); the other three roles keep
+ * their real names since they still work exactly as before.
+ */
+export function roleDisplayLabel(role: SessionUser['role']): string {
+  return role === 'manager' ? 'Admin' : role;
+}
+
 type Permission =
   | 'container:read'
   | 'container:create'

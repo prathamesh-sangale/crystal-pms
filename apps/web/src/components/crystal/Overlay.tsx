@@ -19,16 +19,22 @@ export function Modal({
   open,
   onOpenChange,
   title,
+  subtitle,
   description,
   size = 'md',
+  headerActions,
   footer,
   children,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  title: string;
+  title: React.ReactNode;
+  /** Rendered under the title, left-aligned — a designation, a status, anything identifying. */
+  subtitle?: React.ReactNode;
   description?: string;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
+  /** Rendered top-right, next to the close button — Edit/Delete, never Save (that's the footer's). */
+  headerActions?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }): React.ReactElement {
@@ -36,11 +42,25 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="scrim">
-          <Dialog.Content className={cx('modal', size === 'sm' && 'sm')} aria-describedby={description ? undefined : undefined}>
+          <Dialog.Content className={cx('modal', size === 'sm' && 'sm', size === 'lg' && 'lg')} aria-describedby={description ? undefined : undefined}>
             <div className="modal-head">
-              <Dialog.Title asChild>
-                <h4>{title}</h4>
-              </Dialog.Title>
+              <div style={{ minWidth: 0 }}>
+                <Dialog.Title asChild>
+                  <h4 style={{ margin: 0 }}>{title}</h4>
+                </Dialog.Title>
+                {subtitle && (
+                  <div style={{ marginTop: 'var(--s-1)' }}>{subtitle}</div>
+                )}
+              </div>
+              {headerActions && (
+                <div className="cluster modal-head-actions" style={{ gap: 'var(--s-2)' }}>
+                  {headerActions}
+                </div>
+              )}
+              {/* Always pinned to the same corner (app.css), not a flex
+                 sibling of headerActions — on a narrow screen where
+                 headerActions wraps onto its own row below the title,
+                 Close shouldn't wrap down with it into visual isolation. */}
               <Dialog.Close asChild>
                 <button type="button" className="iconbtn bare close" aria-label="Close">
                   <Icon name="x" />

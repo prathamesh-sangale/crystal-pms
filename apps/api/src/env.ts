@@ -9,9 +9,9 @@ const ENV_FILE = join(API_DIR, '.env');
 /**
  * Load apps/api/.env, but let anything already in the real environment win.
  *
- * That precedence matters: the test runner sets DATABASE_URL to the test
- * database before this module is imported, and a .env file must never quietly
- * point a test run at the development data.
+ * That precedence matters: the test runner sets its own JWT_SECRET/PORT/etc.
+ * before this module is imported, and a .env file must never quietly
+ * override a value a test run deliberately set.
  */
 const fromEnvironment = { ...process.env };
 if (existsSync(ENV_FILE)) {
@@ -24,10 +24,14 @@ if (existsSync(ENV_FILE)) {
 /** Fail at boot with a readable message, not at the first request. */
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  DATABASE_URL: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
   JWT_SECRET: z.string().min(16, 'must be at least 16 characters'),
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  // Required — Supabase is the only database this app has now. Nothing left
+  // to fall back to if these are missing, so booting without them is a
+  // config error, not a degraded-but-working state.
+  SUPABASE_URL: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
 });
 
 const parsed = schema.safeParse(process.env);

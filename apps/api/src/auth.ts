@@ -26,57 +26,23 @@ export function verifyPassword(password: string, stored: string): boolean {
 /* Roles                                                                      */
 /* ------------------------------------------------------------------------- */
 
+/**
+ * Carried over from v1's four-role model — v2 only has one real account
+ * (Admin, displayed from `manager`; see `roleDisplayLabel` in auth.tsx) but
+ * nothing has migrated the seeded accounts or dropped the other three roles,
+ * so the type stays wide rather than silently narrowing what a JWT can
+ * claim. v1's per-action permission table (`PERMISSIONS`/`can`/
+ * `requirePermission`) was removed along with the rest of v1 — no v2 route
+ * has ever used it.
+ */
 export const ROLES = ['manager', 'supervisor', 'technician', 'viewer'] as const;
 export type Role = (typeof ROLES)[number];
-
-export type Permission =
-  | 'container:read'
-  | 'container:create'
-  | 'container:update'
-  | 'container:advance'
-  | 'container:task'
-  | 'container:delete';
-
-/**
- * The permission table.
- *
- * ── NEEDS SIGN-OFF ────────────────────────────────────────────────────────
- * Who may delete a container from the pipeline, and who may advance a stage
- * with tasks still open, are operational policy decisions rather than design
- * ones. This is the proposed mapping, kept in one place so changing it is a
- * one-line edit. Nothing else in the codebase hard-codes a role.
- * ──────────────────────────────────────────────────────────────────────────
- */
-export const PERMISSIONS: Record<Role, readonly Permission[]> = {
-  manager: [
-    'container:read',
-    'container:create',
-    'container:update',
-    'container:advance',
-    'container:task',
-    'container:delete',
-  ],
-  supervisor: [
-    'container:read',
-    'container:create',
-    'container:update',
-    'container:advance',
-    'container:task',
-  ],
-  technician: ['container:read', 'container:task'],
-  viewer: ['container:read'],
-};
-
-export function can(role: Role, permission: Permission): boolean {
-  return PERMISSIONS[role]?.includes(permission) ?? false;
-}
 
 export interface SessionUser {
   id: string;
   email: string;
   name: string;
   role: Role;
-  depotId: string | null;
 }
 
 /**
@@ -100,17 +66,4 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       message: 'Your session has expired. Sign in again to continue.',
     });
   }
-}
-
-/** Use after `authenticate` to gate a route on a permission. */
-export function requirePermission(permission: Permission) {
-  return async function guard(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    const role = request.user?.role;
-    if (!role || !can(role, permission)) {
-      await reply.code(403).send({
-        error: 'forbidden',
-        message: `Your role (${role ?? 'none'}) cannot do this. Ask a depot manager.`,
-      });
-    }
-  };
 }

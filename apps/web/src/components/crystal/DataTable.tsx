@@ -110,6 +110,7 @@ export function DataTable<T>({
                       key={header.id}
                       className={cx(sortable && 'sortable', meta?.num && 'num')}
                       data-dir={dir || undefined}
+                      data-secondary={meta?.secondary ? '' : undefined}
                       aria-sort={dir === 'asc' ? 'ascending' : dir === 'desc' ? 'descending' : 'none'}
                       scope="col"
                     >

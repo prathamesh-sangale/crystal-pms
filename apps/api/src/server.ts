@@ -1,5 +1,4 @@
 import { buildApp } from './app.js';
-import { prisma } from './db.js';
 import { env } from './env.js';
 
 const app = await buildApp();
@@ -7,7 +6,6 @@ const app = await buildApp();
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, 'shutting down');
   await app.close();
-  await prisma.$disconnect();
   process.exit(0);
 };
 process.on('SIGINT', () => void shutdown('SIGINT'));

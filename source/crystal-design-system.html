@@ -480,7 +480,7 @@ code.tok{font-family:var(--f-mono);background:var(--surface-2);color:var(--accen
 .dd-trigger .caret{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--text-3);transition:transform var(--dur-base) var(--ease-out);}
 .dropdown.open .dd-trigger .caret{transform:translateY(-50%) rotate(180deg);}
 .dd-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:100%;background:var(--surface);border:1px solid var(--line);
-  border-radius:var(--r-md);box-shadow:var(--shadow-3);z-index:var(--z-dropdown);padding:6px;display:none;white-space:nowrap;}
+  border-radius:var(--r-md);box-shadow:var(--shadow-3);z-index:calc(var(--z-modal) + 1);padding:6px;display:none;white-space:nowrap;}
 .dropdown.open .dd-menu{display:block;animation:pop var(--dur-base) var(--ease-out);}
 .dd-menu.right{left:auto;right:0;}
 .dd-item{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-sm);cursor:pointer;font-size:12.5px;color:var(--text);}
@@ -804,15 +804,22 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
 .scrim.on{display:flex;animation:fade var(--dur-base) var(--ease-out);}
 @keyframes fade{from{opacity:0;}to{opacity:1;}}
 .modal{background:var(--surface);color:var(--text);border-radius:var(--r-lg);box-shadow:var(--shadow-4);width:100%;max-width:460px;
+  /* A modal taller than the viewport used to have no way to reach its own
+     header or footer — centered by .scrim, with nowhere to scroll, both
+     ends fell off-screen. This caps the modal to the viewport height (minus
+     the scrim's own padding) and lets only the body scroll, so header and
+     footer stay reachable no matter how long the body's content gets. */
+  max-height:calc(100vh - 44px);display:flex;flex-direction:column;
   overflow:hidden;animation:rise var(--dur-base) var(--ease-spring);border:1px solid var(--line);}
 @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.97);}to{opacity:1;transform:none;}}
-.modal-head{display:flex;align-items:center;gap:11px;padding:17px 19px;border-bottom:1px solid var(--line);}
+.modal-head{display:flex;align-items:center;gap:11px;padding:17px 19px;border-bottom:1px solid var(--line);flex:none;}
 .modal-head h4{font-family:var(--f-display);font-weight:800;font-size:15px;margin:0;}
 .modal-head .close{margin-left:auto;}
-.modal-body{padding:18px 19px;font-size:13px;color:var(--text-2);line-height:1.6;}
+.modal-body{padding:18px 19px;font-size:13px;color:var(--text-2);line-height:1.6;overflow-y:auto;flex:1 1 auto;min-height:0;}
 .modal-body .field{margin-bottom:14px;}
-.modal-foot{padding:13px 19px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:var(--surface-2);}
+.modal-foot{padding:13px 19px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:9px;background:var(--surface-2);flex:none;}
 .modal.sm{max-width:370px;}
+.modal.lg{max-width:760px;}
 .modal .warn-mark{width:38px;height:38px;border-radius:50%;background:var(--error-bg);color:var(--error);display:grid;place-items:center;flex:none;}
 
 .drawer{position:fixed;top:0;right:0;bottom:0;width:390px;max-width:92vw;background:var(--surface);color:var(--text);z-index:var(--z-drawer);
@@ -1082,7 +1089,7 @@ table.dt .pos{color:var(--success);font-weight:700;} table.dt .neg{color:var(--e
   transition:opacity var(--dur-fast) var(--ease-out);
 }
 .side.rail:hover .navitem[data-tally]::after,.side.rail:focus-within .navitem[data-tally]::after{opacity:0;}
-.side.rail .side-group{height:14px;overflow:hidden;}
+.side.rail .side-group{height:14px;padding:2px 9px;line-height:10px;overflow:hidden;}
 .side.rail .side-foot{overflow:hidden;}
 @media (max-width:1023px){
   .rail-slot{display:none;}

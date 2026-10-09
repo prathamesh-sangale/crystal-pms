@@ -18,17 +18,13 @@
       rel="stylesheet"
     />
     <script>
-      // Runs before first paint: a returning user never sees the light theme
-      // flash before their dark preference is applied.
+      // Runs before first paint: light is the default for every new visitor,
+      // regardless of OS preference. A returning user who explicitly chose
+      // dark via the toggle never sees a light-theme flash first.
       (function () {
         try {
           var saved = localStorage.getItem('pms-theme');
-          var theme =
-            saved === 'light' || saved === 'dark'
-              ? saved
-              : window.matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light';
+          var theme = saved === 'dark' ? 'dark' : 'light';
           document.documentElement.setAttribute('data-theme', theme);
         } catch (e) {
           /* private mode — the default in the markup stands */

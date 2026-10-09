@@ -1,9 +1,9 @@
 import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { NAV_ITEMS } from '../../lib/nav';
-import { useOverview } from '../../lib/queries';
 import { useTheme } from '../../lib/theme';
+import { useV2Data } from '../../lib/v2Store';
 import { Icon } from '../crystal/Icon';
 
 /**
@@ -13,9 +13,8 @@ import { Icon } from '../crystal/Icon';
 export function CommandPalette(): React.ReactElement {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
-  const [, setSearchParams] = useSearchParams();
   const { theme, toggle } = useTheme();
-  const { data: overview } = useOverview();
+  const { containers, requestOpen } = useV2Data();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -60,7 +59,7 @@ export function CommandPalette(): React.ReactElement {
 
         <Command.List className="cmdk-list">
           <Command.Empty className="ac-none">
-            Nothing matches that. Try a unit number, a customer, or “pipeline”.
+            Nothing matches that. Try a unit number or “live board”.
           </Command.Empty>
 
           <Command.Group heading="Go to">
@@ -78,29 +77,33 @@ export function CommandPalette(): React.ReactElement {
             ))}
           </Command.Group>
 
-          {overview && overview.containers.length > 0 && (
+          {containers.length > 0 && (
             <Command.Group heading="Containers">
-              {overview.containers.map((container) => (
+              {containers.map((container) => (
                 <Command.Item
                   key={container.id}
                   className="cmdk-item"
-                  value={`${container.id} ${container.customer} ${container.assignee} ${container.depot}`}
+                  value={`${container.id} ${container.typeCode}`}
                   onSelect={() =>
-                    run(() =>
-                      setSearchParams(
-                        (params) => {
-                          params.set('container', container.id);
-                          return params;
-                        },
-                        { replace: false }
-                      )
-                    )
+                    run(() => {
+                      // A departed container no longer shows on the Yard
+                      // Board, so opening its drawer there would be a dead
+                      // end — its report is the one place it's still fully
+                      // visible.
+                      if (container.departedAt) {
+                        navigate(`/containers/${encodeURIComponent(container.id)}/report`);
+                      } else {
+                        requestOpen(container.id);
+                        navigate('/yard');
+                      }
+                    })
                   }
                 >
                   <Icon name="container" size="sm" />
                   <span className="mono">{container.id}</span>
-                  <span className="subtle truncate">{container.customer}</span>
-                  <span className="kbd">open</span>
+                  <span className="subtle truncate">{container.typeCode}</span>
+                  {container.departedAt ? <span className="subtle">Departed</span> : null}
+                  <span className="kbd">{container.departedAt ? 'report' : 'open'}</span>
                 </Command.Item>
               ))}
             </Command.Group>

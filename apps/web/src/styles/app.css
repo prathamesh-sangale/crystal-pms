@@ -47,9 +47,38 @@ body {
   z-index: var(--z-sticky);
 }
 
+/* .appbar itself is a plain, non-wrapping flex row (crystal.css) — fine
+ * down to phone-tablet width, but a true small phone (≤420px) doesn't have
+ * room for search + theme toggle + account + Drafts + New container all on
+ * one line without this: the row was overflowing the viewport outright,
+ * cutting New container off past the right edge instead of just looking
+ * cramped. Wrapping to a second line beats a horizontal scrollbar on the
+ * one bar that's supposed to stay put while the page scrolls under it. */
+@media (max-width: 420px) {
+  .appbar {
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: var(--s-2);
+  }
+
+  .appbar > .grow {
+    flex-basis: 100%;
+    order: -1;
+  }
+}
+
+/* Capped and centred past a point: the sidebar/topbar still span the full
+ * window, but on an ultrawide monitor a grid of cards left unbounded just
+ * grows wider gutters between columns, not more useful information — and a
+ * few-item stat row (see .statrow below) would stretch edge to edge with
+ * its number adrift in a mostly-empty card. 1600px comfortably fits five
+ * 280px cards per row before it caps. */
 .appcontent {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
   padding: var(--s-5);
   display: flex;
   flex-direction: column;
@@ -123,6 +152,47 @@ body {
 }
 
 /* ------------------------------------------------------------------ grids */
+
+/* A stat row of only 3-4 cards, laid out with .cardgrid's own auto-fit
+ * 1fr columns, has nothing stopping it from stretching each card to fill
+ * whatever width is available — fine at desktop width, but on a large
+ * monitor that leaves the number floating in a mostly-empty card. Capping
+ * each column's own max width (not just the row's) keeps every stat card a
+ * sane, legible size regardless of how wide the screen is; narrow screens
+ * are unaffected, since auto-fit only grows a column past its minimum once
+ * there's already more room than needed. */
+.statrow {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 300px));
+}
+
+/* Yard Board's "Total containers" + one card per Type — deliberately always
+ * exactly one row at desktop/tablet width, not .statrow's auto-fit/wrap:
+ * auto-fit with a minmax(170px,300px) cap settles on however many *maximum*-
+ * width columns fit, which for a handful of cards in a typical ~1300-1400px
+ * content area is fewer than the actual count — graceful wrapping, not what
+ * was asked for ("all in one row"). Fixed, equal-width columns instead;
+ * only actually wraps once the screen is narrow enough that this many
+ * columns would be unreadably thin. Column count is 1 (Total containers) +
+ * TYPE_CODES.length (mockV2.ts) — currently 4 types, 5 total; revisit this
+ * number alongside TYPE_CODES if that list's length changes again. */
+.yardtype-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+@media (max-width: 899px) {
+  .yardtype-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .yardtype-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .quadgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -292,6 +362,121 @@ body {
   min-width: 0;
 }
 
+/* A data table dropped into a .stack (every screen's table does this) is a
+ * flex item whose default min-width is auto — it refuses to shrink below its
+ * widest row and pushes the whole page wider instead of scrolling within
+ * itself. crystal.css's own .tablescroll already has overflow:auto, but it
+ * never gets the chance to engage until .tablewrap is actually allowed to be
+ * narrower than its content. This is the one line that lets it. */
+.tablewrap {
+  min-width: 0;
+}
+
+/* A `secondary` column is already droppable by design — crystal.css drops it
+ * on a phone-width card. Tablet width is too wide for cards (that's a bigger
+ * layout change than asked for) but too narrow for every column at once on a
+ * data-dense table like Live Board's. Same signal, same idea, one tier
+ * earlier: drop it here too, at the sidebar's own tablet breakpoint, so the
+ * table keeps its row/column shape and still fits without ever scrolling —
+ * instead of silently clipping whichever column lands at the right edge. */
+@media (max-width: 1023px) {
+  .tablewrap th[data-secondary],
+  .tablewrap td[data-secondary] {
+    display: none;
+  }
+}
+
+/* .modal (max-width:760px) and .drawer (390/560px) are capped-width overlay
+ * surfaces — that cap holds regardless of viewport, so a wide screen doesn't
+ * help a table trapped inside one (unlike the full-page tables above, which
+ * actually do get more room as the viewport grows). Drop secondary columns
+ * here unconditionally rather than behind a viewport media query that these
+ * surfaces never actually respond to. */
+.modal .tablewrap th[data-secondary],
+.modal .tablewrap td[data-secondary],
+.drawer .tablewrap th[data-secondary],
+.drawer .tablewrap td[data-secondary] {
+  display: none;
+}
+
+/* crystal.css's .modal-head has no flex-wrap — fine for a short title and a
+ * couple of header buttons, but a content-heavy subtitle (several status
+ * pills, a mini progress strip, on top of the usual descriptive text — see
+ * Container Detail's header) needs more width than is left once headerActions
+ * claims its own fixed-width share on a phone screen. Without wrapping, the
+ * title column gets squeezed down to its CSS minimum, its text wraps across
+ * many lines, and align-items:center then centers the short headerActions
+ * cluster against that now-very-tall sibling — landing its buttons visually
+ * on top of the subtitle text instead of beside it. Wrapping headerActions
+ * to its own row below the title, with the full modal width to work with
+ * instead of a squeezed column, fixes it. Scoped to app.css, not crystal.css
+ * itself, per the standing rule against editing the design system.
+ *
+ * Close is pulled out of that same flex flow entirely (Overlay.tsx) and
+ * pinned to a fixed corner instead — wrapping it down alongside
+ * headerActions left it visually stranded, alone on its own row with a lot
+ * of empty space beside it. padding-right on .modal-head reserves room for
+ * it unconditionally (not just under the media query below), since it's
+ * always absolutely positioned now, at every width. */
+.modal-head {
+  position: relative;
+  padding-right: 56px;
+}
+
+.modal-head .close {
+  position: absolute;
+  top: 13px;
+  right: 15px;
+}
+
+/* .modal-head-actions itself needs its own rule too: its flex-shrink:0 is
+ * right for the normal single-row case (buttons shouldn't get squished next
+ * to a long title) but wrong once it's wrapped onto its own row below —
+ * nothing was capping its width there, so two or three buttons together
+ * could still run past the modal's edge instead of wrapping internally
+ * (.cluster's own flex-wrap only helps once the cluster itself is allowed
+ * to be narrower than its content). */
+.modal-head-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .modal-head {
+    flex-wrap: wrap;
+  }
+
+  .modal-head > :first-child {
+    flex: 1 1 100%;
+  }
+
+  .modal-head-actions {
+    flex-shrink: 1;
+    max-width: 100%;
+  }
+}
+
+/* crystal.css's .modal-foot is a plain flex row with no wrap, sized to each
+ * button's own content — fine for one or two buttons, but a 3-button footer
+ * (Cancel / Save as draft / Run survey, on the Gate-In form) has nowhere
+ * left to shrink on a phone, so the buttons' own text wraps internally
+ * instead ("Save" / "as draft" on two lines) rather than the row giving up
+ * and stacking. Stacking each footer action onto its own full-width row
+ * below this breakpoint reads better than squeezed, wrapped button text at
+ * any count. A footer with a single wrapped child (e.g. a StatusPill
+ * grouped with one or two buttons) still benefits — it gets the full
+ * width, and that group's own .cluster wrapping (already flex-wrap) takes
+ * it from there. */
+@media (max-width: 480px) {
+  .modal-foot {
+    flex-direction: column;
+  }
+
+  .modal-foot > * {
+    width: 100%;
+  }
+}
+
 .mono {
   font-family: var(--f-mono);
 }
@@ -331,10 +516,446 @@ body {
   border: 0;
 }
 
+/* ------------------------------------------------------------- form grid
+ * Two columns instead of one long vertical stack, so a form like "register a
+ * container" fits inside the modal without depending on the modal body
+ * scrolling (it doesn't — see .modal in crystal.css). A field that needs the
+ * full width (the primary identifier, or a conditional field appearing on
+ * its own) takes .span-2. */
+.formgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3) var(--s-4);
+}
+
+.formgrid > .span-2 {
+  grid-column: 1 / -1;
+}
+
+/* The itemized repair/machine-check lists (GateFormDialog) default to one
+ * item per row, which is the single biggest height cost in the form once
+ * either checklist is revealed. Laying them out two-per-row roughly halves
+ * that cost with no loss of readability — each item is just a label, a
+ * severity toggle, and an optional note input. */
+.checklist-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-2) var(--s-3);
+}
+
+@media (max-width: 599px) {
+  .checklist-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The grid's own row gap replaces each field's individual bottom margin
+ * (crystal.css's .modal-body .field rule), so rows don't get double-spaced. */
+.modal-body .formgrid > .field {
+  margin-bottom: 0;
+}
+
+@media (max-width: 599px) {
+  .formgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .infogrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--s-3) var(--s-4);
+}
+
+/* Worker Detail's two-up layout (the "Record" panel beside the running/
+ * assigned/completed task lists) — a fixed 220px sidebar column works fine
+ * at the drawer's normal size="lg" width, but was a raw inline style with no
+ * responsive handling at all, so on a phone the task list got squeezed into
+ * whatever was left (well under 100px), truncating every task name down to
+ * a few characters ("1st co…", "Logo …") with no way to read what any of
+ * them actually were. Collapses to one column at the same breakpoint
+ * .formgrid/.infogrid already use, so the task list gets the full width. */
+.workerdetail-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--s-5);
+}
+
+@media (max-width: 599px) {
+  .workerdetail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Gate In/Out form: the nine required inspection-photo tiles plus any
+ * additional photos (GateFormDialog.tsx) — a tap target showing an upload
+ * prompt until a photo's picked, then its own thumbnail. Reused as a static
+ * display grid on the report (ContainerReportContent.tsx), where
+ * .photo-thumb stands in for the tile since there's nothing to tap there. */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+@media (max-width: 599px) {
+  .photo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.photo-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  aspect-ratio: 4 / 3;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  overflow: hidden;
+  padding: var(--s-2);
+  text-align: center;
+  color: var(--text-2);
+}
+
+.photo-tile img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-tile-label {
+  position: relative;
+  font-size: 10.5px;
+  font-weight: 600;
+  z-index: 1;
+}
+
+.photo-tile.has-photo .photo-tile-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  padding: 4px 6px;
+  background: var(--scrim);
+  color: var(--text-inv);
+  text-align: left;
+}
+
+.photo-tile-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  background: var(--scrim);
+  color: var(--text-inv);
+}
+
+.photo-thumb {
+  display: block;
+  aspect-ratio: 4 / 3;
+  width: 100%;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  object-fit: cover;
+}
+
+/* Live Board's stage picker (LiveBoard.tsx StageFunnel) — every section in
+ * one row, every segment the same size, a real gap (not just a colour
+ * change) between every segment so the boundary between stages is never
+ * ambiguous. A plain selector, not a chart: no axis, no legend, just a
+ * label, a count, and a click to filter the table below. */
+.funnel {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-2);
+  width: 100%;
+}
+
+.funnel-seg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  flex: 1;
+  min-width: 108px;
+  height: 44px;
+  padding: 0 var(--s-3);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 12.5px;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.funnel-seg:hover {
+  background: var(--surface-3);
+}
+
+.funnel-seg[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--text-inv);
+}
+
+.funnel-count {
+  font-family: var(--f-mono);
+}
+
+@media (max-width: 699px) {
+  .funnel {
+    flex-wrap: wrap;
+  }
+}
+
+/* Container Detail's section rail (ContainerDetailDrawer.tsx) — one row per
+ * section (Painting/PTI/Cleaning/Repairment). Each row is tinted by its own
+ * sectionStatus() tone (the same tone every StatusPill in the app already
+ * uses — ok/info/warn/neutral — never a second "done" concept invented just
+ * for this rail), so the whole rail reads as a status overview before you
+ * even pick one; the picked row gets an accent ring on top of its tint.
+ * Picking a row swaps the whole panel beside it to that section only, so
+ * only one section's tasks are ever on screen at once. */
+.stagework {
+  display: flex;
+  gap: var(--s-3);
+  align-items: flex-start;
+}
+
+.stagerail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: none;
+  width: 144px;
+}
+
+.stagerail-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  border: none;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+.stagerail-item.ok {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.stagerail-item.info {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.stagerail-item.warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.stagerail-item.neutral {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.stagerail-item:hover {
+  filter: brightness(0.97);
+}
+
+.stagerail-item.on {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.stagerail-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  color: inherit;
+}
+
+.stagerail-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.stagerail-count {
+  font-family: var(--f-mono);
+  font-weight: 400;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
+
+.stagerail-live {
+  margin-left: auto;
+  flex: none;
+  font-family: var(--f-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: var(--r-full);
+  background: var(--info);
+  color: var(--text-inv);
+}
+
+.stagework-panel {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 599px) {
+  .stagework {
+    flex-direction: column;
+  }
+
+  .stagerail {
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    gap: var(--s-2);
+  }
+
+  .stagerail-item {
+    flex: none;
+  }
+}
+
+/* The mini stage-progress strip — one tagged node per section joined by a
+ * line, tinted by the same sectionStatus() tone as the rail above. Each node
+ * carries its own two-letter tag (PT/TI/CL/RP) rather than a bare colour
+ * dot — at this size a plain dot reads as decoration, not information; the
+ * tag plus colour together say both *which* stage and *what state* without
+ * needing the tooltip. Inline wherever a container needs to show "how far
+ * along" without opening it — the drawer header, and a Progress column on
+ * Live Board's table. */
+.ministrip {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ministrip-step {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ministrip-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 3px;
+  border-radius: var(--r-sm);
+  flex: none;
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  border: 1px solid transparent;
+}
+
+/* All three "something's happened here" states share one solid-fill
+ * treatment (background IS the color, not a pale tint) so they're told
+ * apart by hue alone at this badge's small size, not by comparing two
+ * similarly-muted washes side by side — which is what made "In progress"
+ * and "Not started" hard to tell apart before. "Not started" stays the odd
+ * one out on purpose: muted/recessive is the right way to say "nothing's
+ * happening yet," and it gives the other three something quieter to
+ * contrast against. */
+.ministrip-node.ok, .ministrip-legend-swatch.ok {
+  background: var(--success);
+  color: var(--text-inv);
+}
+
+.ministrip-node.warn, .ministrip-legend-swatch.warn {
+  background: var(--warn);
+  color: var(--text-inv);
+}
+
+.ministrip-node.info, .ministrip-legend-swatch.info {
+  background: var(--info);
+  color: var(--text-inv);
+}
+
+.ministrip-node.info {
+  animation: ministrip-pulse 1.8s ease-in-out infinite;
+}
+
+.ministrip-legend-swatch.neutral {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+/* A static ring read as "slightly different colour," not "this one is
+ * happening right now" — the one thing this strip most needs to say at a
+ * glance. Motion says "live" the way no amount of extra contrast can. */
+@keyframes ministrip-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px var(--info-bg);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px var(--info-bg);
+  }
+}
+
+.ministrip-line {
+  width: 8px;
+  height: 1.5px;
+  background: var(--line);
+  flex: none;
+}
+
+.ministrip-line.on {
+  background: var(--line-strong);
+}
+
+/* A standing key for the strip's colour code — swatches reuse the exact
+ * tones above rather than redefining them, so the legend can never drift
+ * out of sync with what the strip actually renders. */
+.ministrip-legend {
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--text-2);
+}
+
+.ministrip-legend-item {
+  gap: 6px;
+}
+
+.ministrip-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: block;
+  flex: none;
 }
 
 @media (max-width: 599px) {
@@ -356,4 +977,82 @@ body {
   font-weight: 600;
   color: var(--text);
   margin: 2px 0 0;
+}
+
+/* Native date/time inputs: the popup calendar itself is rendered by the
+   browser's own UI, not ours, so it can't be recoloured to the Crystal
+   palette — but `color-scheme` is the one hook the browser gives us, and it
+   switches both the field and its popup to a native light or dark rendering
+   that actually matches the app's current theme, instead of always
+   rendering light even when the rest of the page is dark. Global, not
+   scoped to one screen, so any future date/time input picks it up too. */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="datetime-local"],
+[data-theme="dark"] input[type="time"] {
+  color-scheme: dark;
+}
+
+/* The container report page (apps/web/src/screens/v2/ContainerReport.tsx) is
+   the only thing printed in this app — keep its controls off the page and
+   stop a long task list from splitting mid-panel across a page break. */
+@media print {
+  .report-no-print {
+    display: none !important;
+  }
+
+  .datapanel {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
+
+/* Survey checklist's severity toggle (SurveyIntakeDialog) — good/minor/major
+   each have their own colour, computed in JS and passed in as the two custom
+   properties below (not as `background`/`border`/`color` directly: an inline
+   style always wins over a stylesheet rule regardless of selector, which
+   would silence :hover below entirely if the colours were set that way
+   instead). Split by aria-pressed so hovering an already-picked button adds
+   a lift instead of washing its tone out with the generic unpicked hover. */
+.sev-btn {
+  /* 40px — short of the 44px Apple HIG ideal, but the biggest a 3-up row can
+     go before three of them (plus the item's own label) stop fitting one
+     line on an iPad in portrait; still a real jump from the 26px this
+     replaced, which was sized for a mouse pointer, not a fingertip. */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+  color: var(--text-3);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.sev-btn[aria-pressed="true"] {
+  border-color: var(--sev-color);
+  background: var(--sev-bg);
+  color: var(--sev-color);
+}
+
+.sev-btn[aria-pressed="false"]:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.sev-btn[aria-pressed="true"]:hover {
+  box-shadow: var(--shadow-1);
+}
+
+.sev-btn:active {
+  transform: translateY(1px);
 }

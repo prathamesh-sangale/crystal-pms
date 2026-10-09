@@ -12,20 +12,23 @@ apps/web/src/generated/
 # database
 *.db
 *.db-journal
-apps/api/prisma/dev.db*
 
 # env
 .env
 .env.local
 !.env.example
 
+# secrets / credentials — service account keys, never committed
+apps/api/credentials/
+*.iam.gserviceaccount.com.json
+gen-lang-client-*.json
+sb_token.txt
+
 # test output
 playwright-report/
 test-results/
 apps/web/screenshots/
 coverage/
-# saved browser session from the Playwright sign-in step — contains a token
-apps/web/e2e/.auth/
 
 # editor / os
 .DS_Store

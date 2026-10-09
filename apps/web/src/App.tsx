@@ -2,15 +2,14 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/app/AppShell';
 import { Icon } from './components/crystal/Icon';
 import { useAuth } from './lib/auth';
-import { ChecklistLibrary } from './screens/ChecklistLibrary';
-import { Dashboard } from './screens/Dashboard';
-import { Delayed } from './screens/Delayed';
-import { DepotCommand } from './screens/DepotCommand';
-import { Fleet } from './screens/Fleet';
+import { V2DataProvider } from './lib/v2Store';
 import { Login } from './screens/Login';
-import { Pipeline } from './screens/Pipeline';
-import { Timeline } from './screens/Timeline';
-import { Tomorrow } from './screens/Tomorrow';
+import { ContainerReport } from './screens/v2/ContainerReport';
+import { DashboardsV2 } from './screens/v2/DashboardsV2';
+import { LiveBoard } from './screens/v2/LiveBoard';
+import { WorkerRoster } from './screens/v2/WorkerRoster';
+import { YardBoard } from './screens/v2/YardBoard';
+import { YardReport } from './screens/v2/YardReport';
 
 function Booting(): React.ReactElement {
   return (
@@ -39,8 +38,8 @@ function NotFound(): React.ReactElement {
       <Icon name="pin" size="xl" />
       <b>That screen does not exist</b>
       <p>The link may be out of date. Everything the app can show is in the sidebar.</p>
-      <a className="btn btn-secondary btn-sm" href="/depot">
-        Back to Depot Command
+      <a className="btn btn-secondary btn-sm" href="/yard">
+        Back to Yard Board
       </a>
     </div>
   );
@@ -53,19 +52,24 @@ export function App(): React.ReactElement {
   if (status === 'signed-out') return <Login />;
 
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route path="/" element={<Navigate to="/depot" replace />} />
-        <Route path="/depot" element={<DepotCommand />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/tomorrow" element={<Tomorrow />} />
-        <Route path="/pipeline" element={<Pipeline />} />
-        <Route path="/timeline" element={<Timeline />} />
-        <Route path="/fleet" element={<Fleet />} />
-        <Route path="/checklist" element={<ChecklistLibrary />} />
-        <Route path="/delayed" element={<Delayed />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    // Wrapped above AppShell, not inside one of its routes: AppShell keys its
+    // <main> by pathname to replay each page's entrance animation, which would
+    // otherwise remount this provider (and wipe every timer) on every nav
+    // between screens — the shared store needs to outlive that.
+    <V2DataProvider>
+      <Routes>
+        {/* Chrome-free: no sidebar/topbar, so Print captures only the report. */}
+        <Route path="/containers/:id/report" element={<ContainerReport />} />
+        <Route path="/reports/yard" element={<YardReport />} />
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Navigate to="/live" replace />} />
+          <Route path="/yard" element={<YardBoard />} />
+          <Route path="/live" element={<LiveBoard />} />
+          <Route path="/workers" element={<WorkerRoster />} />
+          <Route path="/dashboards" element={<DashboardsV2 />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </V2DataProvider>
   );
 }

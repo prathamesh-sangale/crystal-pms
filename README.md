@@ -1,8 +1,10 @@
 # ReeferReady PMS
 
-Container readiness pipeline for a reefer depot network — ten repair stages from
-gate-in to release, a checklist that changes with the container type, and one
-view of what is delayed across four depots.
+Container readiness tracking for one reefer depot (Crystal Yard, JNPT) — a
+container enters at Gate-In, is surveyed, works through whichever of four
+Sections (Painting, PTI, Cleaning, Repairment) its survey flagged, and the
+app's job ends at Ready to Move. Gate-Out is optional and only reachable once
+a container has reached that state.
 
 Built entirely on the Crystal Design System in
 [`source/crystal-design-system.html`](source/crystal-design-system.html).
@@ -16,23 +18,28 @@ statement separator, and these are meant to be readable on every shell.
 
 ```
 npm install
-npm run setup      # generates tokens, syncs the schema, seeds the database
+npm run setup      # generates tokens, pushes the schema, seeds the 4 login accounts
 npm run dev        # api on :4000, web on :5173
 ```
 
-`npm run setup` creates `apps/api/.env` from the example if it is missing.
-**Change `JWT_SECRET` before this is deployed anywhere.**
+`npm run setup` creates `apps/api/.env` from the example if it is missing —
+fill in `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` from your Supabase
+project's Settings → API before running it. **Change `JWT_SECRET` before this
+is deployed anywhere** — the committed example value is not safe to ship.
 
 Open http://localhost:5173.
 
-| Account                          | Role       | Can                                        |
-| -------------------------------- | ---------- | ------------------------------------------ |
-| `sitaram@reeferready.example`     | manager    | everything, including removing a container |
-| `supervisor@reeferready.example`  | supervisor | everything except removing                 |
-| `tech@reeferready.example`        | technician | tick checklist items                       |
-| `viewer@reeferready.example`      | viewer     | read only                                  |
+| Account                           | Role       |
+| ---------------------------------- | ---------- |
+| `sitaram@reeferready.example`      | manager (shown as "Admin" in the UI) |
+| `supervisor@reeferready.example`   | supervisor |
+| `tech@reeferready.example`         | technician |
+| `viewer@reeferready.example`       | viewer     |
 
-Password for all four: `readiness`.
+Password for all four: `readiness`. These are dev-only seed accounts
+(`apps/api/scripts/seedUsers.ts`) — the four-role distinction is a holdover
+from an earlier version of this product; today only one of them is actually
+used day to day (signed in as "Admin").
 
 ---
 
@@ -46,18 +53,15 @@ Password for all four: `readiness`.
 | ------------------------------- | -------------------------------------------- |
 | `apps/web/src/styles/tokens.css`  | the `:root` and `[data-theme]` blocks, verbatim |
 | `apps/web/src/styles/crystal.css` | every component rule, verbatim                  |
-| `apps/web/src/generated/icons.ts` | all 58 sprite icons                             |
+| `apps/web/src/generated/icons.ts` | the sprite icons                                |
 | `apps/web/src/generated/manifest.json` | what was taken, what was left, source hash |
 
 All four are gitignored — they are build output, not source. Change the design
 system, run `npm run tokens`, and the app follows. There is no second copy of a
 colour, a radius, a shadow or an icon anywhere in this repository.
 
-Two gates keep it that way:
-
-- **stylelint** rejects any colour literal in the one hand-written stylesheet
-  (`apps/web/src/styles/app.css`, which holds layout only).
-- **Playwright + axe** runs on all eight screens in both themes.
+**stylelint** rejects any colour literal in the one hand-written stylesheet
+(`apps/web/src/styles/app.css`, which holds layout only).
 
 ### Dark mode
 
@@ -70,57 +74,73 @@ screen ever needs a dark-specific rule, the foundation is wrong.
 ## Layout
 
 ```
-packages/shared     the readiness process and every rule derived from it,
-                    plus the zod schemas both sides validate against
-apps/api            Fastify + Prisma + SQLite, JWT auth, audit trail
+packages/shared     the few genuinely shared pieces: the login schema, the
+                    API error shape, and a couple of small display helpers
+                    (toISODate, initials) both apps use
+apps/api            Fastify + Supabase (Postgres) + JWT auth
 apps/web            React 19 + Vite; design system classes bound to
                     headless primitives (Radix, TanStack Table, cmdk, TipTap)
 tools               the design system extractor
 source              the design system, and the original concept
 ```
 
-`packages/shared` is the reason the API and the UI can never disagree about
-whether a container is late: `isLate()` is defined once and imported by both.
+Supabase is the only database — `workers`, `containers`, `sections`, `tasks`,
+`drafts`, `users`, and `api_keys`, all under `apps/api/supabase/migrations/`.
+`apps/api/src/supabase.ts` is the one place the service-role key is read;
+nothing with write access to it ever reaches the browser.
+
+### Outside integrations
+
+| What | Direction | What it's for |
+| --- | --- | --- |
+| Google Drive | apps/api → Drive | Gate-In/Gate-Out photo and PTI video uploads, into one Shared Drive |
+| Google Sheets — IMS lookup | apps/api → IMS's sheet | The "Check IMS" button at Gate-In — read-only, never writes back |
+| External yard-summary API | IMS → apps/api | `/api/external/yard-summary`, gated by its own hashed API key — a narrow, read-only count of what's in the yard |
 
 ---
 
 ## Tests
 
 ```bash
-npm test            # 25 domain + 21 API
-npm run test:e2e    # 77 browser, in apps/web
-npm run verify      # typecheck + eslint + stylelint + unit tests
+npm test            # 5 shared + 5 API
+npm run verify       # typecheck + eslint + stylelint + unit tests
 ```
 
 | Suite                          | Covers                                                                   |
 | ------------------------------ | ------------------------------------------------------------------------ |
-| `packages/shared/*.test.ts`     | stage budgets, variant work, lateness, order matching                     |
-| `apps/api/src/__tests__`        | auth, permissions, validation, checklist snapshotting, the audit trail    |
-| `apps/web/e2e/a11y.spec.ts`     | axe on 8 screens × 2 themes, focus return, keyboard routes                |
-| `apps/web/e2e/responsive.spec.ts` | table→cards, sidebar→sheet, tablet, 200% zoom, no sideways page scroll  |
-| `apps/web/e2e/screens.spec.ts`  | design system rules 4, 5 and 12 asserted directly against the DOM         |
-| `apps/web/e2e/interactions.spec.ts` | register, tick, advance, note, remove — end to end                    |
+| `packages/shared/src/ui.test.ts` | the two small shared helpers (`toISODate`, `initials`)                  |
+| `apps/api/src/__tests__/api.test.ts` | the auth seam — health check, login success/failure, a protected route refusing an anonymous request |
 
-Time-dependent behaviour is pinned with an `x-today` header the API honours
-outside production, so "three containers are delayed" is a real assertion
-rather than something that breaks next Tuesday.
+That's the whole automated suite. Every v2 feature beyond login (containers,
+tasks, drafts, workers, IMS lookup, uploads) is verified live against the
+real Supabase project as it's built, rather than through an automated suite —
+see `DEVELOPMENT-STATUS.md` for how each one was checked. `api.test.ts` hits
+the real Supabase project too; `npm run seed-users` (in apps/api) must have
+been run at least once for its accounts to exist.
 
-### Screenshots
-
-```bash
-npm run shots -w @pms/web
-```
-
-Writes `apps/web/screenshots/{before,after}/…` — the rebuilt app beside the
-original concept, at desktop and phone widths, in both themes. "Before" is the
-concept file opened straight off disk.
+There is no browser/e2e suite today — the previous one targeted a now-deleted
+product and was removed along with it rather than kept failing.
 
 ---
 
-## Changes made to the design system
+## Current state
 
-Every one is commented in place in `source/crystal-design-system.html` and
-listed in the handover report. In short: five new sections (kanban, responsive
-table, mobile navigation, data panel, headless bindings), a corrected contrast
-ramp, two new icons, and a note that the rich text component must not ship on
-`document.execCommand`.
+This repo has gone through two major versions. The first (ten fixed repair
+stages, four depots, role-based permissions) has been fully removed — its
+screens, its Prisma/SQLite backend, and its domain logic are gone, not just
+unused. What remains and is live:
+
+- **v2 UI** — Live Board, Yard Board, Worker Roster, Dashboards, plus two
+  chrome-free printable reports (Container Report, Yard Report).
+- **v2 backend** — Supabase-backed persistence for every screen above; real
+  Google Drive uploads; a read-only IMS lookup; an API-key-gated endpoint for
+  IMS's own integration into this app.
+- **Auth** — still the original scrypt + JWT design, now checking Supabase's
+  `users` table instead of a separate Prisma database.
+
+There is no demo/mock data anywhere in this repo — `npm run setup` seeds only
+the 4 login accounts above. A fresh database genuinely starts empty: every
+screen shows its real empty state until a container is actually gated in
+through the app.
+
+See `DEVELOPMENT-STATUS.md` for the full, dated history of how this was built.

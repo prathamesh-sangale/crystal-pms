@@ -1,12 +1,5 @@
-import type {
-  ApiError,
-  Container,
-  OffLeaseUnit,
-  Order,
-  Stage,
-  StageId,
-  Status,
-} from '@pms/shared';
+import type { ApiError } from '@pms/shared';
+import type { ContainerDraft, ContainerDraftData, MockContainer, MockWorker, SectionKind } from './mockV2';
 
 const TOKEN_KEY = 'pms-token';
 
@@ -65,7 +58,12 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has('content-type')) headers.set('content-type', 'application/json');
+  // A FormData body (the upload endpoint) needs the browser to set its own
+  // multipart/form-data content-type, boundary included — setting it by
+  // hand here would produce a body the server can't actually parse.
+  if (init.body && !headers.has('content-type') && !(init.body instanceof FormData)) {
+    headers.set('content-type', 'application/json');
+  }
   const auth = token.get();
   if (auth) headers.set('authorization', `Bearer ${auth}`);
 
@@ -104,97 +102,6 @@ export interface SessionUser {
   email: string;
   name: string;
   role: 'manager' | 'supervisor' | 'technician' | 'viewer';
-  depotId: string | null;
-}
-
-export interface DepotSummary {
-  name: string;
-  location: string;
-  isHome: boolean;
-  total: number;
-  ready: number;
-  late: number;
-  averageProgress: number;
-}
-
-export interface StageSummary extends Stage {
-  count: number;
-  late: number;
-}
-
-export interface OrderMatchSummary {
-  order: Order;
-  containerId: string | null;
-  remaining: number | null;
-  ready: boolean;
-  elsewhereCount: number;
-  status: Status;
-}
-
-export interface Overview {
-  today: string;
-  homeDepot: string;
-  containers: Container[];
-  offLease: OffLeaseUnit[];
-  orders: Order[];
-  matches: OrderMatchSummary[];
-  depots: DepotSummary[];
-  stages: StageSummary[];
-  totals: {
-    fleet: number;
-    home: number;
-    homeReady: number;
-    homeLate: number;
-    active: number;
-    late: number;
-    ready: number;
-    double: number;
-    anteroom: number;
-    offLeaseIncoming: number;
-    offLeaseHeavy: number;
-    orders: number;
-    ordersReady: number;
-    ordersUnmatched: number;
-    averagePlannedTurnaround: number;
-  };
-}
-
-export interface Reference {
-  depots: Array<{ id: string; name: string; isHome: boolean; location: string }>;
-  homeDepot: string;
-  technicians: Array<{ name: string; trade: string; backup: string | null }>;
-  stages: Stage[];
-  types: Array<{ value: 'standard' | 'double' | 'anteroom'; label: string; hint: string }>;
-  sizes: string[];
-  priorities: string[];
-  anteroomVariants: string[];
-  today: string;
-}
-
-export interface ContainerEvent {
-  id: string;
-  at: string;
-  kind: string;
-  summary: string;
-  actor: string;
-}
-
-export interface ContainerDetail {
-  container: Container;
-  backup: string | null;
-  events: ContainerEvent[];
-  today: string;
-}
-
-export interface ChecklistLibrary {
-  stages: Array<
-    Stage & {
-      tasks: Array<{ key: string; label: string; hrs: number; onlyFor: string[] | null }>;
-      budget: { standard: number; double: number; anteroom: number };
-    }
-  >;
-  totals: { standard: number; double: number; anteroom: number };
-  today: string;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -210,59 +117,93 @@ export const api = {
 
   me: () => request<{ user: SessionUser }>('/api/auth/me'),
 
-  reference: () => request<Reference>('/api/reference'),
+  v2Workers: () => request<{ workers: MockWorker[] }>('/api/v2/workers'),
 
-  overview: () => request<Overview>('/api/overview'),
+  v2CreateWorker: (worker: MockWorker) =>
+    request<{ worker: MockWorker }>('/api/v2/workers', {
+      method: 'POST',
+      body: JSON.stringify(worker),
+    }),
 
-  containers: (query: Record<string, string | undefined> = {}) => {
-    const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(query)) if (v) params.set(k, v);
-    const qs = params.toString();
-    return request<{ containers: Container[]; today: string }>(
-      `/api/containers${qs ? `?${qs}` : ''}`
-    );
+  v2UpdateWorker: (id: string, patch: Partial<Omit<MockWorker, 'id'>>) =>
+    request<{ worker: MockWorker }>(`/api/v2/workers/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  v2DeleteWorker: (id: string) =>
+    request<void>(`/api/v2/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  v2Containers: () => request<{ containers: MockContainer[] }>('/api/v2/containers'),
+
+  v2GateIn: (container: MockContainer) =>
+    request<{ container: MockContainer }>('/api/v2/containers', {
+      method: 'POST',
+      body: JSON.stringify(container),
+    }),
+
+  v2PatchContainer: (id: string, patch: ContainerPatch) =>
+    request<{ container: MockContainer }>(`/api/v2/containers/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  v2RemoveContainer: (id: string) =>
+    request<void>(`/api/v2/containers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  v2PatchTask: (containerId: string, kind: SectionKind, key: string, patch: TaskPatch) =>
+    request<{ container: MockContainer }>(
+      `/api/v2/containers/${encodeURIComponent(containerId)}/tasks/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`,
+      { method: 'PATCH', body: JSON.stringify(patch) }
+    ),
+
+  v2Drafts: () => request<{ drafts: ContainerDraft[] }>('/api/v2/drafts'),
+
+  v2SaveDraft: (id: string, savedAt: string, data: ContainerDraftData) =>
+    request<{ draft: ContainerDraft }>('/api/v2/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ id, savedAt, data }),
+    }),
+
+  v2DiscardDraft: (id: string) => request<void>(`/api/v2/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  v2Upload: (file: File) => {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return request<{ id: string; url: string }>('/api/v2/uploads', { method: 'POST', body: form });
   },
 
-  container: (id: string) => request<ContainerDetail>(`/api/containers/${encodeURIComponent(id)}`),
-
-  createContainer: (input: unknown) =>
-    request<{ container: Container; today: string }>('/api/containers', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
-
-  updateContainer: (id: string, input: unknown) =>
-    request<{ container: Container; today: string }>(`/api/containers/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(input),
-    }),
-
-  toggleTask: (id: string, key: string, done: boolean) =>
-    request<{ container: Container; today: string }>(
-      `/api/containers/${encodeURIComponent(id)}/tasks`,
-      { method: 'POST', body: JSON.stringify({ key, done }) }
-    ),
-
-  advanceStage: (id: string, force = false) =>
-    request<{ container: Container; today: string }>(
-      `/api/containers/${encodeURIComponent(id)}/advance`,
-      { method: 'POST', body: JSON.stringify({ force }) }
-    ),
-
-  removeContainer: (id: string) =>
-    request<void>(`/api/containers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-
-  checklistLibrary: () => request<ChecklistLibrary>('/api/checklist-library'),
+  v2ImsLookup: (containerId: string) =>
+    request<ImsLookupResult>(`/api/v2/ims-lookup?containerId=${encodeURIComponent(containerId)}`),
 };
 
-/** Shape of the 409 the API returns when a stage still has open tasks. */
-export interface StageIncomplete {
-  openTasks: string[];
-  nextStage: string;
+/** One row from the IMS's own container data — read-only, never written
+ * back to. `suggestedTypeCode`/`suggestedSize` are this depot's own
+ * Type/Size dropdown values the server could confidently map IMS's own
+ * (messier, inconsistent) values onto; `null` means no confident mapping,
+ * so the admin picks manually instead of a guess being forced on them. */
+export interface ImsMatch {
+  containerId: string;
+  imsType: string;
+  imsSize: string;
+  depot: string;
+  status: string;
+  grade: string;
+  suggestedTypeCode: string | null;
+  suggestedSize: string | null;
 }
 
-export function isStageIncomplete(err: unknown): err is RequestError & { payload: StageIncomplete } {
-  return err instanceof RequestError && err.code === 'stage_incomplete';
+export interface ImsLookupResult {
+  /** Candidates at our own yard only — the only ones ever offered for pre-fill. */
+  matches: ImsMatch[];
+  /** The same number found at a different depot — never pre-filled, shown as a note instead. */
+  elsewhere: ImsMatch[];
 }
 
-export type { StageId };
+type ContainerPatch = Partial<
+  Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'departedAt' | 'gateOut'>
+>;
+type TaskPatch = Partial<
+  Pick<MockContainer['sections'][number]['tasks'][number], 'workerId' | 'state' | 'startedAt' | 'elapsedSec' | 'completedAt' | 'site' | 'scheduledFor'>
+>;
+

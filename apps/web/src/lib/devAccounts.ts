@@ -1,0 +1,32 @@
+import type { SessionUser } from './api';
+
+/**
+ * Seeded fixture accounts (apps/api/scripts/seedUsers.ts) — dev/test convenience
+ * only. Every seeded account shares this one password. This module is only
+ * ever imported behind `import.meta.env.DEV` checks, so it never ships in a
+ * production build.
+ */
+export const DEV_PASSWORD = 'readiness';
+
+export interface DevAccount {
+  role: SessionUser['role'];
+  label: string;
+  email: string;
+}
+
+export const DEV_ACCOUNTS: DevAccount[] = [
+  { role: 'manager', label: 'Manager', email: 'sitaram@reeferready.example' },
+  { role: 'supervisor', label: 'Supervisor', email: 'supervisor@reeferready.example' },
+  { role: 'technician', label: 'Technician', email: 'tech@reeferready.example' },
+  { role: 'viewer', label: 'Viewer', email: 'viewer@reeferready.example' },
+];
+
+/**
+ * The product is moving to a single Admin account (SPEC.md) — the manager
+ * role is the closest match today, so it's what the UI now labels "Admin"
+ * and the only account the on-screen shortcuts offer. The other three
+ * accounts above still work exactly as before; they're just reached by
+ * typing credentials (see README.md) rather than a one-click shortcut,
+ * since the real routes/permissions haven't changed yet.
+ */
+export const ADMIN_ACCOUNT: DevAccount = { ...DEV_ACCOUNTS[0]!, label: 'Admin' };

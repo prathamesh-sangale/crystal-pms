@@ -12,7 +12,6 @@ export default tseslint.config(
       '**/playwright-report/**',
       '**/test-results/**',
       'apps/web/src/generated/**',
-      'apps/api/prisma/**',
       'source/**',
     ],
   },
