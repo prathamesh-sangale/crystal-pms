@@ -17,7 +17,7 @@
     "db:seed": "npm run db:seed -w @pms/api",
     "env:init": "node -e \"const f='apps/api/.env';require('fs').existsSync(f)||(require('fs').copyFileSync('apps/api/.env.example',f),console.log('created '+f+' — change JWT_SECRET before deploying'))\"",
     "setup": "npm run env:init && npm run tokens && npm run db:push && npm run db:seed",
-    "dev": "npm run tokens && concurrently -n api,web -c blue,yellow \"npm run dev -w @pms/api\" \"npm run dev -w @pms/web\"",
+    "dev": "npm run tokens && npm run build -w @pms/shared && concurrently -n api,web -c blue,yellow \"npm run dev -w @pms/api\" \"npm run dev -w @pms/web\"",
     "dev:api": "npm run dev -w @pms/api",
     "dev:web": "npm run dev -w @pms/web",
     "build": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/api && npm run build -w @pms/web",

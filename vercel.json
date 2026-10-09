@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run tokens && npm run build -w @pms/web",
+  "buildCommand": "npm run tokens && npm run build -w @pms/shared && npm run build -w @pms/web",
   "outputDirectory": "apps/web/dist",
   "functions": {
     "api/**/*.ts": { "maxDuration": 10 }
