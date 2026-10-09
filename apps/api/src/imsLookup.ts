@@ -1,9 +1,5 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { google, type sheets_v4 } from 'googleapis';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { googleServiceAccountKey } from './googleAuth.js';
 
 /** The real IMS's own spreadsheet — read-only, same service account already
  * used for the Sheets export and Drive uploads. There is no write path
@@ -24,8 +20,7 @@ let client: sheets_v4.Sheets | null = null;
 
 function sheets(): sheets_v4.Sheets {
   if (client) return client;
-  const keyPath = path.join(__dirname, '..', 'credentials', 'google-service-account.json');
-  const key = JSON.parse(readFileSync(keyPath, 'utf8'));
+  const key = googleServiceAccountKey();
   const auth = new google.auth.JWT({ email: key.client_email, key: key.private_key, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] });
   client = google.sheets({ version: 'v4', auth });
   return client;

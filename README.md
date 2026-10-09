@@ -1,4 +1,4 @@
-# ReeferReady PMS
+# Crystal PMS
 
 Container readiness tracking for one reefer depot (Crystal Yard, JNPT) — a
 container enters at Gate-In, is surveyed, works through whichever of four
@@ -120,6 +120,31 @@ been run at least once for its accounts to exist.
 
 There is no browser/e2e suite today — the previous one targeted a now-deleted
 product and was removed along with it rather than kept failing.
+
+---
+
+## Deploy (Vercel)
+
+`vercel.json` builds the frontend (`apps/web/dist`) and runs the API as a
+serverless function at `api/[...path].ts` — one Vercel project serves both,
+same-origin. On push, Vercel's own GitHub integration builds and deploys
+automatically; nothing to trigger by hand.
+
+Set these in the Vercel project's own dashboard (Settings → Environment
+Variables) — none of them belong in the repo:
+
+| Variable | Notes |
+| --- | --- |
+| `JWT_SECRET` | a real random value — not the placeholder in `.env.example` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | same values as local `.env` |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | the service-account key file's full JSON, one line — serverless has no local file to read it from |
+| `WEB_ORIGIN` | the deployed URL, for CORS |
+
+Two known platform constraints, not yet worked around: rate limiting resets
+on every cold start (in-memory counters, serverless has no shared state), and
+Vercel's default function body-size limit (~4.5MB) is below this app's own
+50MB upload allowance — large PTI videos will fail there even though they
+work locally.
 
 ---
 

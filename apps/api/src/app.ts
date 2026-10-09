@@ -9,6 +9,7 @@ import { env, isProduction } from './env.js';
 import { zodToApiError } from './http.js';
 import { authRoutes } from './routes/auth.js';
 import { externalApiRoutes } from './routes/externalApi.js';
+import { hydraMovementRoutes } from './routes/hydraMovements.js';
 import { v2ContainerRoutes } from './routes/v2Containers.js';
 import { v2DraftRoutes } from './routes/v2Drafts.js';
 import { v2ImsLookupRoutes } from './routes/v2ImsLookup.js';
@@ -61,7 +62,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     })
   );
 
-  app.get('/api/health', async () => ({ ok: true, service: 'reefer-ready-pms' }));
+  app.get('/api/health', async () => ({ ok: true, service: 'crystal-pms' }));
 
   await app.register(authRoutes);
   await app.register(v2WorkerRoutes);
@@ -69,6 +70,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(v2DraftRoutes);
   await app.register(v2UploadRoutes);
   await app.register(v2ImsLookupRoutes);
+  await app.register(hydraMovementRoutes);
   await app.register(externalApiRoutes);
 
   return app;

@@ -175,6 +175,11 @@ export const api = {
 
   v2ImsLookup: (containerId: string) =>
     request<ImsLookupResult>(`/api/v2/ims-lookup?containerId=${encodeURIComponent(containerId)}`),
+
+  hydraMovements: () => request<{ movements: HydraMovement[] }>('/api/v2/hydra'),
+
+  hydraCreateMovement: (input: HydraMovementInput) =>
+    request<{ movement: HydraMovement }>('/api/v2/hydra', { method: 'POST', body: JSON.stringify(input) }),
 };
 
 /** One row from the IMS's own container data — read-only, never written
@@ -199,6 +204,28 @@ export interface ImsLookupResult {
   /** The same number found at a different depot — never pre-filled, shown as a note instead. */
   elsewhere: ImsMatch[];
 }
+
+/** A Hydra movement log entry — standalone, independent of the readiness
+ * workflow's own container records. Append-only: there's no edit/delete. */
+export interface HydraMovement {
+  id: string;
+  movementDate: string;
+  containerNo: string;
+  type: string;
+  size: string;
+  movementType: 'Loading' | 'Unloading' | 'Shifting';
+  /** Null for Shifting — the form disables and clears this field then. */
+  direction: 'IN' | 'OUT' | null;
+  fileId: string | null;
+  fileUrl: string | null;
+  loggedBy: string | null;
+  createdAt: string;
+}
+
+export type HydraMovementInput = Pick<
+  HydraMovement,
+  'movementDate' | 'containerNo' | 'type' | 'size' | 'movementType' | 'direction' | 'fileId' | 'fileUrl'
+>;
 
 type ContainerPatch = Partial<
   Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'departedAt' | 'gateOut'>

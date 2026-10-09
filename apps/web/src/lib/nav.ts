@@ -55,6 +55,18 @@ export const NAV: NavGroup[] = [
       },
     ],
   },
+  {
+    heading: 'Hydra',
+    items: [
+      {
+        to: '/hydra',
+        label: 'Hydra',
+        icon: 'truck',
+        title: 'Hydra',
+        description: 'Container and equipment movement log — loading, unloading and shifting, independent of the readiness workflow.',
+      },
+    ],
+  },
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV.flatMap((group) => group.items);

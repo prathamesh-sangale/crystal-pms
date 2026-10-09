@@ -32,6 +32,10 @@ const schema = z.object({
   // config error, not a degraded-but-working state.
   SUPABASE_URL: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
+  // Optional — only needed where there's no local filesystem to read the
+  // gitignored credentials file from (serverless deployments). See
+  // googleAuth.ts for the fallback logic.
+  GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

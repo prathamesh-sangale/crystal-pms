@@ -3,6 +3,7 @@ dist/
 build/
 .turbo/
 *.tsbuildinfo
+.vercel/
 
 # generated from source/crystal-design-system.html by tools/extract-design-system.mjs
 apps/web/src/styles/tokens.css

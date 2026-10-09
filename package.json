@@ -1,9 +1,9 @@
 {
-  "name": "reefer-ready-pms",
+  "name": "crystal-pms",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "ReeferReady PMS — container readiness pipeline, built on the Crystal Design System.",
+  "description": "Crystal PMS — container readiness pipeline, built on the Crystal Design System.",
   "workspaces": [
     "packages/*",
     "apps/*"

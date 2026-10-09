@@ -1,4 +1,4 @@
-# ReeferReady PMS — Workflow Redesign Spec (v2)
+# Crystal PMS — Workflow Redesign Spec (v2)
 
 **Status:** Draft — decisions below are confirmed, one field list is still
 pending from the user. No schema, API, or UI code has been changed yet —

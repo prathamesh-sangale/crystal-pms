@@ -1,10 +1,6 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { Readable } from 'node:stream';
-import { fileURLToPath } from 'node:url';
 import { google, type drive_v3 } from 'googleapis';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { googleServiceAccountKey } from './googleAuth.js';
 
 /** The "PMS" Shared Drive, already shared with the service account at
  * Content Manager level (confirmed live — see DEVELOPMENT-STATUS.md). A
@@ -20,8 +16,7 @@ let client: drive_v3.Drive | null = null;
  * actually uploads anything shouldn't need the credential file to exist. */
 function drive(): drive_v3.Drive {
   if (client) return client;
-  const keyPath = path.join(__dirname, '..', 'credentials', 'google-service-account.json');
-  const key = JSON.parse(readFileSync(keyPath, 'utf8'));
+  const key = googleServiceAccountKey();
   const auth = new google.auth.JWT({ email: key.client_email, key: key.private_key, scopes: ['https://www.googleapis.com/auth/drive'] });
   client = google.drive({ version: 'v3', auth });
   return client;

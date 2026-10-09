@@ -98,7 +98,7 @@ export function Login(): React.ReactElement {
             <span className="mark" aria-hidden="true">
               <i />
             </span>
-            ReeferReady
+            Crystal PMS
           </div>
 
           <div>

@@ -6,6 +6,7 @@ import { V2DataProvider } from './lib/v2Store';
 import { Login } from './screens/Login';
 import { ContainerReport } from './screens/v2/ContainerReport';
 import { DashboardsV2 } from './screens/v2/DashboardsV2';
+import { Hydra } from './screens/v2/Hydra';
 import { LiveBoard } from './screens/v2/LiveBoard';
 import { WorkerRoster } from './screens/v2/WorkerRoster';
 import { YardBoard } from './screens/v2/YardBoard';
@@ -67,6 +68,7 @@ export function App(): React.ReactElement {
           <Route path="/live" element={<LiveBoard />} />
           <Route path="/workers" element={<WorkerRoster />} />
           <Route path="/dashboards" element={<DashboardsV2 />} />
+          <Route path="/hydra" element={<Hydra />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

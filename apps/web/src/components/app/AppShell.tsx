@@ -111,7 +111,7 @@ export function AppShell(): React.ReactElement {
             <span className="mark" aria-hidden="true">
               <i />
             </span>
-            <span className="side-brand-label">ReeferReady</span>
+            <span className="side-brand-label">Crystal PMS</span>
           </div>
           <nav>{navItems()}</nav>
           <div className="side-foot">
@@ -131,7 +131,7 @@ export function AppShell(): React.ReactElement {
         </aside>
       </div>
 
-      <NavSheet open={navOpen} onOpenChange={setNavOpen} title="ReeferReady">
+      <NavSheet open={navOpen} onOpenChange={setNavOpen} title="Crystal PMS">
         <nav>{navItems(() => setNavOpen(false))}</nav>
       </NavSheet>
 
@@ -146,7 +146,7 @@ export function AppShell(): React.ReactElement {
               className="truncate"
               style={{ fontFamily: 'var(--f-display)', fontWeight: 800, fontSize: '13px' }}
             >
-              {current?.title ?? 'ReeferReady'}
+              {current?.title ?? 'Crystal PMS'}
             </div>
           </div>
 
