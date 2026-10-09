@@ -1,7 +1,10 @@
 {
   "buildCommand": "npm run tokens && npm run build -w @pms/web",
   "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/**/*.ts": { "maxDuration": 10 }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
