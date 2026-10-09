@@ -36,11 +36,11 @@ describe('health and auth', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: { email: 'sitaram@reeferready.example', password: 'readiness' },
+      payload: { email: 'admin@crystalpms.com', password: 'admin123' },
     });
     expect(res.statusCode, res.body).toBe(200);
     const body = res.json();
-    expect(body.user).toMatchObject({ email: 'sitaram@reeferready.example', role: 'manager' });
+    expect(body.user).toMatchObject({ email: 'admin@crystalpms.com', role: 'manager' });
     expect(typeof body.token).toBe('string');
 
     const me = await app.inject({
@@ -49,14 +49,14 @@ describe('health and auth', () => {
       headers: { authorization: `Bearer ${body.token}` },
     });
     expect(me.statusCode).toBe(200);
-    expect(me.json().user.email).toBe('sitaram@reeferready.example');
+    expect(me.json().user.email).toBe('admin@crystalpms.com');
   });
 
   it('refuses a bad password without saying whether the account exists', async () => {
     const wrongPassword = await app.inject({
       method: 'POST',
       url: '/api/auth/login',
-      payload: { email: 'sitaram@reeferready.example', password: 'nope' },
+      payload: { email: 'admin@crystalpms.com', password: 'nope' },
     });
     const noSuchUser = await app.inject({
       method: 'POST',

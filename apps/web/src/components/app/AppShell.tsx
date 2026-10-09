@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { RequestError } from '../../lib/api';
 import { roleDisplayLabel, useAuth } from '../../lib/auth';
 import { cx } from '../../lib/cx';
-import { ADMIN_ACCOUNT, DEV_PASSWORD } from '../../lib/devAccounts';
+import { ADMIN_ACCOUNT } from '../../lib/devAccounts';
 import type { MockContainer } from '../../lib/mockV2';
 import { NAV, navItemFor } from '../../lib/nav';
 import { useTheme } from '../../lib/theme';
@@ -54,9 +54,9 @@ export function AppShell(): React.ReactElement {
   // work, just aren't offered as a shortcut anywhere — this is the fast way
   // back to Admin, without a sign-out/retype round trip. Still a real
   // signIn() call, not a bypass.
-  const switchTo = async (email: string): Promise<void> => {
+  const switchTo = async (email: string, password: string): Promise<void> => {
     try {
-      await signIn(email, DEV_PASSWORD);
+      await signIn(email, password);
     } catch (error) {
       toast.error(
         'Could not switch user',
@@ -72,7 +72,7 @@ export function AppShell(): React.ReactElement {
           {
             label: 'Back to Admin · dev only',
             icon: 'user' as const,
-            onSelect: () => void switchTo(ADMIN_ACCOUNT.email),
+            onSelect: () => void switchTo(ADMIN_ACCOUNT.email, ADMIN_ACCOUNT.password),
           },
         ]
       : [];

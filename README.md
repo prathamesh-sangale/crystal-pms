@@ -29,17 +29,16 @@ is deployed anywhere** — the committed example value is not safe to ship.
 
 Open http://localhost:5173.
 
-| Account                           | Role       |
-| ---------------------------------- | ---------- |
-| `sitaram@reeferready.example`      | manager (shown as "Admin" in the UI) |
-| `supervisor@reeferready.example`   | supervisor |
-| `tech@reeferready.example`         | technician |
-| `viewer@reeferready.example`       | viewer     |
+| Account                           | Password   | Role       |
+| ---------------------------------- | ---------- | ---------- |
+| `admin@crystalpms.com`             | `admin123` | manager (shown as "Admin" in the UI) |
+| `supervisor@reeferready.example`   | `readiness`| supervisor |
+| `tech@reeferready.example`         | `readiness`| technician |
+| `viewer@reeferready.example`       | `readiness`| viewer     |
 
-Password for all four: `readiness`. These are dev-only seed accounts
-(`apps/api/scripts/seedUsers.ts`) — the four-role distinction is a holdover
-from an earlier version of this product; today only one of them is actually
-used day to day (signed in as "Admin").
+These are dev-only seed accounts (`apps/api/scripts/seedUsers.ts`) — the
+four-role distinction is a holdover from an earlier version of this product;
+today only the Admin account is actually used day to day.
 
 ---
 

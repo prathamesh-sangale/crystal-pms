@@ -2,7 +2,7 @@ import { loginSchema } from '@pms/shared';
 import { useState } from 'react';
 import { RequestError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { ADMIN_ACCOUNT, DEV_PASSWORD } from '../lib/devAccounts';
+import { ADMIN_ACCOUNT } from '../lib/devAccounts';
 import { Button } from '../components/crystal/Button';
 import { Alert } from '../components/crystal/Feedback';
 import { Field } from '../components/crystal/Form';
@@ -21,11 +21,11 @@ export function Login(): React.ReactElement {
   // Dev-only: skip typing credentials and sign straight in as any seeded
   // role. Goes through the exact same signIn() as the form below, so
   // permissions are enforced for real, not bypassed.
-  const quickSignIn = async (accountEmail: string): Promise<void> => {
+  const quickSignIn = async (accountEmail: string, accountPassword: string): Promise<void> => {
     setFormError(null);
     setQuickBusy(accountEmail);
     try {
-      await signIn(accountEmail, DEV_PASSWORD);
+      await signIn(accountEmail, accountPassword);
     } catch (error) {
       setFormError(
         error instanceof RequestError ? error.message : 'Could not sign in. Try again.'
@@ -185,7 +185,7 @@ export function Login(): React.ReactElement {
                 icon="user"
                 loading={quickBusy === ADMIN_ACCOUNT.email}
                 disabled={quickBusy !== null && quickBusy !== ADMIN_ACCOUNT.email}
-                onClick={() => quickSignIn(ADMIN_ACCOUNT.email)}
+                onClick={() => quickSignIn(ADMIN_ACCOUNT.email, ADMIN_ACCOUNT.password)}
               >
                 {ADMIN_ACCOUNT.label}
               </Button>

@@ -1,6 +1,6 @@
 import type { ApiError } from '@pms/shared';
 import type { FastifyReply } from 'fastify';
-import { ZodError, type ZodSchema } from 'zod';
+import { ZodError, type z, type ZodType } from 'zod';
 
 /**
  * Turns a Zod failure into the single error shape the UI renders, with
@@ -19,12 +19,21 @@ export function zodToApiError(error: ZodError): ApiError {
   };
 }
 
-/** Parse or reply 422. Returns null when it has already answered. */
-export async function parseOr422<T>(
-  schema: ZodSchema<T>,
+/**
+ * Parse or reply 422. Returns null when it has already answered.
+ *
+ * Captures the whole schema type (`Schema extends ZodType`) and derives the
+ * return type from it via `z.infer`, rather than asking TypeScript to infer
+ * a bare output type parameter from `ZodType<T, ...>` directly — the latter
+ * is a multi-param generic whose inference is version-sensitive (seen
+ * diverging between local tsc and Vercel's newer bundled TypeScript,
+ * silently loosening every field to optional).
+ */
+export async function parseOr422<Schema extends ZodType>(
+  schema: Schema,
   data: unknown,
   reply: FastifyReply
-): Promise<T | null> {
+): Promise<z.infer<Schema> | null> {
   try {
     return schema.parse(data);
   } catch (err) {

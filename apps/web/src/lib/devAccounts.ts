@@ -2,9 +2,8 @@ import type { SessionUser } from './api';
 
 /**
  * Seeded fixture accounts (apps/api/scripts/seedUsers.ts) — dev/test convenience
- * only. Every seeded account shares this one password. This module is only
- * ever imported behind `import.meta.env.DEV` checks, so it never ships in a
- * production build.
+ * only. This module is only ever imported behind `import.meta.env.DEV` checks,
+ * so it never ships in a production build.
  */
 export const DEV_PASSWORD = 'readiness';
 
@@ -12,13 +11,14 @@ export interface DevAccount {
   role: SessionUser['role'];
   label: string;
   email: string;
+  password: string;
 }
 
 export const DEV_ACCOUNTS: DevAccount[] = [
-  { role: 'manager', label: 'Manager', email: 'sitaram@reeferready.example' },
-  { role: 'supervisor', label: 'Supervisor', email: 'supervisor@reeferready.example' },
-  { role: 'technician', label: 'Technician', email: 'tech@reeferready.example' },
-  { role: 'viewer', label: 'Viewer', email: 'viewer@reeferready.example' },
+  { role: 'manager', label: 'Manager', email: 'admin@crystalpms.com', password: 'admin123' },
+  { role: 'supervisor', label: 'Supervisor', email: 'supervisor@reeferready.example', password: DEV_PASSWORD },
+  { role: 'technician', label: 'Technician', email: 'tech@reeferready.example', password: DEV_PASSWORD },
+  { role: 'viewer', label: 'Viewer', email: 'viewer@reeferready.example', password: DEV_PASSWORD },
 ];
 
 /**
