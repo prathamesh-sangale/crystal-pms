@@ -721,18 +721,17 @@ export function LiveBoard(): React.ReactElement {
     // 24px gaps were section-sized spacing for what's really one control
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
-      <Segmented
-        value={view}
-        onChange={setView}
-        label="Live view"
-        options={[
-          { value: 'stage', label: 'By stage' },
-          { value: 'crew', label: 'By crew' },
-        ]}
-      />
-
-      {view === 'stage' && (
-        <div className="stack stack-tight">
+      <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
+        <Segmented
+          value={view}
+          onChange={setView}
+          label="Live view"
+          options={[
+            { value: 'stage', label: 'By stage' },
+            { value: 'crew', label: 'By crew' },
+          ]}
+        />
+        {view === 'stage' && (
           <InputWithIcon
             icon="search"
             placeholder="Search container number…"
@@ -740,6 +739,11 @@ export function LiveBoard(): React.ReactElement {
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ maxWidth: '280px' }}
           />
+        )}
+      </div>
+
+      {view === 'stage' && (
+        <div className="stack stack-tight">
           <FilterRow label="Product" options={productCounts} active={activeProduct} onSelect={setActiveProduct} />
           {/* Lighter than the product row on purpose — this is a narrowing
              sub-filter under it, scoped to whichever product is selected
