@@ -179,6 +179,9 @@ export const api = {
     return request<{ id: string; url: string }>('/api/v2/uploads', { method: 'POST', body: form });
   },
 
+  v2ExportToSheet: () =>
+    request<{ ok: true; tabs: string[]; exportedAt: string }>('/api/v2/export-sheet', { method: 'POST' }),
+
   v2ImsLookup: (containerId: string) =>
     request<ImsLookupResult>(`/api/v2/ims-lookup?containerId=${encodeURIComponent(containerId)}`),
 

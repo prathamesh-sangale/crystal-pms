@@ -12,6 +12,7 @@ import { externalApiRoutes } from './routes/externalApi.js';
 import { hydraMovementRoutes } from './routes/hydraMovements.js';
 import { v2ContainerRoutes } from './routes/v2Containers.js';
 import { v2DraftRoutes } from './routes/v2Drafts.js';
+import { v2ExportRoutes } from './routes/v2Export.js';
 import { v2ImsLookupRoutes } from './routes/v2ImsLookup.js';
 import { v2UploadRoutes } from './routes/v2Uploads.js';
 import { v2WorkerRoutes } from './routes/v2Workers.js';
@@ -70,6 +71,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(v2DraftRoutes);
   await app.register(v2UploadRoutes);
   await app.register(v2ImsLookupRoutes);
+  await app.register(v2ExportRoutes);
   await app.register(hydraMovementRoutes);
   await app.register(externalApiRoutes);
 

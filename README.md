@@ -94,6 +94,7 @@ nothing with write access to it ever reaches the browser.
 | --- | --- | --- |
 | Google Drive | apps/api → Drive | Gate-In/Gate-Out photo and PTI video uploads, into one Shared Drive |
 | Google Sheets — IMS lookup | apps/api → IMS's sheet | The "Check IMS" button at Gate-In — read-only, never writes back |
+| Google Sheets — PMS export | apps/api → client's own "PMS" sheet | "Sync to PMS Sheet" on Dashboards — on-demand, writes four tabs (Containers, Gate Log, Workers, Hydra Movements). A separate sheet and separate credential scope from the IMS lookup above — never touches IMS's sheet or the depot's original Gate-In/Out sheet |
 | External yard-summary API | IMS → apps/api | `/api/external/yard-summary`, gated by its own hashed API key — a narrow, read-only count of what's in the yard |
 
 ---

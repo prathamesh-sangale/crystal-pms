@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../../lib/api';
 import {
   budgetExposure,
   gateActivityToday,
@@ -16,7 +17,7 @@ import {
 import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, HeroCard, Person, StatCard, StatusPill } from '../../components/crystal/Data';
-import { EmptyState } from '../../components/crystal/Feedback';
+import { EmptyState, useToast } from '../../components/crystal/Feedback';
 
 function formatINR(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -27,6 +28,23 @@ export function DashboardsV2(): React.ReactElement {
   // departed containers would otherwise skew every stat here.
   const { activeContainers: containers, workers } = useV2Data();
   const navigate = useNavigate();
+  const toast = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  // On-demand, not automatic -- same shape as every other export in this
+  // app (Hydra's CSV, the yard report). Refreshes every tab of the
+  // client's own "PMS" Google Sheet from current data.
+  const handleExport = async (): Promise<void> => {
+    setExporting(true);
+    try {
+      const { tabs } = await api.v2ExportToSheet();
+      toast.ok('Sheet updated', `Refreshed: ${tabs.join(', ')}.`);
+    } catch {
+      toast.error('Could not sync', 'The sheet was not updated. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const pti = useMemo(() => ptiBreakdown(containers), [containers]);
   const stageCounts = useMemo(() => sectionContainerCounts(containers), [containers]);
@@ -53,9 +71,14 @@ export function DashboardsV2(): React.ReactElement {
         label="Containers in the yard"
         value={containers.length}
         actions={
-          <Button variant="secondary" size="sm" icon="download" onClick={() => navigate('/reports/yard')}>
-            Download yard report
-          </Button>
+          <>
+            <Button variant="secondary" size="sm" icon="refresh" loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
+              Sync to PMS Sheet
+            </Button>
+            <Button variant="secondary" size="sm" icon="download" onClick={() => navigate('/reports/yard')}>
+              Download yard report
+            </Button>
+          </>
         }
       >
         <p style={{ margin: 'var(--s-2) 0 0', fontSize: '13px', opacity: 0.85 }}>
