@@ -24,6 +24,11 @@ export async function buildApp(): Promise<FastifyInstance> {
       : { transport: undefined, level: env.NODE_ENV === 'test' ? 'silent' : 'info' },
     // Container IDs contain spaces, which arrive percent-encoded.
     routerOptions: { ignoreTrailingSlash: true },
+    // Behind Vercel's proxy, request.ip is otherwise the proxy's own
+    // address (constant, shared across unrelated callers) rather than the
+    // real visitor's -- rate limiting would key on the wrong thing
+    // entirely. Vercel sets x-forwarded-for correctly, so this is safe.
+    trustProxy: true,
   });
 
   await app.register(sensible);
