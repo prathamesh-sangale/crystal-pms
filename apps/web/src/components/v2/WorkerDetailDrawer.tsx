@@ -70,6 +70,7 @@ export function WorkerDetailDrawer({
   onAssignWorker,
   onScheduleTask,
   onUnassignTask,
+  onAddTask,
 }: {
   worker: MockWorker | null;
   containers: MockContainer[];
@@ -80,6 +81,7 @@ export function WorkerDetailDrawer({
   onAssignWorker: (containerId: string, kind: SectionKind, key: string, workerId: string) => void;
   onScheduleTask: (containerId: string, kind: SectionKind, key: string, date: string | null) => void;
   onUnassignTask: (containerId: string, kind: SectionKind, key: string) => void;
+  onAddTask: (containerId: string, kind: SectionKind, task: { key: string; label: string; workerId: string | null; site: null }) => Promise<void>;
 }): React.ReactElement {
   const tasks: LiveTask[] = worker
     ? containers.flatMap((c) => c.sections.flatMap((s) => s.tasks.filter((t) => t.workerId === worker.id).map((task) => ({ containerId: c.id, containerTypeCode: c.typeCode, section: s.kind, task }))))
@@ -334,6 +336,7 @@ export function WorkerDetailDrawer({
         onAssignWorker={onAssignWorker}
         onScheduleTask={onScheduleTask}
         onUnassignTask={onUnassignTask}
+        onAddTask={onAddTask}
       />
     </Modal>
   );

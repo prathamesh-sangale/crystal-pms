@@ -51,7 +51,7 @@ export interface MockWorker {
   notes: string;
 }
 
-export type SectionKind = 'painting' | 'pti' | 'cleaning' | 'all_rounder';
+export type SectionKind = 'painting' | 'pti' | 'cleaning' | 'all_rounder' | 'sailing';
 
 /** The stage's own display name — kept distinct from WORKER_TYPE_LABELS on
  * purpose: "Repairment" is the stage physical repair work happens at, done
@@ -63,6 +63,7 @@ export const SECTION_LABELS: Record<SectionKind, string> = {
   pti: 'PTI',
   cleaning: 'Cleaning',
   all_rounder: 'Repairment',
+  sailing: 'Sailing Crew',
 };
 
 export const SECTION_OWNER_TYPE: Record<SectionKind, WorkerType> = {
@@ -70,6 +71,7 @@ export const SECTION_OWNER_TYPE: Record<SectionKind, WorkerType> = {
   pti: 'technician',
   cleaning: 'cleaner',
   all_rounder: 'all_rounder',
+  sailing: 'sailing_crew',
 };
 
 export type TaskState = 'pending' | 'running' | 'done' | 'na';
@@ -233,7 +235,7 @@ export interface MockSurvey {
   outcome: 'ready' | 'needs-work';
 }
 
-export type LogoChoice = 'na' | 'readymade' | 'physical';
+export type LogoChoice = 'na' | 'readymade' | 'physical' | 'removal';
 
 /** Matches the depot's live Gate In/Out portal: a plain Yes/No, with Yes
  * requiring a PTI video alongside it. */
@@ -368,6 +370,10 @@ export interface MockContainer {
   survey: MockSurvey | null;
   sections: MockSection[];
   readyAt: string | null;
+  /** A completion photo is required before a container can be marked ready
+   * (client request) — set together with `readyAt` in the same action, so
+   * this is never non-null while `readyAt` is still null, or vice versa. */
+  readyPhotoUrl: string | null;
   /** Where the container physically is right now. Null means it hasn't been
    * moved to any of the yard's work sites yet (fresh off gate-in). */
   currentSite: SailingSite | null;
@@ -656,7 +662,7 @@ export interface SectionLoad {
 }
 
 export function sectionLoad(containers: MockContainer[]): SectionLoad[] {
-  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
+  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
   return kinds.map((kind) => {
     const openTasks = containers
       .flatMap((c) => c.sections.filter((s) => s.kind === kind))
@@ -681,7 +687,7 @@ export interface SectionContainerCounts {
 /** How many containers sit at each stage, not how many tasks — the "how many
  * are in process vs. still in line" breakdown for the admin's overview. */
 export function sectionContainerCounts(containers: MockContainer[]): SectionContainerCounts[] {
-  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
+  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
   return kinds.map((kind) => {
     let inProcess = 0;
     let inLine = 0;
@@ -707,7 +713,7 @@ export interface SectionTurnaround {
  * (`elapsedSec`, not the `estHrs` guess) — the yard report's "how long does
  * this really take" number. */
 export function sectionTurnaround(containers: MockContainer[]): SectionTurnaround[] {
-  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
+  const kinds: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
   return kinds.map((kind) => {
     const doneTasks = containers
       .flatMap((c) => c.sections.filter((s) => s.kind === kind))

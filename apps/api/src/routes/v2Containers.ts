@@ -23,6 +23,19 @@ const taskInputSchema = z.object({
   scheduledFor: z.string().nullable().optional(),
 });
 
+/** A new task added to a container after Gate-In — the one thing the fixed
+ * Gate-In builders can't do. Worker/schedule are set in the same request
+ * since the only place this is ever called from (AssignWorkDialog's "add a
+ * task" flow) picks a worker and a date in the same step anyway. */
+const addTaskSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  workerId: z.string().nullable(),
+  site: z.string().nullable(),
+  ownerType: z.string().optional(),
+  scheduledFor: z.string().nullable().optional(),
+});
+
 const createContainerSchema = z.object({
   id: z.string().min(1),
   typeCode: z.string().min(1),
@@ -53,6 +66,7 @@ const patchContainerSchema = z
     priority: z.boolean().optional(),
     currentSite: z.string().nullable().optional(),
     readyAt: z.string().nullable().optional(),
+    readyPhotoUrl: z.string().nullable().optional(),
     departedAt: z.string().nullable().optional(),
     gateOut: z.record(z.string(), z.unknown()).nullable().optional(),
   })
@@ -65,6 +79,7 @@ const CONTAINER_FIELD_MAP: Record<string, string> = {
   priority: 'priority',
   currentSite: 'current_site',
   readyAt: 'ready_at',
+  readyPhotoUrl: 'ready_photo_url',
   departedAt: 'departed_at',
   gateOut: 'gate_out',
 };
@@ -229,5 +244,57 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     const { data: full, error: refetchErr } = await supabase().from('containers').select(CONTAINER_SELECT).eq('id', id).single();
     if (refetchErr) throw app.httpErrors.internalServerError(refetchErr.message);
     return reply.send({ container: fromContainerRow(full as ContainerRow) });
+  });
+
+  /** Adds one new task to a container, after Gate-In. The fixed Gate-In
+   * builders (ptiTasks/cleaningTasks/repairTasksFor/painting's own sequence)
+   * only ever run once, at registration -- this is the one place work can
+   * be added to a container that's already in the yard. */
+  app.post('/api/v2/containers/:id/sections/:kind/tasks', async (request, reply) => {
+    const { id, kind } = request.params as { id: string; kind: string };
+    const body = await parseOr422(addTaskSchema, request.body, reply);
+    if (!body) return;
+
+    const { data: existingSection, error: sectionErr } = await supabase()
+      .from('sections')
+      .select('id')
+      .eq('container_id', id)
+      .eq('kind', kind)
+      .maybeSingle();
+    if (sectionErr) throw app.httpErrors.internalServerError(sectionErr.message);
+
+    let section = existingSection;
+
+    if (!section) {
+      const { data: newSection, error: insertSectionErr } = await supabase()
+        .from('sections')
+        .insert({ container_id: id, kind })
+        .select('id')
+        .single();
+      if (insertSectionErr) throw app.httpErrors.internalServerError(insertSectionErr.message);
+      section = newSection;
+    }
+
+    const { error: taskErr } = await supabase()
+      .from('tasks')
+      .insert(
+        toTaskInsert((section as { id: string }).id, {
+          key: body.key,
+          label: body.label,
+          workerId: body.workerId,
+          state: 'pending',
+          startedAt: null,
+          elapsedSec: 0,
+          estHrs: 1,
+          site: body.site,
+          ownerType: body.ownerType,
+          scheduledFor: body.scheduledFor ?? null,
+        })
+      );
+    if (taskErr) throw app.httpErrors.internalServerError(taskErr.message);
+
+    const { data: full, error: refetchErr } = await supabase().from('containers').select(CONTAINER_SELECT).eq('id', id).single();
+    if (refetchErr) throw app.httpErrors.internalServerError(refetchErr.message);
+    return reply.code(201).send({ container: fromContainerRow(full as ContainerRow) });
   });
 }

@@ -157,6 +157,12 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify(patch) }
     ),
 
+  v2AddTask: (containerId: string, kind: SectionKind, task: NewTaskInput) =>
+    request<{ container: MockContainer }>(
+      `/api/v2/containers/${encodeURIComponent(containerId)}/sections/${encodeURIComponent(kind)}/tasks`,
+      { method: 'POST', body: JSON.stringify(task) }
+    ),
+
   v2Drafts: () => request<{ drafts: ContainerDraft[] }>('/api/v2/drafts'),
 
   v2SaveDraft: (id: string, savedAt: string, data: ContainerDraftData) =>
@@ -228,9 +234,18 @@ export type HydraMovementInput = Pick<
 >;
 
 type ContainerPatch = Partial<
-  Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'departedAt' | 'gateOut'>
+  Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'readyPhotoUrl' | 'departedAt' | 'gateOut'>
 >;
 type TaskPatch = Partial<
   Pick<MockContainer['sections'][number]['tasks'][number], 'workerId' | 'state' | 'startedAt' | 'elapsedSec' | 'completedAt' | 'site' | 'scheduledFor'>
 >;
+
+export interface NewTaskInput {
+  key: string;
+  label: string;
+  workerId: string | null;
+  site: string | null;
+  ownerType?: string;
+  scheduledFor?: string | null;
+}
 

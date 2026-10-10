@@ -23,7 +23,7 @@ import { Menu, Modal } from '../crystal/Overlay';
  * which tasks are theirs. A plain function, not a lookup table, because
  * Painter Helper needs a real predicate (only the tape/gasket and
  * compressor-and-display tasks, SPEC.md §4.3), not just a section match. */
-function roleFilterFor(type: WorkerType): { kind: SectionKind; matchesTask: (task: MockTask) => boolean } | null {
+function roleFilterFor(type: WorkerType): { kind: SectionKind; matchesTask: (task: MockTask) => boolean } {
   switch (type) {
     case 'painter':
       return { kind: 'painting', matchesTask: (t) => !t.ownerType || t.ownerType === 'painter' };
@@ -38,11 +38,32 @@ function roleFilterFor(type: WorkerType): { kind: SectionKind; matchesTask: (tas
       return { kind: 'cleaning', matchesTask: () => true };
     case 'all_rounder':
       return { kind: 'all_rounder', matchesTask: () => true };
-    // Sailing Crew only ever appears against movements (load/offload/shift),
-    // never a task — there's nothing task-shaped to assign them yet.
     case 'sailing_crew':
-      return null;
+      return { kind: 'sailing', matchesTask: () => true };
   }
+}
+
+/** Preset labels offered under "Add a new task" for each role — on top of
+ * whatever's already pending from Gate-In. Client request: these roles had
+ * no way to get new, specifically-labelled work added once a container was
+ * already in the yard (sticker removal, office cleaning, a new repair, a
+ * Sailing Crew container move — none of these come from the fixed Gate-In
+ * builders). A free-text "Other" option is always offered alongside these,
+ * regardless of role. */
+const ROLE_TASK_PRESETS: Partial<Record<WorkerType, string[]>> = {
+  cleaner: ['Yard cleaning', 'Washroom cleaning', 'Kitchen cleaning', 'Office cleaning'],
+  tea_boy: ['Yard cleaning', 'Washroom cleaning', 'Kitchen cleaning', 'Office cleaning'],
+  all_rounder: ['Painting', 'Dry repair', 'Reefer repair'],
+  painter: ['Sticker removing'],
+  sailing_crew: ['Loading', 'Unloading', 'Shifting', 'Container list'],
+};
+
+/** A stable, readable task key from a label — lowercase, hyphenated, with a
+ * short suffix so picking the same preset twice on the same container never
+ * collides (e.g. "Yard cleaning" added on two different days). */
+function taskKeyFor(label: string): string {
+  const slug = label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return `${slug}-${Date.now().toString(36)}`;
 }
 
 /**
@@ -60,6 +81,7 @@ export function AssignWorkDialog({
   onAssignWorker,
   onScheduleTask,
   onUnassignTask,
+  onAddTask,
   initialDate,
 }: {
   open: boolean;
@@ -69,6 +91,10 @@ export function AssignWorkDialog({
   onAssignWorker: (containerId: string, kind: SectionKind, key: string, workerId: string) => void;
   onScheduleTask: (containerId: string, kind: SectionKind, key: string, date: string | null) => void;
   onUnassignTask: (containerId: string, kind: SectionKind, key: string) => void;
+  /** Creates a brand-new task — the "Add a new task" flow below, and PTI's
+   * "Flag repair needed" shortcut (which adds to the all_rounder section,
+   * not PTI's own, unassigned — for an All-Rounder to pick up later). */
+  onAddTask: (containerId: string, kind: SectionKind, task: { key: string; label: string; workerId: string | null; site: null }) => Promise<void>;
   /** Defaults to today. Callers that already have a date in view — the "By
    * crew" roster, say — pass it through so opening the dialog from a row on
    * tomorrow's roster starts on tomorrow, not today. */
@@ -82,12 +108,18 @@ export function AssignWorkDialog({
   // by containerId+key since task keys (e.g. "logo") repeat across
   // containers.
   const [picked, setPicked] = useState<Array<{ containerId: string; kind: SectionKind; key: string; label: string }>>([]);
+  const [newTaskLabel, setNewTaskLabel] = useState('');
+  const [customLabel, setCustomLabel] = useState('');
+  const [addingTask, setAddingTask] = useState(false);
+  const [flaggingRepair, setFlaggingRepair] = useState(false);
 
   useEffect(() => {
     if (open) {
       setDate(initialDate ?? offsetDate(0));
       setContainerId('');
       setPicked([]);
+      setNewTaskLabel('');
+      setCustomLabel('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-running on every initialDate identity change would reset the in-progress date pick
   }, [open, worker?.id]);
@@ -98,17 +130,11 @@ export function AssignWorkDialog({
   // what's already given" half of the dialog.
   const alreadyScheduled: LiveTask[] = worker ? tasksForWorker(containers, worker.id).filter((r) => isScheduledFor(r.task, date)) : [];
 
-  // Containers with at least one open, role-matching, unassigned task —
-  // nothing irrelevant to this worker's trade ever shows up in the list.
-  const eligibleContainers = roleFilter
-    ? containers.filter(
-        (c) =>
-          !c.departedAt &&
-          c.sections.some(
-            (s) => s.kind === roleFilter.kind && s.tasks.some((t) => !taskSettled(t) && t.state === 'pending' && !t.workerId && roleFilter.matchesTask(t))
-          )
-      )
-    : [];
+  // Every active container, not just ones with a pre-existing matching
+  // task — "Add a new task" below means there's always somewhere to put
+  // new work, even for a role (Sailing Crew) or label (sticker removing,
+  // office cleaning) nothing was ever generated for at Gate-In.
+  const eligibleContainers = roleFilter ? containers.filter((c) => !c.departedAt) : [];
 
   const selectedContainer = containers.find((c) => c.id === containerId) ?? null;
   const section = selectedContainer?.sections.find((s) => s.kind === roleFilter?.kind) ?? null;
@@ -128,6 +154,43 @@ export function AssignWorkDialog({
 
   const removePicked = (containerId: string, key: string): void => {
     setPicked((cur) => cur.filter((p) => !(p.containerId === containerId && p.key === key)));
+  };
+
+  const [repairFlaggedFor, setRepairFlaggedFor] = useState<string | null>(null);
+
+  // PTI finding a problem is reported against a different section
+  // (all_rounder/Repairment) than the technician's own — it's not assigned
+  // to them, just left open for an All-Rounder to pick up normally.
+  const handleFlagRepair = async (): Promise<void> => {
+    if (!selectedContainer) return;
+    setFlaggingRepair(true);
+    try {
+      await onAddTask(selectedContainer.id, 'all_rounder', {
+        key: taskKeyFor('repair-required'),
+        label: 'Repair required',
+        workerId: null,
+        site: null,
+      });
+      setRepairFlaggedFor(selectedContainer.id);
+    } finally {
+      setFlaggingRepair(false);
+    }
+  };
+
+  const handleAddNewTask = async (): Promise<void> => {
+    if (!selectedContainer || !roleFilter || !worker) return;
+    const label = (newTaskLabel === 'Other' ? customLabel : newTaskLabel).trim();
+    if (!label) return;
+    const key = taskKeyFor(label);
+    setAddingTask(true);
+    try {
+      await onAddTask(selectedContainer.id, roleFilter.kind, { key, label, workerId: null, site: null });
+      setPicked((cur) => [...cur, { containerId: selectedContainer.id, kind: roleFilter.kind, key, label }]);
+      setNewTaskLabel('');
+      setCustomLabel('');
+    } finally {
+      setAddingTask(false);
+    }
   };
 
   const handleConfirm = (): void => {
@@ -156,13 +219,7 @@ export function AssignWorkDialog({
         </>
       }
     >
-      {!worker ? null : !roleFilter ? (
-        <div className="empty" style={{ padding: 'var(--s-4) 0' }}>
-          <Icon name="user" size="lg" />
-          <b>No assignable work for this role yet</b>
-          <p>Sailing Crew work is logged through a container&rsquo;s Move action, not a daily assignment.</p>
-        </div>
-      ) : (
+      {!worker ? null : (
         <div className="stack stack-loose">
           <div>
             <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
@@ -209,11 +266,11 @@ export function AssignWorkDialog({
 
           <div>
             <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
-              {SECTION_LABELS[roleFilter.kind]} work to give them
+              {SECTION_LABELS[roleFilter!.kind]} work to give them
             </div>
             {eligibleContainers.length === 0 ? (
               <p className="subtle" style={{ fontSize: '12.5px', margin: 0 }}>
-                No container currently has open, unassigned {SECTION_LABELS[roleFilter.kind]} work.
+                No containers currently in the yard.
               </p>
             ) : (
               <div className="stack">
@@ -235,7 +292,7 @@ export function AssignWorkDialog({
 
                 {selectedContainer && (
                   <div className="stack stack-tight" style={{ marginTop: 'var(--s-2)' }}>
-                    {roleFilter.kind === 'painting' && selectedContainer.color && (
+                    {roleFilter!.kind === 'painting' && selectedContainer.color && (
                       <p className="subtle" style={{ fontSize: '11.5px', margin: '0 0 var(--s-1)' }}>
                         Paint colour: <b style={{ color: 'var(--text)' }}>{selectedContainer.color}</b>
                       </p>
@@ -292,6 +349,71 @@ export function AssignWorkDialog({
                         )
                       )
                     )}
+
+                    {roleFilter!.kind === 'pti' && (
+                      <div className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderTop: '1px solid var(--line)', marginTop: 'var(--s-1)' }}>
+                        <span className="subtle" style={{ fontSize: '12px' }}>
+                          {repairFlaggedFor === selectedContainer.id ? 'Repair flagged — an All-Rounder can pick it up.' : 'Found something that needs fixing?'}
+                        </span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon="alert"
+                          loading={flaggingRepair}
+                          disabled={flaggingRepair || repairFlaggedFor === selectedContainer.id}
+                          onClick={() => void handleFlagRepair()}
+                        >
+                          Flag repair needed
+                        </Button>
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 'var(--s-2)', paddingTop: 'var(--s-2)', borderTop: '1px solid var(--line)' }}>
+                      <span className="subtle" style={{ fontSize: '11px' }}>Add a new task</span>
+                      <div className="cluster" style={{ gap: 'var(--s-2)', marginTop: 'var(--s-1)' }}>
+                        {(ROLE_TASK_PRESETS[worker.type] ?? []).map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            className="chip"
+                            aria-pressed={newTaskLabel === preset}
+                            onClick={() => setNewTaskLabel(newTaskLabel === preset ? '' : preset)}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className="chip"
+                          aria-pressed={newTaskLabel === 'Other'}
+                          onClick={() => setNewTaskLabel(newTaskLabel === 'Other' ? '' : 'Other')}
+                        >
+                          Other
+                        </button>
+                      </div>
+                      {newTaskLabel === 'Other' && (
+                        <input
+                          className="input"
+                          style={{ marginTop: 'var(--s-2)' }}
+                          placeholder="Describe the task"
+                          value={customLabel}
+                          onChange={(e) => setCustomLabel(e.target.value)}
+                        />
+                      )}
+                      {newTaskLabel && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon="plus"
+                          style={{ marginTop: 'var(--s-2)' }}
+                          loading={addingTask}
+                          disabled={addingTask || (newTaskLabel === 'Other' && !customLabel.trim())}
+                          onClick={() => void handleAddNewTask()}
+                        >
+                          Add
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
 

@@ -12,6 +12,7 @@ const SECTION_SHORT: Record<SectionKind, string> = {
   pti: 'PTI',
   cleaning: 'CL',
   all_rounder: 'RP',
+  sailing: 'SC',
 };
 
 /**

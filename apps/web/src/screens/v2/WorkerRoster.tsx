@@ -17,7 +17,7 @@ const EMPTY_DRAFT = { name: '', type: 'painter' as WorkerType, notes: '' };
 type DisplayMode = 'cards' | 'list';
 
 export function WorkerRoster(): React.ReactElement {
-  const { workers, containers, addWorker, updateWorker, removeWorker, toggleWorkerActive, assignWorker, scheduleTask, unassignTask } = useV2Data();
+  const { workers, containers, addWorker, updateWorker, removeWorker, toggleWorkerActive, assignWorker, scheduleTask, unassignTask, addTask } = useV2Data();
   const [typeFilter, setTypeFilter] = useState<WorkerType | 'all'>('all');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
   const [addOpen, setAddOpen] = useState(false);
@@ -295,6 +295,7 @@ export function WorkerRoster(): React.ReactElement {
         onAssignWorker={assignWorker}
         onScheduleTask={scheduleTask}
         onUnassignTask={unassignTask}
+        onAddTask={addTask}
       />
       <AssignWorkDialog
         open={assignWorkerId !== null}
@@ -304,6 +305,7 @@ export function WorkerRoster(): React.ReactElement {
         onAssignWorker={assignWorker}
         onScheduleTask={scheduleTask}
         onUnassignTask={unassignTask}
+        onAddTask={addTask}
       />
     </div>
   );

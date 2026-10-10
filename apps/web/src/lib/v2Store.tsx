@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from './api';
+import { api, type NewTaskInput } from './api';
 import {
   type ContainerDraft,
   type ContainerDraftData,
@@ -63,7 +63,15 @@ interface V2Data {
    * "remove" action on an already-scheduled row in AssignWorkDialog. */
   unassignTask: (containerId: string, kind: SectionKind, key: string) => void;
   setTaskSite: (containerId: string, kind: SectionKind, key: string, site: SailingSite) => void;
-  markReady: (containerId: string) => void;
+  /** Adds a brand-new task to a container after Gate-In — the one thing the
+   * fixed Gate-In builders can't do (sticker removal, office cleaning, an
+   * ad-hoc repair flagged from PTI, etc). Awaits the server since it's a
+   * real insert, not a patch to something already in local state. */
+  addTask: (containerId: string, kind: SectionKind, task: NewTaskInput) => Promise<void>;
+  /** A completion photo is required before a container can be marked ready
+   * (client request) — the photo URL and readyAt are set together in one
+   * call, so there's no in-between state where readyAt is set without one. */
+  markReady: (containerId: string, photoUrl: string) => Promise<void>;
   gateIn: (container: MockContainer) => Promise<void>;
   /** Only ever called on a container that's already Ready to move — archives
    * it (sets `departedAt`) so it drops off the active Yard Board/Dashboards/
@@ -267,10 +275,15 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         patchTask(containerId, kind, key, patch);
       },
 
-      markReady: (containerId) => {
-        const patch = { readyAt: todayDate() };
-        setContainers((cur) => mapContainer(cur, containerId, (c) => ({ ...c, ...patch })));
-        patchContainer(containerId, patch);
+      addTask: async (containerId, kind, task) => {
+        const { container: saved } = await api.v2AddTask(containerId, kind, task);
+        setContainers((cur) => mapContainer(cur, containerId, () => saved));
+      },
+
+      markReady: async (containerId, photoUrl) => {
+        const patch = { readyAt: todayDate(), readyPhotoUrl: photoUrl };
+        const { container: saved } = await api.v2PatchContainer(containerId, patch);
+        setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },
 
       gateIn: async (container) => {

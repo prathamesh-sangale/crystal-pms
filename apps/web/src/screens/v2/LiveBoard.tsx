@@ -29,7 +29,7 @@ import { Button, Segmented } from '../../components/crystal/Button';
 import { Person } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState } from '../../components/crystal/Feedback';
-import { Chip } from '../../components/crystal/Form';
+import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
 
 type View = 'stage' | 'crew';
@@ -45,7 +45,7 @@ type StageFilter = 'all' | SectionKind;
 type ProductFilter = 'all' | 'Reefer' | 'Dry';
 const productOf = (typeCode: string): 'Reefer' | 'Dry' => (typeCode.startsWith('Reefer') ? 'Reefer' : 'Dry');
 
-const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
+const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
 const crewColumnHelper = createColumnHelper<CrewLoad>();
 
@@ -370,6 +370,7 @@ export function LiveBoard(): React.ReactElement {
     assignWorker,
     scheduleTask,
     unassignTask,
+    addTask,
     setTaskSite,
     markReady,
     toggleWorkerActive,
@@ -400,6 +401,10 @@ export function LiveBoard(): React.ReactElement {
   // A sub-filter under the stage one — which product the open work belongs
   // to, not just which stage it's at.
   const [activeProduct, setActiveProduct] = useState<ProductFilter>('all');
+  // Inline, board-local search — separate from the global command-palette
+  // search, which jumps away from the board entirely. Matches the same way
+  // the palette does (id + typeCode), just without leaving this screen.
+  const [searchQuery, setSearchQuery] = useState('');
   const [openContainerId, setOpenContainerId] = useState<string | null>(null);
   const [openWorkerId, setOpenWorkerId] = useState<string | null>(null);
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -499,8 +504,12 @@ export function LiveBoard(): React.ReactElement {
   // making the rest of the yard's work look like it didn't exist ("the
   // system is only showing Painting"). Priority still wins within each
   // section's own turn in the rotation, just not across the whole table.
-  const stageRows =
+  const stageRowsUnfiltered =
     activeSection === 'all' ? interleaveBySection(rowsForProduct, byPriority) : rowsForProduct.filter((r) => r.section === activeSection).sort(byPriority);
+  const searchNeedle = searchQuery.trim().toLowerCase();
+  const stageRows = searchNeedle
+    ? stageRowsUnfiltered.filter((r) => `${r.containerId} ${r.containerTypeCode}`.toLowerCase().includes(searchNeedle))
+    : stageRowsUnfiltered;
 
   // Deliberately its own useCallback, not just inlined in stageColumns below
   // — stageColumns itself is rebuilt every render (including Live Board's
@@ -724,6 +733,13 @@ export function LiveBoard(): React.ReactElement {
 
       {view === 'stage' && (
         <div className="stack stack-tight">
+          <InputWithIcon
+            icon="search"
+            placeholder="Search container number…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ maxWidth: '280px' }}
+          />
           <FilterRow label="Product" options={productCounts} active={activeProduct} onSelect={setActiveProduct} />
           {/* Lighter than the product row on purpose — this is a narrowing
              sub-filter under it, scoped to whichever product is selected
@@ -870,6 +886,7 @@ export function LiveBoard(): React.ReactElement {
         onAssignWorker={assignWorker}
         onScheduleTask={scheduleTask}
         onUnassignTask={unassignTask}
+        onAddTask={addTask}
       />
       <AssignWorkDialog
         open={assignWorkerId !== null}
@@ -879,6 +896,7 @@ export function LiveBoard(): React.ReactElement {
         onAssignWorker={assignWorker}
         onScheduleTask={scheduleTask}
         onUnassignTask={unassignTask}
+        onAddTask={addTask}
         initialDate={rosterDate}
       />
       {startConfirmDialog}

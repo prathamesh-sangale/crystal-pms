@@ -41,6 +41,16 @@ const LOGO_LABELS: Record<LogoChoice, string> = {
   na: 'Not required',
   readymade: 'Ready-made (sticker/decal)',
   physical: 'Physical (painted)',
+  removal: 'Removal',
+};
+
+/** The actual task created at Gate-In once a Logo choice other than "Not
+ * required" is picked — kept as an explicit lookup (not a ternary) so a new
+ * LogoChoice value can't silently fall through into the wrong label. */
+const LOGO_TASK: Record<Exclude<LogoChoice, 'na'>, { label: string; estHrs: number }> = {
+  readymade: { label: 'Logo (ready-made)', estHrs: 0.25 },
+  physical: { label: 'Logo (painted)', estHrs: 0.75 },
+  removal: { label: 'Logo removal', estHrs: 0.5 },
 };
 
 interface DraftField extends MockSurveyField {
@@ -413,7 +423,7 @@ export function GateFormDialog({
   const [estBudget, setEstBudget] = useState('');
   const [remarks, setRemarks] = useState('');
 
-  const [sections, setSections] = useState<Record<SectionKind, boolean>>({ painting: false, pti: false, cleaning: false, all_rounder: false });
+  const [sections, setSections] = useState<Record<SectionKind, boolean>>({ painting: false, pti: false, cleaning: false, all_rounder: false, sailing: false });
 
   const isReefer = isOut ? Boolean(container?.typeCode.startsWith('Reefer')) : typeCode.startsWith('Reefer');
 
@@ -594,6 +604,10 @@ export function GateFormDialog({
       pti: ptiCheck === 'No',
       cleaning: cleaningRequired,
       all_rounder: needsRepair,
+      // Sailing Crew work is never generated at Gate-In -- it's only ever
+      // added afterward, via the ad-hoc "Add a new task" flow in
+      // AssignWorkDialog.
+      sailing: false,
     });
     setStep('result');
   };
@@ -656,12 +670,12 @@ export function GateFormDialog({
         ? [
             {
               key: 'logo',
-              label: logoChoice === 'readymade' ? 'Logo (ready-made)' : 'Logo (painted)',
+              label: LOGO_TASK[logoChoice].label,
               workerId: null,
               state: 'pending' as const,
               startedAt: null,
               elapsedSec: 0,
-              estHrs: logoChoice === 'readymade' ? 0.25 : 0.75,
+              estHrs: LOGO_TASK[logoChoice].estHrs,
               site: 'Painting site' as const,
               dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
             },
@@ -759,7 +773,12 @@ export function GateFormDialog({
                   ? cleaningTasks(null)
                   : allRounderTasks,
         })),
-        readyAt: outcome === 'ready' ? offsetDate(0) : null,
+        // Even a container with nothing flagged now needs a completion photo
+        // before it's genuinely "ready to move" (client request) -- readyAt
+        // is never set until that photo is uploaded, so this no longer
+        // short-circuits straight to ready for a clean survey outcome.
+        readyAt: null,
+        readyPhotoUrl: null,
         currentSite: null,
         gateIn: entry,
         gateOut: null,

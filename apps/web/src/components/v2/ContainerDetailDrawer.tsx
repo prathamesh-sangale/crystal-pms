@@ -1,5 +1,5 @@
 import { createColumnHelper } from '@tanstack/react-table';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   formatElapsed,
@@ -30,6 +30,7 @@ import {
   type SailingSite,
   type SectionKind,
 } from '../../lib/mockV2';
+import { api } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { useLiveTick } from '../../lib/useLiveTick';
 import { Button } from '../crystal/Button';
@@ -247,7 +248,7 @@ export function ContainerDetailDrawer({
   onAssignWorker: (containerId: string, sectionKind: SectionKind, taskKey: string, workerId: string) => void;
   onScheduleTask: (containerId: string, sectionKind: SectionKind, taskKey: string, date: string | null) => void;
   onSetTaskSite: (containerId: string, sectionKind: SectionKind, taskKey: string, site: SailingSite) => void;
-  onMarkReady: (containerId: string) => void;
+  onMarkReady: (containerId: string, photoUrl: string) => Promise<void>;
   onUpdateContainer: (containerId: string, updates: { typeCode: string; size: string; color: string | null }) => void;
   onRemoveContainer: (containerId: string) => Promise<void>;
   onSetPriority: (containerId: string, priority: boolean) => void;
@@ -338,6 +339,27 @@ export function ContainerDetailDrawer({
   const status = container ? overallStatus(container) : null;
   const editIsReefer = editDraft.typeCode.startsWith('Reefer');
 
+  // A completion photo is required before "Mark ready to move" actually
+  // does anything (client request) -- uploading it and marking ready happen
+  // together, in the one action below, so readyAt is never set without one.
+  const [readyPhotoUploading, setReadyPhotoUploading] = useState(false);
+  const [readyPhotoError, setReadyPhotoError] = useState<string | null>(null);
+  const readyPhotoInputId = useId();
+
+  const handleReadyPhoto = async (file: File | null): Promise<void> => {
+    if (!file || !container) return;
+    setReadyPhotoError(null);
+    setReadyPhotoUploading(true);
+    try {
+      const { url } = await api.v2Upload(file);
+      await onMarkReady(container.id, url);
+    } catch {
+      setReadyPhotoError('Could not upload that photo. Try again.');
+    } finally {
+      setReadyPhotoUploading(false);
+    }
+  };
+
   const handleSaveEdit = (): void => {
     if (!container) return;
     onUpdateContainer(container.id, {
@@ -419,14 +441,35 @@ export function ContainerDetailDrawer({
               Get report
             </Button>
           </span>
+        ) : ready ? (
+          <span className="cluster" style={{ marginLeft: 'auto', gap: 'var(--s-2)', alignItems: 'center' }}>
+            {readyPhotoError && (
+              <span className="subtle" style={{ color: 'var(--text-bad, #b42318)', fontSize: '12px' }}>
+                {readyPhotoError}
+              </span>
+            )}
+            <label
+              htmlFor={readyPhotoInputId}
+              className={cx('btn', 'btn-primary', readyPhotoUploading && 'loading')}
+              aria-disabled={readyPhotoUploading}
+            >
+              <Icon name="upload" size="sm" />
+              Upload completion photo to mark ready
+            </label>
+            <input
+              id={readyPhotoInputId}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              disabled={readyPhotoUploading}
+              onChange={(e) => {
+                void handleReadyPhoto(e.target.files?.[0] ?? null);
+                e.target.value = '';
+              }}
+            />
+          </span>
         ) : (
-          <Button
-            variant="primary"
-            icon="check-circle"
-            style={{ marginLeft: 'auto' }}
-            disabled={!ready}
-            onClick={() => onMarkReady(container.id)}
-          >
+          <Button variant="primary" icon="check-circle" style={{ marginLeft: 'auto' }} disabled>
             Mark ready to move
           </Button>
         )

@@ -15,7 +15,7 @@ import { useV2Data } from '../../lib/v2Store';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { CategoryBadge, StatCard, StatusPill } from '../../components/crystal/Data';
 import { DateTimePicker } from '../../components/crystal/DateTimePicker';
-import { Chip } from '../../components/crystal/Form';
+import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import { Icon, type IconName } from '../../components/crystal/Icon';
@@ -96,13 +96,17 @@ export function YardBoard(): React.ReactElement {
   const [workerFilter, setWorkerFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Inline, board-local search — same matching convention the command
+  // palette uses (id + typeCode), without leaving this screen.
+  const [searchQuery, setSearchQuery] = useState('');
   const toast = useToast();
 
-  const anyAdvancedFilter = Boolean(workerFilter || dateFrom || dateTo);
+  const anyAdvancedFilter = Boolean(workerFilter || dateFrom || dateTo || searchQuery);
   const clearAdvancedFilters = (): void => {
     setWorkerFilter('');
     setDateFrom('');
     setDateTo('');
+    setSearchQuery('');
   };
 
   const open = containers.find((c) => c.id === openId) ?? null;
@@ -160,6 +164,8 @@ export function YardBoard(): React.ReactElement {
       return Boolean(c.survey) && !c.readyAt && !isReadyToMove(c);
     });
     const advanced = filtered.filter((c) => {
+      const needle = searchQuery.trim().toLowerCase();
+      if (needle && !`${c.id} ${c.typeCode}`.toLowerCase().includes(needle)) return false;
       if (workerFilter && !c.sections.some((s) => s.tasks.some((t) => t.workerId === workerFilter))) return false;
       if (dateFrom || dateTo) {
         if (!c.survey) return false;
@@ -176,10 +182,10 @@ export function YardBoard(): React.ReactElement {
     // Fast-tracked containers first — a flag nobody has to scroll past the
     // rest of the yard to notice.
     return [...advanced].sort((a, b) => Number(b.priority) - Number(a.priority));
-  }, [activeContainers, filter, workerFilter, dateFrom, dateTo]);
+  }, [activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery]);
 
-  const handleMarkReady = (id: string): void => {
-    markReady(id);
+  const handleMarkReady = async (id: string, photoUrl: string): Promise<void> => {
+    await markReady(id, photoUrl);
     toast.ok('Ready to move', `${id} cleared for release.`);
   };
 
@@ -295,6 +301,13 @@ export function YardBoard(): React.ReactElement {
           borderRadius: 'var(--r-md)',
         }}
       >
+        <InputWithIcon
+          icon="search"
+          placeholder="Search container number…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ width: '220px' }}
+        />
         <select
           className="input"
           style={{ width: '180px', height: '40px', padding: '8px 10px', fontSize: '12.5px' }}
