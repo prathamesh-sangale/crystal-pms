@@ -1056,3 +1056,59 @@ input[type="time"] {
 .sev-btn:active {
   transform: translateY(1px);
 }
+
+/* ------------------------------------------------------------------- boot
+ * The app's own brand mark (crystal.css's .side-brand .mark — a navy square
+ * with a rotated amber diamond), scaled up and given a light-sweep overlay
+ * for the one moment there's nothing else to show yet: checking whether the
+ * stored token is still valid, before the real shell can render. Not scoped
+ * under .side-brand (that rule only applies there), so the shape is
+ * redefined here at boot size — same tokens, same look, just bigger. */
+.bootmark {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-lg);
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.bootmark i {
+  width: 20px;
+  height: 20px;
+  background: var(--amber-c);
+  transform: rotate(45deg);
+  border-radius: var(--r-sm);
+  display: block;
+}
+
+.bootmark-sweep {
+  position: absolute;
+  inset: 0;
+  width: 60%;
+  background: linear-gradient(
+    105deg,
+    transparent 25%,
+    color-mix(in srgb, var(--on-accent) 70%, transparent) 50%,
+    transparent 75%
+  );
+  animation: bootmark-sweep 1.4s var(--ease-in-out) infinite;
+}
+
+@keyframes bootmark-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  55%, 100% {
+    transform: translateX(260%) skewX(-18deg);
+    opacity: 0;
+  }
+}

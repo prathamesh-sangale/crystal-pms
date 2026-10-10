@@ -24,7 +24,10 @@ function Booting(): React.ReactElement {
       }}
     >
       <div className="stack" style={{ alignItems: 'center' }}>
-        <div className="ring" aria-hidden="true" />
+        <span className="bootmark" aria-hidden="true">
+          <i />
+          <span className="bootmark-sweep" />
+        </span>
         <p role="status" style={{ fontSize: '12.5px', margin: 0 }}>
           Checking your session…
         </p>
