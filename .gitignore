@@ -39,3 +39,6 @@ Thumbs.db
 
 .vercel
 .env*
+
+# client-facing deliverable, not project source
+/Crystal-PMS-Change-Requests.pdf

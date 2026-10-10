@@ -16,8 +16,9 @@ import {
 } from '../../lib/mockV2';
 import { Button } from '../crystal/Button';
 import { Pill } from '../crystal/Data';
+import { Select } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
-import { Menu, Modal } from '../crystal/Overlay';
+import { Modal } from '../crystal/Overlay';
 
 /** Which section a worker's type actually does, and — inside that section —
  * which tasks are theirs. A plain function, not a lookup table, because
@@ -274,21 +275,20 @@ export function AssignWorkDialog({
               </p>
             ) : (
               <div className="stack">
-                <Menu
-                  label="Choose a container"
-                  align="start"
-                  trigger={
-                    <button type="button" className="dd-trigger" style={{ width: '100%' }}>
-                      {selectedContainer ? `${selectedContainer.id} — ${selectedContainer.typeCode}` : <span className="subtle">Choose a container</span>}
-                      <Icon name="chev-down" size="sm" className="caret" />
-                    </button>
-                  }
-                  items={eligibleContainers.map((c) => ({
-                    label: `${c.id} — ${c.typeCode}`,
-                    icon: c.id === containerId ? 'check' : undefined,
-                    onSelect: () => setContainerId(c.id),
-                  }))}
-                />
+                {/* A plain native <select>, not the Menu dropdown used
+                   elsewhere — "Add a new task" (below) needs every active
+                   container as an option, not just ones with a pre-existing
+                   matching task, and a 40+-item list overflows Menu's
+                   unscrolled popover (it was only ever sized for a handful
+                   of items). A native select handles any length natively. */}
+                <Select value={containerId} onChange={(e) => setContainerId(e.target.value)} style={{ width: '100%' }}>
+                  <option value="">Choose a container</option>
+                  {eligibleContainers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.id} — {c.typeCode}
+                    </option>
+                  ))}
+                </Select>
 
                 {selectedContainer && (
                   <div className="stack stack-tight" style={{ marginTop: 'var(--s-2)' }}>
