@@ -139,7 +139,13 @@ export function AppShell(): React.ReactElement {
               {renderGroup(helpGroup)}
             </div>
           )}
-          <div className="side-foot">
+          {/* .side-foot's own class carries margin-top:auto — fine on its
+              own, but with the Help block above it also needing an auto
+              margin to reach the bottom, the two would split the leftover
+              space between them instead of Help sitting snug against this.
+              Overriding it to 0 here lets Help's own auto margin do all the
+              pushing, so this lands directly below it with no gap. */}
+          <div className="side-foot" style={{ marginTop: helpGroup ? 0 : undefined }}>
             <Avatar name={user?.name ?? '—'} size="sm" />
             <div className="side-foot-label" style={{ minWidth: 0 }}>
               <div
