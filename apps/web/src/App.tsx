@@ -6,6 +6,7 @@ import { V2DataProvider } from './lib/v2Store';
 import { Login } from './screens/Login';
 import { ContainerReport } from './screens/v2/ContainerReport';
 import { DashboardsV2 } from './screens/v2/DashboardsV2';
+import { Guide } from './screens/v2/Guide';
 import { Hydra } from './screens/v2/Hydra';
 import { ImsStock } from './screens/v2/ImsStock';
 import { LiveBoard } from './screens/v2/LiveBoard';
@@ -74,6 +75,7 @@ export function App(): React.ReactElement {
           <Route path="/dashboards" element={<DashboardsV2 />} />
           <Route path="/hydra" element={<Hydra />} />
           <Route path="/ims-stock" element={<ImsStock />} />
+          <Route path="/guide" element={<Guide />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>

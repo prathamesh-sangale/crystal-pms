@@ -79,6 +79,18 @@ export const NAV: NavGroup[] = [
       },
     ],
   },
+  {
+    heading: 'Help',
+    items: [
+      {
+        to: '/guide',
+        label: 'System Guide',
+        icon: 'info',
+        title: 'System Guide',
+        description: 'How to use Crystal PMS, in plain language — a six-step walkthrough plus answers to every common question.',
+      },
+    ],
+  },
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV.flatMap((group) => group.items);
