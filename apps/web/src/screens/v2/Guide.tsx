@@ -262,22 +262,44 @@ export function Guide(): React.ReactElement {
           </EmptyState>
         ) : (
           <div style={{ columnWidth: '340px', columnGap: 'var(--s-4)' }}>
+            {/* Each topic is its own bordered panel, not just a heading
+                above loose cards — with two unrelated topics often landing
+                back to back in the same CSS column, a heading alone wasn't
+                a clear enough boundary; a box edge is unambiguous. */}
             {filteredFaq.map((group) => (
-              <div key={group.heading} className="stack stack-tight" style={{ breakInside: 'avoid', marginBottom: 'var(--s-4)' }}>
-                <div className="cluster" style={{ gap: 'var(--s-2)' }}>
+              <div
+                key={group.heading}
+                style={{
+                  breakInside: 'avoid',
+                  marginBottom: 'var(--s-4)',
+                  border: '1px solid var(--line)',
+                  borderRadius: 'var(--r-md)',
+                  overflow: 'hidden',
+                  background: 'var(--surface)',
+                }}
+              >
+                <div
+                  className="cluster"
+                  style={{ gap: 'var(--s-2)', padding: '10px 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}
+                >
                   <Icon name={group.icon} size="sm" />
                   <h3 style={{ margin: 0, fontFamily: 'var(--f-display)', fontSize: '12.5px' }}>{group.heading}</h3>
                 </div>
-                {group.items.map((item) => (
-                  <details key={slugify(item.q)} className="card" style={{ padding: '8px 12px' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '12.5px', color: 'var(--text)' }}>
-                      {item.q}
-                    </summary>
-                    <p style={{ margin: '6px 0 0', fontSize: '11.5px', color: 'var(--text-3)', lineHeight: 1.45 }}>
-                      {item.a}
-                    </p>
-                  </details>
-                ))}
+                <div style={{ padding: '4px 12px' }}>
+                  {group.items.map((item, i) => (
+                    <details
+                      key={slugify(item.q)}
+                      style={{ padding: '7px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}
+                    >
+                      <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '12.5px', color: 'var(--text)' }}>
+                        {item.q}
+                      </summary>
+                      <p style={{ margin: '6px 0 0', fontSize: '11.5px', color: 'var(--text-3)', lineHeight: 1.45 }}>
+                        {item.a}
+                      </p>
+                    </details>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
