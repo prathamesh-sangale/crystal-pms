@@ -1,7 +1,7 @@
 import * as Popover from '@radix-ui/react-popover';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { RequestError } from '../../lib/api';
+import { api, RequestError } from '../../lib/api';
 import { roleDisplayLabel, useAuth } from '../../lib/auth';
 import { cx } from '../../lib/cx';
 import { ADMIN_ACCOUNT } from '../../lib/devAccounts';
@@ -64,6 +64,16 @@ export function AppShell(): React.ReactElement {
       );
     }
   };
+
+  // IMS Stock's first load each 5-minute window pays for a real, ~2s round
+  // trip to Google Sheets (apps/api's own server-side cache TTL) — firing
+  // this once as soon as the shell mounts means that round trip has usually
+  // already happened by the time the admin actually clicks into the screen,
+  // so it opens from the warm cache instead. Fire-and-forget: a failure here
+  // just means the screen's own fetch pays the normal cost when visited.
+  useEffect(() => {
+    api.v2ImsStock().catch(() => {});
+  }, []);
 
   const switchSection: Array<MenuItem | 'separator' | { heading: string }> =
     import.meta.env.DEV && user?.email !== ADMIN_ACCOUNT.email
@@ -151,6 +161,14 @@ export function AppShell(): React.ReactElement {
           </div>
 
           <CommandPalette />
+
+          <IconButton
+            icon="package"
+            label="IMS Stock"
+            bare
+            pressed={pathname === '/ims-stock'}
+            onClick={() => navigate('/ims-stock')}
+          />
 
           <IconButton
             icon={theme === 'dark' ? 'sun' : 'moon'}
