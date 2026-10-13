@@ -87,25 +87,35 @@ export function AppShell(): React.ReactElement {
         ]
       : [];
 
-  const navItems = (onNavigate?: () => void): React.ReactNode =>
-    NAV.map((group) => (
-      <div key={group.heading}>
-        <div className="side-group">{group.heading}</div>
-        {group.items.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            className={({ isActive }) => cx('navitem', isActive && 'on')}
-          >
-            <Icon name={item.icon} size="sm" />
-            {/* Faded rather than removed when collapsed, so the item keeps
-                its accessible name at every width. */}
-            <span className="navitem-label">{item.label}</span>
-          </NavLink>
-        ))}
-      </div>
-    ));
+  const renderGroup = (group: (typeof NAV)[number], onNavigate?: () => void): React.ReactNode => (
+    <div key={group.heading}>
+      <div className="side-group">{group.heading}</div>
+      {group.items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          onClick={onNavigate}
+          className={({ isActive }) => cx('navitem', isActive && 'on')}
+        >
+          <Icon name={item.icon} size="sm" />
+          {/* Faded rather than removed when collapsed, so the item keeps
+              its accessible name at every width. */}
+          <span className="navitem-label">{item.label}</span>
+        </NavLink>
+      ))}
+    </div>
+  );
+
+  // Mobile sheet: every group, flat, in NAV's own order — there's no
+  // competing avatar footer inside the sheet to pin against.
+  const navItems = (onNavigate?: () => void): React.ReactNode => NAV.map((group) => renderGroup(group, onNavigate));
+
+  // Desktop rail only: Help is pulled out of the scrollable list and glued to
+  // the bottom edge of the sidebar instead, right above the avatar — so it
+  // reads as a persistent utility link, not just the last item in a list
+  // that happens to end there.
+  const mainNavGroups = NAV.filter((group) => group.heading !== 'Help');
+  const helpGroup = NAV.find((group) => group.heading === 'Help');
 
   return (
     <div className="appshell">
@@ -123,7 +133,12 @@ export function AppShell(): React.ReactElement {
             </span>
             <span className="side-brand-label">Crystal PMS</span>
           </div>
-          <nav>{navItems()}</nav>
+          <nav>{mainNavGroups.map((group) => renderGroup(group))}</nav>
+          {helpGroup && (
+            <div style={{ marginTop: 'auto', paddingTop: 'var(--s-2)', borderTop: '1px solid var(--line)' }}>
+              {renderGroup(helpGroup)}
+            </div>
+          )}
           <div className="side-foot">
             <Avatar name={user?.name ?? '—'} size="sm" />
             <div className="side-foot-label" style={{ minWidth: 0 }}>
