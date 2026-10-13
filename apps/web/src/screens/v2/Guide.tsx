@@ -241,14 +241,13 @@ export function Guide(): React.ReactElement {
         ))}
       </div>
 
+      <div className="divider-lbl">Frequently asked questions</div>
+
       {/* The deep reference — collapsed by default, so "detailed" doesn't
           mean "a wall of open text." Runs in CSS columns, same multi-column
           technique Yard Board's card grid uses, so a normal desktop shows
           several topics side by side instead of one long single column. */}
       <div className="stack">
-        <h2 style={{ margin: 0, fontFamily: 'var(--f-display)', fontSize: '15px' }}>
-          Frequently asked questions
-        </h2>
         <InputWithIcon
           icon="search"
           placeholder="Search every question…"
