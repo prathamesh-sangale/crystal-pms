@@ -19,6 +19,17 @@ const STEPS: Step[] = [
   { icon: 'door', label: 'Gate out' },
 ];
 
+/** One punchy line per screen — the first one (Live Board) gets the most
+ * personality on purpose, since it's the one everyone opens first every day. */
+const BLURB: Record<string, string> = {
+  '/live': "The yard's pulse, live",
+  '/yard': 'One container, full picture',
+  '/workers': 'Your crew, on record',
+  '/dashboards': "Today's numbers, at a glance",
+  '/hydra': 'Loading, unloading, shifting — logged',
+  '/ims-stock': "What's ready to go, from IMS",
+};
+
 const TIPS: Array<{ icon: IconName; text: string }> = [
   { icon: 'search', text: 'Ctrl+K jumps anywhere' },
   { icon: 'shield', text: 'IMS is read-only, always' },
@@ -72,18 +83,25 @@ export function Guide(): React.ReactElement {
         ))}
       </div>
 
-      {/* The map — tap a screen instead of reading about it. */}
+      {/* The map — tap a screen instead of reading about it. .stack (not a
+          bare inline flex column) on purpose: it's the exact layout utility
+          already proven to render icon+label correctly in the flow strip
+          above, and it carries min-width:0 — a plain inline flex column on a
+          CSS Grid item was leaving these labels unreadably clipped. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--s-3)' }}>
         {screens.map((item) => (
           <button
             key={item.to}
             type="button"
-            className="card hoverable"
-            style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 'var(--s-2)' }}
+            className="card hoverable stack stack-tight"
+            style={{ textAlign: 'left', color: 'var(--text)' }}
             onClick={() => navigate(item.to)}
           >
             <StepIcon icon={item.icon} size={36} />
-            <span style={{ fontWeight: 700, fontSize: '13px' }}>{item.label}</span>
+            <span style={{ fontWeight: 700, fontSize: '13px', color: 'var(--text)' }}>{item.label}</span>
+            {BLURB[item.to] && (
+              <span style={{ fontSize: '11.5px', color: 'var(--text-3)' }}>{BLURB[item.to]}</span>
+            )}
           </button>
         ))}
       </div>
