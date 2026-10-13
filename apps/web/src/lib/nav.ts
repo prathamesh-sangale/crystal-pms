@@ -67,6 +67,18 @@ export const NAV: NavGroup[] = [
       },
     ],
   },
+  {
+    heading: 'IMS',
+    items: [
+      {
+        to: '/ims-stock',
+        label: 'IMS Stock',
+        icon: 'package',
+        title: 'IMS Stock',
+        description: 'Every container currently available at Crystal Yard in IMS — read-only, never written back to.',
+      },
+    ],
+  },
 ];
 
 export const NAV_ITEMS: NavItem[] = NAV.flatMap((group) => group.items);

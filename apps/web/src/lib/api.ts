@@ -185,6 +185,14 @@ export const api = {
   v2ImsLookup: (containerId: string) =>
     request<ImsLookupResult>(`/api/v2/ims-lookup?containerId=${encodeURIComponent(containerId)}`),
 
+  v2ImsStock: (types?: string[], sizes?: string[]) => {
+    const params = new URLSearchParams();
+    if (types?.length) params.set('types', types.join(','));
+    if (sizes?.length) params.set('sizes', sizes.join(','));
+    const qs = params.toString();
+    return request<{ items: ImsMatch[] }>(`/api/v2/ims-stock${qs ? `?${qs}` : ''}`);
+  },
+
   hydraMovements: () => request<{ movements: HydraMovement[] }>('/api/v2/hydra'),
 
   hydraCreateMovement: (input: HydraMovementInput) =>
@@ -203,6 +211,9 @@ export interface ImsMatch {
   depot: string;
   status: string;
   grade: string;
+  location: string;
+  yom: string;
+  reeferUnit: string;
   suggestedTypeCode: string | null;
   suggestedSize: string | null;
 }

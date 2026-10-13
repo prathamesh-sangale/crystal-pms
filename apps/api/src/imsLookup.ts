@@ -33,6 +33,12 @@ export interface ImsMatch {
   depot: string;
   status: string;
   grade: string;
+  /** The rest of "essential detail" beyond id/type/size/grade — read from
+   * the same already-fetched sheet, no extra cost. Yard/row location in the
+   * depot, year of manufacture, and (for a reefer) the compressor make. */
+  location: string;
+  yom: string;
+  reeferUnit: string;
   /** Best-effort guess at this depot's own Type/Size dropdown values, for
    * pre-filling the Gate-In form — `null` when IMS's own value (its Type
    * column alone has at least 8 distinct, inconsistently-cased spellings,
@@ -94,6 +100,9 @@ async function loadRows(): Promise<ImsRow[]> {
   const depotCol = col('Depot');
   const statusCol = col('Status');
   const gradeCol = col('Grade');
+  const locationCol = col('Location');
+  const yomCol = col('YOM');
+  const reeferUnitCol = col('Reefer Unit');
 
   const rows: ImsRow[] = [];
   for (const row of values.slice(headerIndex + 1)) {
@@ -109,6 +118,9 @@ async function loadRows(): Promise<ImsRow[]> {
       depot: (row[depotCol] ?? '').trim(),
       status: (row[statusCol] ?? '').trim(),
       grade: (row[gradeCol] ?? '').trim(),
+      location: (row[locationCol] ?? '').trim(),
+      yom: (row[yomCol] ?? '').trim(),
+      reeferUnit: (row[reeferUnitCol] ?? '').trim(),
       suggestedTypeCode: mapType(imsType),
       suggestedSize: mapSize(imsSize),
     });
@@ -145,4 +157,24 @@ export async function findContainerMatches(containerId: string): Promise<ImsLook
     matches: hits.filter((m) => m.depot.trim().toUpperCase() === OUR_DEPOT),
     elsewhere: hits.filter((m) => m.depot.trim().toUpperCase() !== OUR_DEPOT),
   };
+}
+
+const AVAILABLE_STATUS = 'STOCK';
+
+/** Everything at our own yard currently available (Status = "Stock" in
+ * IMS's own sheet, confirmed directly as the definition of "available") —
+ * the browse-all-inventory counterpart to findContainerMatches' single-id
+ * lookup. `types`/`sizes` filter against the already-mapped suggestedType/
+ * suggestedSize (this app's own vocabulary), not IMS's raw inconsistent
+ * strings, since that's what the admin picks from in the UI. */
+export async function findAvailableStock(types?: string[], sizes?: string[]): Promise<ImsMatch[]> {
+  const rows = await loadRows();
+  const typeSet = types && types.length > 0 ? new Set(types) : null;
+  const sizeSet = sizes && sizes.length > 0 ? new Set(sizes) : null;
+  return rows
+    .filter((r) => r.depot.trim().toUpperCase() === OUR_DEPOT)
+    .filter((r) => r.status.trim().toUpperCase() === AVAILABLE_STATUS)
+    .filter((r) => !typeSet || (r.suggestedTypeCode !== null && typeSet.has(r.suggestedTypeCode)))
+    .filter((r) => !sizeSet || (r.suggestedSize !== null && sizeSet.has(r.suggestedSize)))
+    .map(({ normalizedId: _normalizedId, ...match }) => match);
 }

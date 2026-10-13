@@ -1,10 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate } from '../auth.js';
-import { findContainerMatches } from '../imsLookup.js';
+import { findAvailableStock, findContainerMatches } from '../imsLookup.js';
 import { parseOr422 } from '../http.js';
 
 const lookupQuerySchema = z.object({ containerId: z.string().min(1) });
+
+/** `types=Reefer,Dry` -> ['Reefer','Dry']; absent/empty means "no filter". */
+const commaList = z
+  .string()
+  .optional()
+  .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined));
+
+const stockQuerySchema = z.object({ types: commaList, sizes: commaList });
 
 /**
  * A read-only bridge to the IMS's own container data, for the Gate-In
@@ -22,5 +30,14 @@ export async function v2ImsLookupRoutes(app: FastifyInstance): Promise<void> {
     if (!query) return;
     const result = await findContainerMatches(query.containerId);
     return reply.send(result);
+  });
+
+  // The browse-all-inventory counterpart to the single-id lookup above —
+  // "what's currently available at our yard", not "find this one container".
+  app.get('/api/v2/ims-stock', async (request, reply) => {
+    const query = await parseOr422(stockQuerySchema, request.query, reply);
+    if (!query) return;
+    const items = await findAvailableStock(query.types, query.sizes);
+    return reply.send({ items });
   });
 }
