@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate, requireScreen } from '../auth.js';
+import { authenticate, requireScreen, userHasScreen } from '../auth.js';
 import { notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 import { fromContainerRow, toTaskInsert, type ContainerRow } from '../v2Mappers.js';
@@ -71,6 +71,14 @@ const patchContainerSchema = z
     gateOut: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
+
+/** Editing a container's type/size/color is Yard Board's alone now, by
+ * direct request — Live Board's own detail drawer no longer even offers
+ * the control, and this is the server-side half of that: a request that
+ * touches any of these fields needs 'yard' specifically, not just 'live' or
+ * 'yard' like the rest of this endpoint's fields (priority/ready/gate-out),
+ * which both screens' drawers still legitimately send. */
+const YARD_ONLY_PATCH_FIELDS = ['typeCode', 'size', 'color'];
 
 const CONTAINER_FIELD_MAP: Record<string, string> = {
   typeCode: 'type_code',
@@ -202,10 +210,24 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ container: fromContainerRow(full as ContainerRow) });
   });
 
-  app.patch('/api/v2/containers/:id', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
+  // No single requireScreen preHandler here -- which screen(s) this needs
+  // depends on which fields the request actually touches (see
+  // YARD_ONLY_PATCH_FIELDS above), so the check runs inline once the body
+  // is parsed, not before.
+  app.patch('/api/v2/containers/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = await parseOr422(patchContainerSchema, request.body, reply);
     if (!body) return;
+
+    const touchesYardOnlyField = Object.keys(body).some((k) => YARD_ONLY_PATCH_FIELDS.includes(k));
+    const allowed = touchesYardOnlyField ? userHasScreen(request.user, 'yard') : userHasScreen(request.user, 'live', 'yard');
+    if (!allowed) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: "You don't have access to this part of the system. Ask an admin to grant it.",
+      });
+    }
+
     const { data, error } = await supabase()
       .from('containers')
       .update(toDbContainerPatch(body))
@@ -217,7 +239,9 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ container: fromContainerRow(data as ContainerRow) });
   });
 
-  app.delete('/api/v2/containers/:id', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
+  // Removing a container outright is Yard Board's alone, same as editing
+  // its type/size/color above -- Live Board's drawer no longer offers it.
+  app.delete('/api/v2/containers/:id', { preHandler: requireScreen('yard') }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { error } = await supabase().from('containers').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);

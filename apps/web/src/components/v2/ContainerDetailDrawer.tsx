@@ -249,8 +249,14 @@ export function ContainerDetailDrawer({
   onScheduleTask: (containerId: string, sectionKind: SectionKind, taskKey: string, date: string | null) => void;
   onSetTaskSite: (containerId: string, sectionKind: SectionKind, taskKey: string, site: SailingSite) => void;
   onMarkReady: (containerId: string, photoUrl: string) => Promise<void>;
-  onUpdateContainer: (containerId: string, updates: { typeCode: string; size: string; color: string | null }) => void;
-  onRemoveContainer: (containerId: string) => Promise<void>;
+  /** Absent on Live Board's own instance of this drawer, by direct design
+   * decision — editing a container's type/size/color, and removing it
+   * outright, are Yard Board's alone now, not something available from
+   * wherever a container happens to be opened from. The server enforces
+   * the same split (apps/api/src/routes/v2Containers.ts), so this isn't
+   * just cosmetic. */
+  onUpdateContainer?: (containerId: string, updates: { typeCode: string; size: string; color: string | null }) => void;
+  onRemoveContainer?: (containerId: string) => Promise<void>;
   onSetPriority: (containerId: string, priority: boolean) => void;
   onGateOut: (containerId: string, entry: GateLogEntry) => Promise<void>;
 }): React.ReactElement {
@@ -362,7 +368,7 @@ export function ContainerDetailDrawer({
 
   const handleSaveEdit = (): void => {
     if (!container) return;
-    onUpdateContainer(container.id, {
+    onUpdateContainer?.(container.id, {
       typeCode: editDraft.typeCode,
       size: editDraft.size,
       color: editIsReefer ? 'White' : editDraft.color === CUSTOM_COLOR ? editCustomColor.trim() || 'Unspecified' : editDraft.color,
@@ -372,7 +378,7 @@ export function ContainerDetailDrawer({
 
   const handleDelete = (): void => {
     if (!container) return;
-    onRemoveContainer(container.id);
+    onRemoveContainer?.(container.id);
     setDeleteOpen(false);
     onOpenChange(false);
   };
@@ -414,12 +420,16 @@ export function ContainerDetailDrawer({
                 {container.priority ? 'Remove from fast-track' : 'Fast-track'}
               </Button>
             )}
-            <Button variant="ghost" size="sm" icon="edit" onClick={() => setEditOpen(true)} disabled={Boolean(container.departedAt)}>
-              Edit
-            </Button>
-            <Button variant="ghost" size="sm" icon="trash" onClick={() => setDeleteOpen(true)} disabled={anyRunning || Boolean(container.departedAt)}>
-              Delete
-            </Button>
+            {onUpdateContainer && (
+              <Button variant="ghost" size="sm" icon="edit" onClick={() => setEditOpen(true)} disabled={Boolean(container.departedAt)}>
+                Edit
+              </Button>
+            )}
+            {onRemoveContainer && (
+              <Button variant="ghost" size="sm" icon="trash" onClick={() => setDeleteOpen(true)} disabled={anyRunning || Boolean(container.departedAt)}>
+                Delete
+              </Button>
+            )}
           </span>
         )
       }

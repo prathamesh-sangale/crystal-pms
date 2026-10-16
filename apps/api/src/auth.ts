@@ -82,11 +82,23 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
 }
 
 /**
+ * The underlying check `requireScreen` below is built on — exported on its
+ * own too, for the rare route that can't just gate its whole handler behind
+ * one preHandler (e.g. one PATCH endpoint whose body can touch either a
+ * shared field or a screen-exclusive one; see v2Containers.ts's container
+ * PATCH, which inspects which fields a request actually touches before
+ * deciding which screen(s) to require). `manager` always passes: the admin
+ * can never lock themselves out by misconfiguring their own access.
+ */
+export function userHasScreen(user: SessionUser, ...screens: Screen[]): boolean {
+  return user.role === 'manager' || screens.some((s) => user.allowedScreens.includes(s));
+}
+
+/**
  * The first real, server-side permission check in this app — written once,
  * reused everywhere a screen needs gating, rather than each route rolling
- * its own. `manager` always passes: the admin can never lock themselves
- * out by misconfiguring their own access. Must run *after* `authenticate`
- * (reads `request.user`, which that hook attaches).
+ * its own. Must run *after* `authenticate` (reads `request.user`, which
+ * that hook attaches).
  *
  * Accepts one or more screens — pass more than one when a route's data is
  * genuinely shared by more than one screen (Live Board/Yard Board both
@@ -94,9 +106,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
  */
 export function requireScreen(...screens: Screen[]) {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
-    const user = request.user;
-    if (user.role === 'manager') return;
-    if (screens.some((s) => user.allowedScreens.includes(s))) return;
+    if (userHasScreen(request.user, ...screens)) return;
     await reply.code(403).send({
       error: 'forbidden',
       message: "You don't have access to this part of the system. Ask an admin to grant it.",

@@ -376,8 +376,6 @@ export function LiveBoard(): React.ReactElement {
     toggleWorkerActive,
     updateWorker,
     removeWorker,
-    updateContainer,
-    removeContainer,
     setPriority,
     gateOut,
   } = useV2Data();
@@ -875,8 +873,6 @@ export function LiveBoard(): React.ReactElement {
         onScheduleTask={scheduleTask}
         onSetTaskSite={setTaskSite}
         onMarkReady={markReady}
-        onUpdateContainer={updateContainer}
-        onRemoveContainer={removeContainer}
         onSetPriority={setPriority}
         onGateOut={gateOut}
       />
