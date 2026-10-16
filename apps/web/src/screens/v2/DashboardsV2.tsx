@@ -18,6 +18,7 @@ import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, HeroCard, Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
+import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 
 function formatINR(n: number): string {
   return `₹${Math.round(n).toLocaleString('en-IN')}`;
@@ -26,10 +27,11 @@ function formatINR(n: number): string {
 export function DashboardsV2(): React.ReactElement {
   // Dashboards describe the active yard, not the full historical record —
   // departed containers would otherwise skew every stat here.
-  const { activeContainers: containers, workers } = useV2Data();
+  const { activeContainers: containers, workers, assignWorker, scheduleTask, unassignTask, addTask } = useV2Data();
   const navigate = useNavigate();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
+  const [assignWorkerId, setAssignWorkerId] = useState<string | null>(null);
 
   // On-demand, not automatic -- same shape as every other export in this
   // app (Hydra's CSV, the yard report). Refreshes every tab of the
@@ -198,7 +200,7 @@ export function DashboardsV2(): React.ReactElement {
               {idleCrew.map((w) => (
                 <div key={w.id} className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderBottom: '1px solid var(--line)' }}>
                   <Person name={w.name} detail={WORKER_TYPE_LABELS[w.type]} />
-                  <Button variant="ghost" size="sm" icon="plus" onClick={() => navigate('/workers')}>
+                  <Button variant="ghost" size="sm" icon="plus" onClick={() => setAssignWorkerId(w.id)}>
                     Assign work
                   </Button>
                 </div>
@@ -225,6 +227,17 @@ export function DashboardsV2(): React.ReactElement {
           )}
         </DataPanel>
       </div>
+
+      <AssignWorkDialog
+        open={assignWorkerId !== null}
+        onOpenChange={(next) => !next && setAssignWorkerId(null)}
+        worker={workers.find((w) => w.id === assignWorkerId) ?? null}
+        containers={containers}
+        onAssignWorker={assignWorker}
+        onScheduleTask={scheduleTask}
+        onUnassignTask={unassignTask}
+        onAddTask={addTask}
+      />
     </div>
   );
 }
