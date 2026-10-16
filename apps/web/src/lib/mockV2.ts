@@ -622,7 +622,14 @@ const SECTION_TNT_HRS: Partial<Record<SectionKind, number>> = {
   all_rounder: 11,
 };
 
-const PAINT_WORK_KEYS = ['primer', 'coat1', 'coat2'];
+/** The sequential primer/coat run Logo actually waits on (confirmed
+ * directly: "logo will be done only after painting... is completed") —
+ * tape_display leads it even on a logo-only job (no primer/coat at all),
+ * since Logo's real dependency is whichever of these ran last. Deliberately
+ * narrower than "every non-Logo painting task": paint_compressor runs in
+ * parallel with Logo once this group settles, not before it — gating Logo
+ * on paint_compressor too would delay it for no reason. */
+const PAINT_WORK_KEYS = ['tape_display', 'primer', 'coat1', 'coat2'];
 
 function tntElapsedMs(startMs: number, pausedAt: string | null | undefined, pausedMs: number | undefined, nowMs: number): number {
   const livePauseMs = pausedAt ? Math.max(0, nowMs - new Date(pausedAt).getTime()) : 0;
@@ -671,21 +678,31 @@ export function paintingTntStatuses(section: MockSection, nowMs: number = Date.n
   if (section.kind !== 'painting') return [];
   const statuses: Status[] = [];
 
-  const paintTasks = section.tasks.filter((t) => PAINT_WORK_KEYS.includes(t.key));
-  const paintOpen = paintTasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
-  if (paintOpen.length > 0) {
+  // The "Paint work" badge stays visible through every non-Logo task, not
+  // just the narrower primer/coat run — paint_compressor normally finishes
+  // *after* coat2 (same dependency chain), so without this the badge would
+  // vanish the instant coat2 is marked done, right as the 10h target would
+  // actually start showing.
+  const nonLogoTasks = section.tasks.filter((t) => t.key !== 'logo');
+  const nonLogoOpen = nonLogoTasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
+  if (nonLogoOpen.length > 0) {
     const coat2 = section.tasks.find((t) => t.key === 'coat2');
     const targetHrs = coat2 && coat2.state === 'done' ? 10 : 4;
-    const earliest = paintOpen.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
-    const paused = paintOpen.some((t) => Boolean(t.tntPausedAt));
+    const earliest = nonLogoOpen.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
+    const paused = nonLogoOpen.some((t) => Boolean(t.tntPausedAt));
     const elapsedMs = tntElapsedMs(new Date(earliest.tntStartedAt!).getTime(), earliest.tntPausedAt, earliest.tntPausedMs, nowMs);
     statuses.push(tntStatus('Paint work', elapsedMs, targetHrs, paused));
   }
 
+  // Logo's own clock only waits on the sequential primer/coat run
+  // (PAINT_WORK_KEYS) — not on paint_compressor, which runs in parallel
+  // with it once that run settles, confirmed directly against how these
+  // tasks are actually built (GateFormDialog.tsx's confirmGateIn).
+  const paintRun = section.tasks.filter((t) => PAINT_WORK_KEYS.includes(t.key));
   const logo = section.tasks.find((t) => t.key === 'logo');
-  const paintStillOpen = paintTasks.length > 0 && !paintTasks.every(taskSettled);
-  if (logo && !taskSettled(logo) && logo.tntStartedAt && !paintStillOpen) {
-    const paintDoneMs = Math.max(0, ...paintTasks.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
+  const paintRunStillOpen = paintRun.length > 0 && !paintRun.every(taskSettled);
+  if (logo && !taskSettled(logo) && logo.tntStartedAt && !paintRunStillOpen) {
+    const paintDoneMs = Math.max(0, ...paintRun.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
     const startMs = Math.max(new Date(logo.tntStartedAt).getTime(), paintDoneMs);
     const elapsedMs = tntElapsedMs(startMs, logo.tntPausedAt, logo.tntPausedMs, nowMs);
     statuses.push(tntStatus('Logo', elapsedMs, LOGO_TNT_HRS, Boolean(logo.tntPausedAt)));
