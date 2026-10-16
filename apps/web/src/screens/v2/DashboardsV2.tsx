@@ -18,6 +18,7 @@ import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
+import { Icon } from '../../components/crystal/Icon';
 import { ConfirmDialog } from '../../components/crystal/Overlay';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 
@@ -100,12 +101,13 @@ export function DashboardsV2(): React.ReactElement {
         </Button>
       </div>
 
-      {/* Containers-in-yard and Electricity, same compact StatCard size as
-          every stat row below — direct feedback that the old hero card plus
-          its own separate toolbar row were both too big, took up far more
-          space than two numbers need. Electricity is itself the click
-          target (StatCard's own onClick affordance), same pattern a stat
-          card already uses elsewhere, rather than a button bolted on. */}
+      {/* Containers-in-yard stays the plain StatCard everything else uses;
+          Electricity gets its own distinctly tinted card (amber at rest,
+          red while actually down) — direct feedback that next to a row of
+          identical plain white cards, it was too easy to miss entirely.
+          Same compact size/shape as a StatCard, same tap-to-act affordance,
+          just colored to be found at a glance instead of read label by
+          label. */}
       <div className="cardgrid stagger statrow">
         <StatCard
           label="Containers in the yard"
@@ -113,13 +115,25 @@ export function DashboardsV2(): React.ReactElement {
           icon="warehouse"
           foot={`${gateActivity.gatedInToday} in · ${gateActivity.gatedOutToday} out today`}
         />
-        <StatCard
-          label="Electricity"
-          value={<span style={{ color: powerDown ? 'var(--error)' : undefined }}>{powerDown ? 'Down' : 'Normal'}</span>}
-          icon="power"
+        <button
+          type="button"
+          className="card hoverable"
+          style={{
+            textAlign: 'left',
+            background: powerDown ? 'var(--error-bg)' : 'var(--amber-soft)',
+            borderColor: powerDown ? 'var(--error)' : 'var(--amber-c)',
+          }}
           onClick={() => setPowerConfirmOpen(true)}
-          foot={powerDown ? 'Tap to mark restored' : 'Tap to mark power down'}
-        />
+        >
+          <span className="klabel" style={{ color: powerDown ? 'var(--error)' : 'var(--warn)' }}>
+            <Icon name="power" size="sm" />
+            Electricity
+          </span>
+          <span className="kval" style={{ display: 'block', color: powerDown ? 'var(--error)' : 'var(--text)' }}>
+            {powerDown ? 'Down' : 'Normal'}
+          </span>
+          <span className="kfoot">{powerDown ? 'Tap to mark restored' : 'Tap to mark power down'}</span>
+        </button>
       </div>
 
       <div className="cardgrid stagger statrow">
