@@ -18,6 +18,7 @@ import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, HeroCard, Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
+import { Icon } from '../../components/crystal/Icon';
 import { ConfirmDialog } from '../../components/crystal/Overlay';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 
@@ -93,14 +94,6 @@ export function DashboardsV2(): React.ReactElement {
         value={containers.length}
         actions={
           <>
-            <Button
-              variant={powerDown ? 'danger' : 'accent'}
-              size="sm"
-              icon="power"
-              onClick={() => setPowerConfirmOpen(true)}
-            >
-              {powerDown ? 'Power is down — mark restored' : 'Mark power down'}
-            </Button>
             <Button variant="secondary" size="sm" icon="refresh" loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
               Sync to PMS Sheet
             </Button>
@@ -114,6 +107,32 @@ export function DashboardsV2(): React.ReactElement {
           {gateActivity.gatedInToday} gated in today · {gateActivity.gatedOutToday} gated out today
         </p>
       </HeroCard>
+
+      {/* Its own row, not a hero-card action — sitting next to small
+          secondary buttons made it look oversized and out of place. Plain
+          surface card, same toolbar-row convention used elsewhere (Yard
+          Board's filter bar), so it reads as a normal page element instead
+          of a second hero. */}
+      <div
+        className="cluster"
+        style={{
+          justifyContent: 'space-between',
+          padding: 'var(--s-3) var(--s-4)',
+          background: 'var(--surface)',
+          border: '1px solid var(--line)',
+          borderRadius: 'var(--r-md)',
+        }}
+      >
+        <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+          <Icon name="power" size="sm" />
+          <span style={{ fontSize: '12.5px', fontWeight: 600 }}>
+            {powerDown ? 'Power is currently down' : 'Electricity status: normal'}
+          </span>
+        </span>
+        <Button variant={powerDown ? 'danger' : 'secondary'} size="sm" icon="power" onClick={() => setPowerConfirmOpen(true)}>
+          {powerDown ? 'Mark restored' : 'Mark power down'}
+        </Button>
+      </div>
 
       <div className="cardgrid stagger statrow">
         <StatCard label="PTI pending" value={pti.ptiPending} icon="clock" foot="Neither lights nor curtain done" />
