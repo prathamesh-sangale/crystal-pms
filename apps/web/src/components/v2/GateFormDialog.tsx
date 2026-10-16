@@ -343,6 +343,7 @@ export function GateFormDialog({
   onSaveDraft,
   onDiscardDraft,
   loggedInEmail,
+  prefillId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -357,6 +358,12 @@ export function GateFormDialog({
   onSaveDraft?: (data: ContainerDraftData) => void;
   onDiscardDraft?: (draftId: string) => void;
   loggedInEmail?: string;
+  /** `mode === 'in'` only — opens straight into a known container number
+   * (e.g. picked from IMS Stock) instead of a blank form, and runs the same
+   * "Check IMS" lookup automatically so its details pre-fill without the
+   * admin re-typing or re-clicking anything. Still just a starting point —
+   * every field stays editable, same as a manual IMS check. */
+  prefillId?: string | null;
 }): React.ReactElement {
   const isOut = mode === 'out';
   const [step, setStep] = useState<'intake' | 'result'>('intake');
@@ -439,8 +446,8 @@ export function GateFormDialog({
     setImsApplied(match);
   };
 
-  const checkIms = async (): Promise<void> => {
-    const trimmed = id.trim();
+  const checkIms = async (overrideId?: string): Promise<void> => {
+    const trimmed = (overrideId ?? id).trim();
     if (!trimmed) return;
     setImsStatus('loading');
     setImsApplied(null);
@@ -506,6 +513,17 @@ export function GateFormDialog({
     setMachineFields(MACHINE_CHECK_FIELDS.map((label) => restore(label, 'unassessed')));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/draft-id change.
   }, [open, isOut, resumeDraft?.id]);
+
+  // Pre-fill just the container number from an external picker (IMS Stock's
+  // "Gate in" action) and run the same lookup a manual "Check IMS" click
+  // would — resumeDraft takes priority if somehow both are set, since a
+  // saved draft represents more work already done than a fresh IMS pick.
+  useEffect(() => {
+    if (!open || isOut || !prefillId || resumeDraft) return;
+    setId(prefillId);
+    void checkIms(prefillId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/prefillId change.
+  }, [open, isOut, prefillId, resumeDraft]);
 
   const reset = (): void => {
     setStep('intake');

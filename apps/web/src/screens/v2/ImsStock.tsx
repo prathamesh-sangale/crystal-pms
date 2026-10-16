@@ -1,12 +1,17 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
+import type { MockContainer } from '../../lib/mockV2';
+import { useV2Data } from '../../lib/v2Store';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { CategoryBadge, StatCard } from '../../components/crystal/Data';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { DataTable } from '../../components/crystal/DataTable';
-import { EmptyState } from '../../components/crystal/Feedback';
+import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import type { IconName } from '../../components/crystal/Icon';
+import { GateFormDialog } from '../../components/v2/GateFormDialog';
 
 type DisplayMode = 'cards' | 'list';
 
@@ -44,6 +49,23 @@ export function ImsStock(): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
+  const [gateInId, setGateInId] = useState<string | null>(null);
+
+  const navigate = useNavigate();
+  const { user, can } = useAuth();
+  const { containers, gateIn, saveDraft, discardDraft } = useV2Data();
+  const toast = useToast();
+
+  // Containers already active in our own yard — offering "Gate in" again for
+  // one of these would just hit the dialog's own duplicate-id error, so it's
+  // disabled here instead, before the admin gets that far.
+  const activeIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
+
+  const handleGateIn = async (container: MockContainer): Promise<void> => {
+    await gateIn(container);
+    toast.ok('Container registered', `${container.id} ${container.sections.length ? `has ${container.sections.length} section(s) open.` : 'is ready to move.'}`);
+    navigate('/yard');
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -130,8 +152,32 @@ export function ImsStock(): React.ReactElement {
         meta: { label: 'Reefer unit', secondary: true },
         cell: (ctx) => ctx.getValue() || '—',
       }),
+      ...(can('container:create')
+        ? [
+            columnHelper.display({
+              id: 'gateIn',
+              header: '',
+              meta: { label: 'Action' },
+              cell: (ctx) => {
+                const id = ctx.row.original.containerId;
+                const already = activeIds.has(id);
+                return (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="arrow-right"
+                    disabled={already}
+                    onClick={() => setGateInId(id)}
+                  >
+                    {already ? 'Already in yard' : 'Gate in'}
+                  </Button>
+                );
+              },
+            }),
+          ]
+        : []),
     ],
-    []
+    [can, activeIds]
   );
 
   return (
@@ -266,10 +312,36 @@ export function ImsStock(): React.ReactElement {
                 {i.yom && <div>YOM: {i.yom}</div>}
                 {i.reeferUnit && <div>Reefer unit: {i.reeferUnit}</div>}
               </div>
+              {can('container:create') && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon="arrow-right"
+                  disabled={activeIds.has(i.containerId)}
+                  onClick={() => setGateInId(i.containerId)}
+                  style={{ marginTop: 'var(--s-3)', width: '100%' }}
+                >
+                  {activeIds.has(i.containerId) ? 'Already in yard' : 'Gate in'}
+                </Button>
+              )}
             </div>
           ))}
         </div>
       )}
+
+      <GateFormDialog
+        mode="in"
+        open={gateInId !== null}
+        onOpenChange={(next) => {
+          if (!next) setGateInId(null);
+        }}
+        prefillId={gateInId}
+        onGateIn={handleGateIn}
+        existingIds={[...activeIds]}
+        onSaveDraft={saveDraft}
+        onDiscardDraft={discardDraft}
+        loggedInEmail={user?.email}
+      />
     </div>
   );
 }
