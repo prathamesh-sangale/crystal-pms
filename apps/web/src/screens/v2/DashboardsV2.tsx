@@ -16,9 +16,8 @@ import {
 } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
-import { DataPanel, HeroCard, Person, StatCard, StatusPill } from '../../components/crystal/Data';
+import { DataPanel, Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
-import { Icon } from '../../components/crystal/Icon';
 import { ConfirmDialog } from '../../components/crystal/Overlay';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 
@@ -89,49 +88,38 @@ export function DashboardsV2(): React.ReactElement {
 
   return (
     <div className="stack stack-loose">
-      <HeroCard
-        label="Containers in the yard"
-        value={containers.length}
-        actions={
-          <>
-            <Button variant="secondary" size="sm" icon="refresh" loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
-              Sync to PMS Sheet
-            </Button>
-            <Button variant="secondary" size="sm" icon="download" onClick={() => navigate('/reports/yard')}>
-              Download yard report
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 'var(--s-2) 0 0', fontSize: '13px', opacity: 0.85 }}>
-          {gateActivity.gatedInToday} gated in today · {gateActivity.gatedOutToday} gated out today
-        </p>
-      </HeroCard>
-
-      {/* Its own row, not a hero-card action — sitting next to small
-          secondary buttons made it look oversized and out of place. Plain
-          surface card, same toolbar-row convention used elsewhere (Yard
-          Board's filter bar), so it reads as a normal page element instead
-          of a second hero. */}
-      <div
-        className="cluster"
-        style={{
-          justifyContent: 'space-between',
-          padding: 'var(--s-3) var(--s-4)',
-          background: 'var(--surface)',
-          border: '1px solid var(--line)',
-          borderRadius: 'var(--r-md)',
-        }}
-      >
-        <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-          <Icon name="power" size="sm" />
-          <span style={{ fontSize: '12.5px', fontWeight: 600 }}>
-            {powerDown ? 'Power is currently down' : 'Electricity status: normal'}
-          </span>
-        </span>
-        <Button variant={powerDown ? 'danger' : 'secondary'} size="sm" icon="power" onClick={() => setPowerConfirmOpen(true)}>
-          {powerDown ? 'Mark restored' : 'Mark power down'}
+      {/* A plain small toolbar, not a hero's own actions — nothing here is
+          the one headline number this page is about, so none of it earns
+          hero-card treatment. */}
+      <div className="cluster" style={{ justifyContent: 'flex-end', gap: 'var(--s-2)' }}>
+        <Button variant="secondary" size="sm" icon="refresh" loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
+          Sync to PMS Sheet
         </Button>
+        <Button variant="secondary" size="sm" icon="download" onClick={() => navigate('/reports/yard')}>
+          Download yard report
+        </Button>
+      </div>
+
+      {/* Containers-in-yard and Electricity, same compact StatCard size as
+          every stat row below — direct feedback that the old hero card plus
+          its own separate toolbar row were both too big, took up far more
+          space than two numbers need. Electricity is itself the click
+          target (StatCard's own onClick affordance), same pattern a stat
+          card already uses elsewhere, rather than a button bolted on. */}
+      <div className="cardgrid stagger statrow">
+        <StatCard
+          label="Containers in the yard"
+          value={containers.length}
+          icon="warehouse"
+          foot={`${gateActivity.gatedInToday} in · ${gateActivity.gatedOutToday} out today`}
+        />
+        <StatCard
+          label="Electricity"
+          value={<span style={{ color: powerDown ? 'var(--error)' : undefined }}>{powerDown ? 'Down' : 'Normal'}</span>}
+          icon="power"
+          onClick={() => setPowerConfirmOpen(true)}
+          foot={powerDown ? 'Tap to mark restored' : 'Tap to mark power down'}
+        />
       </div>
 
       <div className="cardgrid stagger statrow">
