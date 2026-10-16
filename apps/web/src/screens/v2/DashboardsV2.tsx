@@ -18,6 +18,7 @@ import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, HeroCard, Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
+import { ConfirmDialog } from '../../components/crystal/Overlay';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 
 function formatINR(n: number): string {
@@ -27,11 +28,29 @@ function formatINR(n: number): string {
 export function DashboardsV2(): React.ReactElement {
   // Dashboards describe the active yard, not the full historical record —
   // departed containers would otherwise skew every stat here.
-  const { activeContainers: containers, workers, assignWorker, scheduleTask, unassignTask, addTask } = useV2Data();
+  const { activeContainers: containers, workers, assignWorker, scheduleTask, unassignTask, addTask, powerDown, setPowerDown } = useV2Data();
   const navigate = useNavigate();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
   const [assignWorkerId, setAssignWorkerId] = useState<string | null>(null);
+  const [powerConfirmOpen, setPowerConfirmOpen] = useState(false);
+  const [powerBusy, setPowerBusy] = useState(false);
+
+  // Same action as the top-bar icon (AppShell) — this is just the easier-to-
+  // spot version for the admin's main screen, by direct request. One flip
+  // pauses/resets every active container's TnT clock at once.
+  const handleTogglePower = async (): Promise<void> => {
+    setPowerBusy(true);
+    try {
+      await setPowerDown(!powerDown);
+      toast.ok(powerDown ? 'Power restored' : 'Power marked down', powerDown ? 'Paused turnaround clocks have resumed.' : 'Painting/Cleaning/Repairment clocks are paused; PTI clocks have reset.');
+      setPowerConfirmOpen(false);
+    } catch {
+      toast.error('Could not update power status', 'Try again.');
+    } finally {
+      setPowerBusy(false);
+    }
+  };
 
   // On-demand, not automatic -- same shape as every other export in this
   // app (Hydra's CSV, the yard report). Refreshes every tab of the
@@ -74,6 +93,14 @@ export function DashboardsV2(): React.ReactElement {
         value={containers.length}
         actions={
           <>
+            <Button
+              variant={powerDown ? 'danger' : 'accent'}
+              size="sm"
+              icon="power"
+              onClick={() => setPowerConfirmOpen(true)}
+            >
+              {powerDown ? 'Power is down — mark restored' : 'Mark power down'}
+            </Button>
             <Button variant="secondary" size="sm" icon="refresh" loading={exporting} disabled={exporting} onClick={() => void handleExport()}>
               Sync to PMS Sheet
             </Button>
@@ -237,6 +264,20 @@ export function DashboardsV2(): React.ReactElement {
         onScheduleTask={scheduleTask}
         onUnassignTask={unassignTask}
         onAddTask={addTask}
+      />
+
+      <ConfirmDialog
+        open={powerConfirmOpen}
+        onOpenChange={setPowerConfirmOpen}
+        title={powerDown ? 'Mark power restored?' : 'Mark power down?'}
+        body={
+          powerDown
+            ? 'Resumes the turnaround-time clock for every paused Painting, Cleaning, and Repairment task, picking up from where it paused.'
+            : 'Pauses the turnaround-time clock for every open Painting, Cleaning, and Repairment task, and resets it for every open PTI task. This affects every active container at once.'
+        }
+        confirmLabel={powerDown ? 'Mark restored' : 'Mark power down'}
+        onConfirm={() => void handleTogglePower()}
+        busy={powerBusy}
       />
     </div>
   );
