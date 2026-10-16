@@ -655,6 +655,10 @@ export function sectionTntStatus(section: MockSection, nowMs: number = Date.now(
   return tntStatus(SECTION_LABELS[section.kind], elapsedMs, targetHrs, paused);
 }
 
+/** Confirmed directly: 11h, same target regardless of whether Logo is the
+ * only painting work or runs after a repair-paint job. */
+const LOGO_TNT_HRS = 11;
+
 /** Painting's two independent clocks, confirmed directly as genuinely
  * separate rather than one lump total: paint-work (primer/1st/2nd coat,
  * only present when the Repair checklist called for it) and Logo. Logo's
@@ -684,7 +688,7 @@ export function paintingTntStatuses(section: MockSection, nowMs: number = Date.n
     const paintDoneMs = Math.max(0, ...paintTasks.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
     const startMs = Math.max(new Date(logo.tntStartedAt).getTime(), paintDoneMs);
     const elapsedMs = tntElapsedMs(startMs, logo.tntPausedAt, logo.tntPausedMs, nowMs);
-    statuses.push(tntStatus('Logo', elapsedMs, 4, Boolean(logo.tntPausedAt)));
+    statuses.push(tntStatus('Logo', elapsedMs, LOGO_TNT_HRS, Boolean(logo.tntPausedAt)));
   }
 
   return statuses;
