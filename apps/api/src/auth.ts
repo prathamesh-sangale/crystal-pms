@@ -38,11 +38,24 @@ export function verifyPassword(password: string, stored: string): boolean {
 export const ROLES = ['manager', 'supervisor', 'technician', 'viewer'] as const;
 export type Role = (typeof ROLES)[number];
 
+/** The six screens access management can grant/withhold, by direct request
+ * — matches `nav.ts`'s own six real nav items one-to-one. Live Board and
+ * Yard Board are two views over the same backend data (containers/tasks),
+ * so there's no route-level way to tell them apart; `requireScreen` below
+ * treats either one as unlocking that shared data, same as the plan this
+ * was built from says plainly rather than pretending otherwise. */
+export const SCREENS = ['live', 'yard', 'workers', 'dashboards', 'hydra', 'ims-stock'] as const;
+export type Screen = (typeof SCREENS)[number];
+
 export interface SessionUser {
   id: string;
   email: string;
   name: string;
   role: Role;
+  /** The worker roster entry this login belongs to, if any — null for the
+   * original admin account, which isn't a roster entry. */
+  workerId: string | null;
+  allowedScreens: Screen[];
 }
 
 /**
@@ -66,4 +79,27 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
       message: 'Your session has expired. Sign in again to continue.',
     });
   }
+}
+
+/**
+ * The first real, server-side permission check in this app — written once,
+ * reused everywhere a screen needs gating, rather than each route rolling
+ * its own. `manager` always passes: the admin can never lock themselves
+ * out by misconfiguring their own access. Must run *after* `authenticate`
+ * (reads `request.user`, which that hook attaches).
+ *
+ * Accepts one or more screens — pass more than one when a route's data is
+ * genuinely shared by more than one screen (Live Board/Yard Board both
+ * reading containers/tasks) and *either* should unlock it.
+ */
+export function requireScreen(...screens: Screen[]) {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const user = request.user;
+    if (user.role === 'manager') return;
+    if (screens.some((s) => user.allowedScreens.includes(s))) return;
+    await reply.code(403).send({
+      error: 'forbidden',
+      message: "You don't have access to this part of the system. Ask an admin to grant it.",
+    });
+  };
 }

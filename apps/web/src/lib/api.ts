@@ -97,11 +97,28 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 /* Response shapes                                                           */
 /* ------------------------------------------------------------------------ */
 
+/** The six screens access management can grant/withhold — matches `nav.ts`'s
+ * six real nav items one-to-one, and `apps/api/src/auth.ts`'s `SCREENS`. */
+export type Screen = 'live' | 'yard' | 'workers' | 'dashboards' | 'hydra' | 'ims-stock';
+
 export interface SessionUser {
   id: string;
   email: string;
   name: string;
   role: 'manager' | 'supervisor' | 'technician' | 'viewer';
+  workerId: string | null;
+  allowedScreens: Screen[];
+}
+
+/** One login account — what `/api/v2/users` manages. Never carries the
+ * password hash; a login's own password is write-only from here on. */
+export interface AccessUser {
+  id: string;
+  email: string;
+  name: string;
+  role: SessionUser['role'];
+  workerId: string | null;
+  allowedScreens: Screen[];
 }
 
 /* ------------------------------------------------------------------------ */
@@ -133,6 +150,18 @@ export const api = {
 
   v2DeleteWorker: (id: string) =>
     request<void>(`/api/v2/workers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  // Access management — manager-only on the server regardless of what this
+  // client sends; a non-manager calling these just gets a 403.
+  v2Users: () => request<{ users: AccessUser[] }>('/api/v2/users'),
+
+  v2CreateUser: (input: { id: string; email: string; password: string; name: string; role: AccessUser['role']; workerId: string | null; allowedScreens: Screen[] }) =>
+    request<{ user: AccessUser }>('/api/v2/users', { method: 'POST', body: JSON.stringify(input) }),
+
+  v2UpdateUser: (id: string, patch: Partial<{ name: string; role: AccessUser['role']; allowedScreens: Screen[]; password: string }>) =>
+    request<{ user: AccessUser }>(`/api/v2/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  v2DeleteUser: (id: string) => request<void>(`/api/v2/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   v2Containers: () => request<{ containers: MockContainer[] }>('/api/v2/containers'),
 

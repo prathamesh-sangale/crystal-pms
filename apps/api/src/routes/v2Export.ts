@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { exportToSheet } from '../pmsSheetExport.js';
 
 /** One on-demand action: refresh every tab of the client's own "PMS"
@@ -9,7 +9,7 @@ import { exportToSheet } from '../pmsSheetExport.js';
 export async function v2ExportRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.post('/api/v2/export-sheet', async (_request, reply) => {
+  app.post('/api/v2/export-sheet', { preHandler: requireScreen('dashboards') }, async (_request, reply) => {
     const result = await exportToSheet();
     return reply.send({ ok: true, ...result });
   });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 import { fromContainerRow, toTaskInsert, type ContainerRow } from '../v2Mappers.js';
@@ -146,7 +146,7 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ containers: (data as ContainerRow[]).map(fromContainerRow) });
   });
 
-  app.post('/api/v2/containers', async (request, reply) => {
+  app.post('/api/v2/containers', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const body = await parseOr422(createContainerSchema, request.body, reply);
     if (!body) return;
 
@@ -202,7 +202,7 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ container: fromContainerRow(full as ContainerRow) });
   });
 
-  app.patch('/api/v2/containers/:id', async (request, reply) => {
+  app.patch('/api/v2/containers/:id', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = await parseOr422(patchContainerSchema, request.body, reply);
     if (!body) return;
@@ -217,14 +217,14 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ container: fromContainerRow(data as ContainerRow) });
   });
 
-  app.delete('/api/v2/containers/:id', async (request, reply) => {
+  app.delete('/api/v2/containers/:id', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { error } = await supabase().from('containers').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.code(204).send();
   });
 
-  app.patch('/api/v2/containers/:id/tasks/:kind/:key', async (request, reply) => {
+  app.patch('/api/v2/containers/:id/tasks/:kind/:key', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id, kind, key } = request.params as { id: string; kind: string; key: string };
     const body = await parseOr422(patchTaskSchema, request.body, reply);
     if (!body) return;
@@ -250,7 +250,7 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
    * builders (ptiTasks/cleaningTasks/repairTasksFor/painting's own sequence)
    * only ever run once, at registration -- this is the one place work can
    * be added to a container that's already in the yard. */
-  app.post('/api/v2/containers/:id/sections/:kind/tasks', async (request, reply) => {
+  app.post('/api/v2/containers/:id/sections/:kind/tasks', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id, kind } = request.params as { id: string; kind: string };
     const body = await parseOr422(addTaskSchema, request.body, reply);
     if (!body) return;

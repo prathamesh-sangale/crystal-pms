@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { findAvailableStock, findContainerMatches } from '../imsLookup.js';
 import { parseOr422 } from '../http.js';
 
@@ -25,7 +25,7 @@ const stockQuerySchema = z.object({ types: commaList, sizes: commaList });
 export async function v2ImsLookupRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/ims-lookup', async (request, reply) => {
+  app.get('/api/v2/ims-lookup', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const query = await parseOr422(lookupQuerySchema, request.query, reply);
     if (!query) return;
     const result = await findContainerMatches(query.containerId);
@@ -34,7 +34,7 @@ export async function v2ImsLookupRoutes(app: FastifyInstance): Promise<void> {
 
   // The browse-all-inventory counterpart to the single-id lookup above —
   // "what's currently available at our yard", not "find this one container".
-  app.get('/api/v2/ims-stock', async (request, reply) => {
+  app.get('/api/v2/ims-stock', { preHandler: requireScreen('ims-stock') }, async (request, reply) => {
     const query = await parseOr422(stockQuerySchema, request.query, reply);
     if (!query) return;
     const items = await findAvailableStock(query.types, query.sizes);

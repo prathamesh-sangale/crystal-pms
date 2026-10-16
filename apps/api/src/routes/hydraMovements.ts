@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 
@@ -54,13 +54,13 @@ function toMovement(row: MovementRow) {
 export async function hydraMovementRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/hydra', async (_request, reply) => {
+  app.get('/api/v2/hydra', { preHandler: requireScreen('hydra') }, async (_request, reply) => {
     const { data, error } = await supabase().from('hydra_movements').select('*').order('movement_date', { ascending: false }).order('created_at', { ascending: false });
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.send({ movements: (data as MovementRow[]).map(toMovement) });
   });
 
-  app.post('/api/v2/hydra', async (request, reply) => {
+  app.post('/api/v2/hydra', { preHandler: requireScreen('hydra') }, async (request, reply) => {
     const body = await parseOr422(createMovementSchema, request.body, reply);
     if (!body) return;
     const { data, error } = await supabase()

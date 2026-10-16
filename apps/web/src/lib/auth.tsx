@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api, setUnauthorizedHandler, token, type SessionUser } from './api';
+import { api, setUnauthorizedHandler, token, type Screen, type SessionUser } from './api';
 
 /**
  * The manager role reads as "Admin" everywhere it's shown — the product is
@@ -50,6 +50,12 @@ interface AuthValue {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
   can: (permission: Permission) => boolean;
+  /** Access management's own gate — unrelated to `can` above. `manager`
+   * always passes (can never be locked out of their own system); everyone
+   * else needs the screen in their admin-granted `allowedScreens`. Mirrored
+   * for real server-side by `requireScreen` (apps/api/src/auth.ts) on every
+   * route that matters — this only decides what the UI itself offers. */
+  hasScreenAccess: (screen: Screen) => boolean;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -116,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       signIn,
       signOut,
       can: (permission) => (user ? PERMISSIONS[user.role].includes(permission) : false),
+      hasScreenAccess: (screen) => (user ? user.role === 'manager' || user.allowedScreens.includes(screen) : false),
     }),
     [user, status, signIn, signOut]
   );

@@ -1,7 +1,8 @@
 import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NAV_ITEMS } from '../../lib/nav';
+import { useAuth } from '../../lib/auth';
+import { navItemsForUser } from '../../lib/nav';
 import { useTheme } from '../../lib/theme';
 import { useV2Data } from '../../lib/v2Store';
 import { Icon } from '../crystal/Icon';
@@ -14,7 +15,11 @@ export function CommandPalette(): React.ReactElement {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const { theme, toggle } = useTheme();
+  const { user } = useAuth();
   const { containers, requestOpen } = useV2Data();
+  // Same real gate as the sidebar — a blocked screen can't be reached by
+  // typing its name here either.
+  const navItems = navItemsForUser(user);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -63,7 +68,7 @@ export function CommandPalette(): React.ReactElement {
           </Command.Empty>
 
           <Command.Group heading="Go to">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <Command.Item
                 key={item.to}
                 className="cmdk-item"

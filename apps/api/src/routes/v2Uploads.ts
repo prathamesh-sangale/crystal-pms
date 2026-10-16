@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { uploadToDrive } from '../googleDrive.js';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB — covers the PTI video, the largest file this form ever sends.
@@ -14,7 +14,7 @@ const MAX_BYTES = 50 * 1024 * 1024; // 50MB — covers the PTI video, the larges
 export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.post('/api/v2/uploads', async (request, reply) => {
+  app.post('/api/v2/uploads', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const file = await request.file({ limits: { fileSize: MAX_BYTES } });
     if (!file) {
       return reply.code(422).send({ error: 'validation_failed', message: 'No file was sent with this request.' });

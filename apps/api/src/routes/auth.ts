@@ -1,6 +1,6 @@
 import { loginSchema } from '@pms/shared';
 import type { FastifyInstance } from 'fastify';
-import { authenticate, verifyPassword, type Role, type SessionUser } from '../auth.js';
+import { authenticate, verifyPassword, type Role, type Screen, type SessionUser } from '../auth.js';
 import { parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 
@@ -10,6 +10,8 @@ interface UserRow {
   name: string;
   role: string;
   password_hash: string;
+  worker_id: string | null;
+  allowed_screens: string[];
 }
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
@@ -24,7 +26,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const { data: user } = (await supabase()
         .from('users')
-        .select('id, email, name, role, password_hash')
+        .select('id, email, name, role, password_hash, worker_id, allowed_screens')
         .eq('email', body.email.toLowerCase())
         .maybeSingle()) as { data: UserRow | null };
 
@@ -43,6 +45,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         email: user.email,
         name: user.name,
         role: user.role as Role,
+        workerId: user.worker_id,
+        allowedScreens: (user.allowed_screens ?? []) as Screen[],
       };
       const token = app.jwt.sign(session, { expiresIn: '12h' });
       return reply.send({ token, user: session });

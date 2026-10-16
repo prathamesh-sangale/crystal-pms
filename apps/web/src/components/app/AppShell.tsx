@@ -6,7 +6,7 @@ import { roleDisplayLabel, useAuth } from '../../lib/auth';
 import { cx } from '../../lib/cx';
 import { ADMIN_ACCOUNT } from '../../lib/devAccounts';
 import type { MockContainer } from '../../lib/mockV2';
-import { NAV, navItemFor } from '../../lib/nav';
+import { navForUser, navItemFor, type NavGroup } from '../../lib/nav';
 import { useTheme } from '../../lib/theme';
 import { useV2Data } from '../../lib/v2Store';
 import { Button, IconButton } from '../crystal/Button';
@@ -104,7 +104,12 @@ export function AppShell(): React.ReactElement {
         ]
       : [];
 
-  const renderGroup = (group: (typeof NAV)[number], onNavigate?: () => void): React.ReactNode => (
+  // Filtered once per render by what this signed-in user can actually
+  // reach — access management's real gate (nav.ts's navForUser), not just a
+  // cosmetic list. A blocked screen simply never appears here.
+  const visibleNav = navForUser(user);
+
+  const renderGroup = (group: NavGroup, onNavigate?: () => void): React.ReactNode => (
     <div key={group.heading}>
       <div className="side-group">{group.heading}</div>
       {group.items.map((item) => (
@@ -123,16 +128,16 @@ export function AppShell(): React.ReactElement {
     </div>
   );
 
-  // Mobile sheet: every group, flat, in NAV's own order — there's no
+  // Mobile sheet: every visible group, flat, in order — there's no
   // competing avatar footer inside the sheet to pin against.
-  const navItems = (onNavigate?: () => void): React.ReactNode => NAV.map((group) => renderGroup(group, onNavigate));
+  const navItems = (onNavigate?: () => void): React.ReactNode => visibleNav.map((group) => renderGroup(group, onNavigate));
 
   // Desktop rail only: Help is pulled out of the scrollable list and glued to
   // the bottom edge of the sidebar instead, right above the avatar — so it
   // reads as a persistent utility link, not just the last item in a list
   // that happens to end there.
-  const mainNavGroups = NAV.filter((group) => group.heading !== 'Help');
-  const helpGroup = NAV.find((group) => group.heading === 'Help');
+  const mainNavGroups = visibleNav.filter((group) => group.heading !== 'Help');
+  const helpGroup = visibleNav.find((group) => group.heading === 'Help');
 
   return (
     <div className="appshell">

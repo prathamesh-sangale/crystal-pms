@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { authenticate } from '../auth.js';
+import { authenticate, requireScreen } from '../auth.js';
 import { parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 
@@ -32,7 +32,7 @@ export async function v2DraftRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ drafts: (data as DraftRow[]).map(toDraft) });
   });
 
-  app.post('/api/v2/drafts', async (request, reply) => {
+  app.post('/api/v2/drafts', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const body = await parseOr422(saveDraftSchema, request.body, reply);
     if (!body) return;
     const { data, error } = await supabase()
@@ -44,7 +44,7 @@ export async function v2DraftRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ draft: toDraft(data as DraftRow) });
   });
 
-  app.delete('/api/v2/drafts/:id', async (request, reply) => {
+  app.delete('/api/v2/drafts/:id', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { error } = await supabase().from('drafts').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);

@@ -87,7 +87,7 @@ interface V2Data {
   drafts: ContainerDraft[];
   saveDraft: (data: ContainerDraftData) => Promise<void>;
   discardDraft: (draftId: string) => Promise<void>;
-  addWorker: (name: string, type: WorkerType, notes: string) => Promise<void>;
+  addWorker: (name: string, type: WorkerType, notes: string) => Promise<MockWorker>;
   updateWorker: (workerId: string, updates: { name: string; type: WorkerType; notes: string }) => Promise<void>;
   /** Removes the worker and unassigns any task they hadn't started yet.
    * Callers must check they have no *running* task first — this doesn't
@@ -362,6 +362,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         const draft: MockWorker = { id: `w-${Date.now()}`, name, type, active: true, notes };
         const { worker } = await api.v2CreateWorker(draft);
         setWorkers((cur) => [worker, ...cur]);
+        return worker;
       },
 
       updateWorker: async (workerId, updates) => {
