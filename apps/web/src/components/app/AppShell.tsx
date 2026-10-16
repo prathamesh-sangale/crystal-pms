@@ -30,14 +30,31 @@ export function AppShell(): React.ReactElement {
   const [addOpen, setAddOpen] = useState(false);
   const [resumeDraftId, setResumeDraftId] = useState<string | null>(null);
   const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
+  const [powerConfirmOpen, setPowerConfirmOpen] = useState(false);
+  const [powerBusy, setPowerBusy] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, signIn, signOut, can } = useAuth();
   const { theme, toggle } = useTheme();
-  const { containers, gateIn, drafts, saveDraft, discardDraft } = useV2Data();
+  const { containers, gateIn, drafts, saveDraft, discardDraft, powerDown, setPowerDown } = useV2Data();
   const toast = useToast();
   const current = navItemFor(pathname);
   const resumeDraft = drafts.find((d) => d.id === resumeDraftId) ?? null;
+
+  // One flip pauses/resets every active container's TnT clock at once —
+  // too consequential for a bare click, hence the confirm step.
+  const handleTogglePower = async (): Promise<void> => {
+    setPowerBusy(true);
+    try {
+      await setPowerDown(!powerDown);
+      toast.ok(powerDown ? 'Power restored' : 'Power marked down', powerDown ? 'Paused turnaround clocks have resumed.' : 'Painting/Cleaning/Repairment clocks are paused; PTI clocks have reset.');
+      setPowerConfirmOpen(false);
+    } catch (error) {
+      toast.error('Could not update power status', error instanceof RequestError ? error.message : 'Try again.');
+    } finally {
+      setPowerBusy(false);
+    }
+  };
 
   const handleGateIn = async (container: MockContainer): Promise<void> => {
     // Awaited rather than fire-and-forget: gateIn now actually saves to the
@@ -192,6 +209,14 @@ export function AppShell(): React.ReactElement {
           />
 
           <IconButton
+            icon="power"
+            label={powerDown ? 'Mark power restored' : 'Mark power down'}
+            bare
+            pressed={powerDown}
+            onClick={() => setPowerConfirmOpen(true)}
+          />
+
+          <IconButton
             icon={theme === 'dark' ? 'sun' : 'moon'}
             label={theme === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
             bare
@@ -316,6 +341,20 @@ export function AppShell(): React.ReactElement {
           if (draftToDelete) discardDraft(draftToDelete);
           setDraftToDelete(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={powerConfirmOpen}
+        onOpenChange={setPowerConfirmOpen}
+        title={powerDown ? 'Mark power restored?' : 'Mark power down?'}
+        body={
+          powerDown
+            ? 'Resumes the turnaround-time clock for every paused Painting, Cleaning, and Repairment task, picking up from where it paused.'
+            : 'Pauses the turnaround-time clock for every open Painting, Cleaning, and Repairment task, and resets it for every open PTI task. This affects every active container at once.'
+        }
+        confirmLabel={powerDown ? 'Mark restored' : 'Mark power down'}
+        onConfirm={() => void handleTogglePower()}
+        busy={powerBusy}
       />
     </div>
   );

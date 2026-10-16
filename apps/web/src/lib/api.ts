@@ -193,6 +193,14 @@ export const api = {
     return request<{ items: ImsMatch[] }>(`/api/v2/ims-stock${qs ? `?${qs}` : ''}`);
   },
 
+  v2PowerStatus: () => request<{ isDown: boolean; changedAt: string }>('/api/v2/power-status'),
+
+  v2SetPowerStatus: (isDown: boolean) =>
+    request<{ isDown: boolean; changedAt: string }>('/api/v2/power-status', {
+      method: 'POST',
+      body: JSON.stringify({ isDown }),
+    }),
+
   hydraMovements: () => request<{ movements: HydraMovement[] }>('/api/v2/hydra'),
 
   hydraCreateMovement: (input: HydraMovementInput) =>

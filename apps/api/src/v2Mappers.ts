@@ -21,6 +21,9 @@ export interface TaskRow {
   owner_type: string | null;
   depends_on: string[];
   scheduled_for: string | null;
+  tnt_started_at: string;
+  tnt_paused_at: string | null;
+  tnt_paused_ms: number;
 }
 
 export interface SectionRow {
@@ -63,6 +66,9 @@ function fromTaskRow(row: TaskRow): Record<string, unknown> {
     ownerType: row.owner_type ?? undefined,
     dependsOn: row.depends_on?.length ? row.depends_on : undefined,
     scheduledFor: row.scheduled_for,
+    tntStartedAt: row.tnt_started_at,
+    tntPausedAt: row.tnt_paused_at,
+    tntPausedMs: row.tnt_paused_ms,
   };
 }
 

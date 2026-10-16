@@ -121,6 +121,18 @@ export interface MockTask {
    * or by the demo data never has to carry a fabricated date it doesn't
    * actually have yet. */
   scheduledFor?: string | null;
+  /** The turnaround-time (TnT) clock — deliberately separate from
+   * `startedAt`/`elapsedSec` above, which track actual logged work.
+   * `tntStartedAt` is an ISO timestamp, normally set once at creation and
+   * never touched again; `tntPausedAt` is non-null exactly while a yard-wide
+   * electricity outage is in progress (see `powerDown` in v2Store) and
+   * `tntPausedMs` is the running total of outage time already folded in.
+   * Optional/absent on a task a screen has only just built locally and not
+   * yet saved — the server assigns the real `tntStartedAt` on insert, same
+   * as every DB-defaulted field here never set by the client. */
+  tntStartedAt?: string;
+  tntPausedAt?: string | null;
+  tntPausedMs?: number;
 }
 
 export interface MockSection {
@@ -595,6 +607,96 @@ export function agingStatus(container: MockContainer): Status | null {
   const tone: StatusTone = days >= 7 ? 'bad' : 'warn';
   const stage = container.survey ? 'in progress' : 'awaiting survey';
   return { tone, icon: 'clock', label: `${days}d ${stage}`, detail: `${container.id} has been ${stage} for ${days} day(s).` };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Turnaround time (TnT) — target hours per section, confirmed directly:    */
+/* PTI 6h, Repairment 11h, Painting split into two independent clocks       */
+/* (paint-work 4h/10h, Logo 4h — see paintingTntStatuses below). Separate   */
+/* from elapsedSec/startedAt, which track actual logged work and never      */
+/* factor in here. Cleaning/Sailing Crew have no target yet.                */
+/* ------------------------------------------------------------------------ */
+
+const SECTION_TNT_HRS: Partial<Record<SectionKind, number>> = {
+  pti: 6,
+  all_rounder: 11,
+};
+
+const PAINT_WORK_KEYS = ['primer', 'coat1', 'coat2'];
+
+function tntElapsedMs(startMs: number, pausedAt: string | null | undefined, pausedMs: number | undefined, nowMs: number): number {
+  const livePauseMs = pausedAt ? Math.max(0, nowMs - new Date(pausedAt).getTime()) : 0;
+  return Math.max(0, nowMs - startMs - (pausedMs ?? 0) - livePauseMs);
+}
+
+function tntStatus(label: string, elapsedMs: number, targetHrs: number, paused: boolean): Status {
+  const hrs = Math.floor(elapsedMs / (3600 * 1000));
+  if (paused) {
+    return { tone: 'info', icon: 'pulse', label: `${label} paused`, detail: `${label} turnaround is paused (power down) at ${hrs}h of its ${targetHrs}h target.` };
+  }
+  if (elapsedMs > targetHrs * 3600 * 1000) {
+    return { tone: 'bad', icon: 'alert', label: `${label} over ${targetHrs}h`, detail: `${label} has been running ${hrs}h, past its ${targetHrs}h target.` };
+  }
+  return { tone: 'ok', icon: 'clock', label: `${label} ${hrs}h/${targetHrs}h`, detail: `${label} has been running ${hrs}h of its ${targetHrs}h target.` };
+}
+
+/** PTI/Repairment: one clock for the whole section, running from its
+ * earliest open task's own TnT start. Null once every task is settled (same
+ * "stops mattering once there's nothing waiting" reasoning as `agingStatus`
+ * above), or for a section kind with no target hours. */
+export function sectionTntStatus(section: MockSection, nowMs: number = Date.now()): Status | null {
+  const targetHrs = SECTION_TNT_HRS[section.kind];
+  if (!targetHrs) return null;
+  const open = section.tasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
+  if (open.length === 0) return null;
+  const earliest = open.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
+  const paused = open.some((t) => Boolean(t.tntPausedAt));
+  const elapsedMs = tntElapsedMs(new Date(earliest.tntStartedAt!).getTime(), earliest.tntPausedAt, earliest.tntPausedMs, nowMs);
+  return tntStatus(SECTION_LABELS[section.kind], elapsedMs, targetHrs, paused);
+}
+
+/** Painting's two independent clocks, confirmed directly as genuinely
+ * separate rather than one lump total: paint-work (primer/1st/2nd coat,
+ * only present when the Repair checklist called for it) and Logo. Logo's
+ * clock doesn't start until the paint-work group is settled — "logo will be
+ * done only after painting... is completed" — so it's simply left out of
+ * the result until then, same as `sectionTntStatus` drops a fully-settled
+ * section. Returns up to two statuses; either, both, or neither may apply,
+ * depending on what this container's Painting section actually has. */
+export function paintingTntStatuses(section: MockSection, nowMs: number = Date.now()): Status[] {
+  if (section.kind !== 'painting') return [];
+  const statuses: Status[] = [];
+
+  const paintTasks = section.tasks.filter((t) => PAINT_WORK_KEYS.includes(t.key));
+  const paintOpen = paintTasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
+  if (paintOpen.length > 0) {
+    const coat2 = section.tasks.find((t) => t.key === 'coat2');
+    const targetHrs = coat2 && coat2.state === 'done' ? 10 : 4;
+    const earliest = paintOpen.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
+    const paused = paintOpen.some((t) => Boolean(t.tntPausedAt));
+    const elapsedMs = tntElapsedMs(new Date(earliest.tntStartedAt!).getTime(), earliest.tntPausedAt, earliest.tntPausedMs, nowMs);
+    statuses.push(tntStatus('Paint work', elapsedMs, targetHrs, paused));
+  }
+
+  const logo = section.tasks.find((t) => t.key === 'logo');
+  const paintStillOpen = paintTasks.length > 0 && !paintTasks.every(taskSettled);
+  if (logo && !taskSettled(logo) && logo.tntStartedAt && !paintStillOpen) {
+    const paintDoneMs = Math.max(0, ...paintTasks.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
+    const startMs = Math.max(new Date(logo.tntStartedAt).getTime(), paintDoneMs);
+    const elapsedMs = tntElapsedMs(startMs, logo.tntPausedAt, logo.tntPausedMs, nowMs);
+    statuses.push(tntStatus('Logo', elapsedMs, 4, Boolean(logo.tntPausedAt)));
+  }
+
+  return statuses;
+}
+
+/** Every applicable TnT status for one section, whichever kind it is — the
+ * single entry point a screen actually renders from, so it never has to
+ * know Painting is the one kind with more than one clock. */
+export function tntStatusesFor(section: MockSection, nowMs: number = Date.now()): Status[] {
+  if (section.kind === 'painting') return paintingTntStatuses(section, nowMs);
+  const status = sectionTntStatus(section, nowMs);
+  return status ? [status] : [];
 }
 
 export function isDeparted(container: MockContainer): boolean {

@@ -102,6 +102,12 @@ interface V2Data {
   pendingOpenId: string | null;
   requestOpen: (containerId: string) => void;
   clearPendingOpen: () => void;
+  /** The one yard-wide electricity switch (TnT tracking). Toggling it
+   * re-fetches every container, since a single flip can touch many tasks'
+   * TnT clocks at once server-side — simpler and more correct than trying
+   * to patch each one's new pause/reset state locally by hand. */
+  powerDown: boolean;
+  setPowerDown: (isDown: boolean) => Promise<void>;
 }
 
 const V2Context = createContext<V2Data | null>(null);
@@ -114,6 +120,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
   const [workers, setWorkers] = useState<MockWorker[]>([]);
   const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<ContainerDraft[]>([]);
+  const [powerDown, setPowerDownState] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +169,21 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .v2PowerStatus()
+      .then(({ isDown }) => {
+        if (!cancelled) setPowerDownState(isDown);
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load power status from the server:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Every task/container field-change below updates local state immediately
   // (so Start/Stop etc. keep feeling instant — these are frequent,
   // latency-sensitive clicks) and separately fires the same change at the
@@ -180,6 +202,15 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
     });
   };
 
+  const setPowerDown = async (isDown: boolean): Promise<void> => {
+    const { isDown: confirmed } = await api.v2SetPowerStatus(isDown);
+    setPowerDownState(confirmed);
+    // A single toggle can pause/reset many tasks' TnT clocks at once —
+    // re-fetching is simpler and more correct than patching each one by hand.
+    const { containers: fetched } = await api.v2Containers();
+    setContainers(fetched);
+  };
+
   const value = useMemo<V2Data>(
     () => ({
       containers,
@@ -188,6 +219,8 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
       pendingOpenId,
       requestOpen: (containerId) => setPendingOpenId(containerId),
       clearPendingOpen: () => setPendingOpenId(null),
+      powerDown,
+      setPowerDown,
 
       startTask: (containerId, kind, key) => {
         const patch = { state: 'running' as const, startedAt: Date.now() };
@@ -357,7 +390,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         setWorkers((cur) => cur.map((w) => (w.id === workerId ? worker : w)));
       },
     }),
-    [containers, workers, pendingOpenId, drafts]
+    [containers, workers, pendingOpenId, drafts, powerDown]
   );
 
   return <V2Context.Provider value={value}>{children}</V2Context.Provider>;

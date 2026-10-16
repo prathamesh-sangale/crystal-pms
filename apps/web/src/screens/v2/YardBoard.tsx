@@ -8,6 +8,7 @@ import {
   overallStatus,
   SECTION_LABELS,
   sectionStatus,
+  tntStatusesFor,
   TYPE_CODES,
   type MockContainer,
 } from '../../lib/mockV2';
@@ -223,6 +224,7 @@ export function YardBoard(): React.ReactElement {
               {c.sections.map((s) => (
                 <StatusPill key={s.kind} status={{ ...sectionStatus(s), label: `${SECTION_LABELS[s.kind]} ${sectionStatus(s).label}` }} />
               ))}
+              {c.sections.flatMap((s) => tntStatusesFor(s).map((status, i) => <StatusPill key={`${s.kind}-tnt-${i}`} status={status} />))}
             </span>
           ) : (
             <span className="subtle">{c.survey ? 'No sections required' : 'Not yet surveyed'}</span>
@@ -405,6 +407,7 @@ export function YardBoard(): React.ReactElement {
                   {c.sections.map((s) => (
                     <StatusPill key={s.kind} status={{ ...sectionStatus(s), label: `${SECTION_LABELS[s.kind]} ${sectionStatus(s).label}` }} />
                   ))}
+                  {c.sections.flatMap((s) => tntStatusesFor(s).map((status, i) => <StatusPill key={`${s.kind}-tnt-${i}`} status={status} />))}
                 </div>
               ) : (
                 <p style={{ fontSize: '12.5px', color: 'var(--text)', margin: 0 }}>
