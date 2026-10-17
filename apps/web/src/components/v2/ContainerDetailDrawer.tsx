@@ -36,7 +36,7 @@ import { useLiveTick } from '../../lib/useLiveTick';
 import { Button } from '../crystal/Button';
 import { StatusPill, Person } from '../crystal/Data';
 import { DataTable } from '../crystal/DataTable';
-import { EmptyState } from '../crystal/Feedback';
+import { EmptyState, useToast } from '../crystal/Feedback';
 import { Field } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, Modal } from '../crystal/Overlay';
@@ -267,7 +267,9 @@ export function ContainerDetailDrawer({
   const anyRunning = Boolean(container?.sections.some((s) => s.tasks.some((t) => t.state === 'running')));
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [gateOutOpen, setGateOutOpen] = useState(false);
+  const toast = useToast();
   const [editDraft, setEditDraft] = useState({ typeCode: TYPE_CODES[0]!, size: SIZE_OPTIONS[0]!, color: STANDARD_COLORS[0]! });
   // Separate from editDraft.color, same split GateFormDialog uses — the
   // select holds either a real STANDARD_COLORS value or the CUSTOM_COLOR
@@ -376,11 +378,18 @@ export function ContainerDetailDrawer({
     setEditOpen(false);
   };
 
-  const handleDelete = (): void => {
-    if (!container) return;
-    onRemoveContainer?.(container.id);
-    setDeleteOpen(false);
-    onOpenChange(false);
+  const handleDelete = async (): Promise<void> => {
+    if (!container || !onRemoveContainer) return;
+    setDeleteBusy(true);
+    try {
+      await onRemoveContainer(container.id);
+      setDeleteOpen(false);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error('Could not delete this container', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   return (
@@ -688,7 +697,8 @@ export function ContainerDetailDrawer({
           }
           confirmLabel={`Delete ${container.id}`}
           destructive
-          onConfirm={handleDelete}
+          busy={deleteBusy}
+          onConfirm={() => void handleDelete()}
         />
       )}
 

@@ -74,16 +74,36 @@ export function AccessManagement(): React.ReactElement {
 
   const handleSave = async (): Promise<void> => {
     if (!draft) return;
+
+    // Validate everything the request will need *before* creating anything
+    // server-side — a brand-new worker is a real, permanent row the moment
+    // addWorker resolves, and there's no rollback if a later step fails. Doing
+    // this up front means a bad email/password never leaves an orphaned,
+    // duplicate-on-retry worker behind.
+    if (draft.workerId === 'new' && !draft.newWorkerName.trim()) {
+      toast.error('Could not give access', 'Enter a worker name.');
+      return;
+    }
+    const isEditingExistingLogin = draft.workerId !== 'new' && userByWorkerId.has(draft.workerId);
+    if (!isEditingExistingLogin && (!draft.email.trim() || draft.password.trim().length < 8)) {
+      toast.error('Could not give access', 'Enter an email and a password of at least 8 characters.');
+      return;
+    }
+
     setSaving(true);
     try {
       let workerId = draft.workerId;
       let workerName = workers.find((w) => w.id === workerId)?.name ?? '';
 
       if (workerId === 'new') {
-        if (!draft.newWorkerName.trim()) return;
         const worker: MockWorker = await addWorker(draft.newWorkerName.trim(), draft.newWorkerType, '');
         workerId = worker.id;
         workerName = worker.name;
+        // The dialog was showing "New worker with access" against draft state
+        // that no longer matches reality now that the worker is real — if
+        // anything below throws, re-point the draft at the real id so a retry
+        // edits/retries this worker's login instead of creating another one.
+        setDraft((d) => (d ? { ...d, workerId } : d));
       }
 
       const existing = userByWorkerId.get(workerId);
@@ -95,10 +115,6 @@ export function AccessManagement(): React.ReactElement {
         setUsers((cur) => cur.map((u) => (u.id === user.id ? user : u)));
         toast.ok('Access updated', `${workerName}'s access was saved.`);
       } else {
-        if (!draft.email.trim() || draft.password.trim().length < 6) {
-          toast.error('Could not give access', 'Enter an email and a password of at least 6 characters.');
-          return;
-        }
         const { user } = await api.v2CreateUser({
           id: `u-${workerId}`,
           email: draft.email.trim(),
@@ -236,7 +252,7 @@ export function AccessManagement(): React.ReactElement {
                 {(props) => <input {...props} type="email" value={draft.email} onChange={(e) => setDraft((d) => d && { ...d, email: e.target.value })} placeholder="name@example.com" autoComplete="off" />}
               </Field>
             )}
-            <Field label="Password" required={!isEditingExisting} hint={isEditingExisting ? 'Leave blank to keep their current password.' : 'At least 6 characters.'}>
+            <Field label="Password" required={!isEditingExisting} hint={isEditingExisting ? 'Leave blank to keep their current password.' : 'At least 8 characters.'}>
               {(props) => <input {...props} type="password" value={draft.password} onChange={(e) => setDraft((d) => d && { ...d, password: e.target.value })} placeholder={isEditingExisting ? '••••••••' : 'Set a password'} autoComplete="new-password" />}
             </Field>
             <div className="field" role="group" aria-label="Screens they can reach">

@@ -7,7 +7,7 @@ import { supabase } from '../supabase.js';
 const createUserSchema = z.object({
   id: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(8),
   name: z.string().min(1),
   role: z.enum(ROLES).default('technician'),
   workerId: z.string().nullable(),
@@ -21,7 +21,7 @@ const updateUserSchema = z
     allowedScreens: z.array(z.enum(SCREENS)).optional(),
     // Omitted or blank means "leave the password unchanged" -- never
     // overwritten with a random/blank value by accident.
-    password: z.string().min(6).optional(),
+    password: z.string().min(8).optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
 
@@ -47,11 +47,13 @@ function toUser(row: UserRow): Record<string, unknown> {
 
 /** Managing who can log in, and what they can reach once they do, is itself
  * the single most sensitive action in the app — every route here is
- * manager-only, full stop, not screen-based like everything else. */
-async function requireManager(request: FastifyRequest, reply: FastifyReply): Promise<boolean> {
-  if (request.user.role === 'manager') return true;
+ * manager-only, full stop, not screen-based like everything else. A real
+ * preHandler (like every other gated route in this app), not a manually
+ * called helper — a route added here later can't forget it without also
+ * forgetting `authenticate`, which would be immediately obvious. */
+async function requireManager(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (request.user.role === 'manager') return;
   await reply.code(403).send({ error: 'forbidden', message: 'Only an admin can manage access.' });
-  return false;
 }
 
 const USER_SELECT = 'id, email, name, role, worker_id, allowed_screens';
@@ -65,16 +67,15 @@ const USER_SELECT = 'id, email, name, role, worker_id, allowed_screens';
  */
 export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
+  app.addHook('preHandler', requireManager);
 
-  app.get('/api/v2/users', async (request, reply) => {
-    if (!(await requireManager(request, reply))) return;
+  app.get('/api/v2/users', async (_request, reply) => {
     const { data, error } = await supabase().from('users').select(USER_SELECT).order('name');
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.send({ users: (data as UserRow[]).map(toUser) });
   });
 
   app.post('/api/v2/users', async (request, reply) => {
-    if (!(await requireManager(request, reply))) return;
     const body = await parseOr422(createUserSchema, request.body, reply);
     if (!body) return;
 
@@ -101,7 +102,6 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.patch('/api/v2/users/:id', async (request, reply) => {
-    if (!(await requireManager(request, reply))) return;
     const { id } = request.params as { id: string };
     const body = await parseOr422(updateUserSchema, request.body, reply);
     if (!body) return;
@@ -121,7 +121,6 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.delete('/api/v2/users/:id', async (request, reply) => {
-    if (!(await requireManager(request, reply))) return;
     const { id } = request.params as { id: string };
     const { error } = await supabase().from('users').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);

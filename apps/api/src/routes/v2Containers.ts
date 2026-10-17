@@ -77,7 +77,14 @@ const patchContainerSchema = z
  * the control, and this is the server-side half of that: a request that
  * touches any of these fields needs 'yard' specifically, not just 'live' or
  * 'yard' like the rest of this endpoint's fields (priority/ready/gate-out),
- * which both screens' drawers still legitimately send. */
+ * which both screens' drawers still legitimately send.
+ *
+ * All-or-nothing by design, not per-field: today no real caller ever mixes a
+ * yard-only field with a shared one in the same request (every mutator below
+ * sends its own fixed shape), so this is safe as written. If a future caller
+ * ever did combine them, the whole request would require 'yard', silently
+ * blocking what would otherwise be a legitimate 'live'-only edit of the
+ * shared field — worth revisiting with a per-field split if that happens. */
 const YARD_ONLY_PATCH_FIELDS = ['typeCode', 'size', 'color'];
 
 const CONTAINER_FIELD_MAP: Record<string, string> = {
@@ -148,7 +155,10 @@ function toDbTaskPatch(body: Record<string, unknown>): Record<string, unknown> {
 export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/containers', async (_request, reply) => {
+  // Every screen that actually renders container data, not just Live/Yard --
+  // Worker Roster (per-worker task history), Dashboards (yard stats) and IMS
+  // Stock (which containers are already in the yard) all read this too.
+  app.get('/api/v2/containers', { preHandler: requireScreen('live', 'yard', 'workers', 'dashboards', 'ims-stock') }, async (_request, reply) => {
     const { data, error } = await supabase().from('containers').select(CONTAINER_SELECT).order('registered_at', { ascending: false });
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.send({ containers: (data as ContainerRow[]).map(fromContainerRow) });
@@ -226,6 +236,23 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
         error: 'forbidden',
         message: "You don't have access to this part of the system. Ask an admin to grant it.",
       });
+    }
+
+    // "Ready" without a photo was only ever a client-side rule (the Mark
+    // Ready button), so a direct API call could set readyAt with nothing
+    // backing it up. Checked against the *resulting* photo, not just this
+    // request's body, since a request can set readyAt alone and rely on a
+    // readyPhotoUrl that was already saved earlier.
+    if (body.readyAt !== undefined && body.readyAt !== null) {
+      let photoUrl = body.readyPhotoUrl;
+      if (photoUrl === undefined) {
+        const { data: existing, error: existingErr } = await supabase().from('containers').select('ready_photo_url').eq('id', id).maybeSingle();
+        if (existingErr) throw app.httpErrors.internalServerError(existingErr.message);
+        photoUrl = (existing as { ready_photo_url: string | null } | null)?.ready_photo_url ?? null;
+      }
+      if (!photoUrl) {
+        return reply.code(422).send({ error: 'validation_failed', message: 'A container can only be marked ready with a photo attached.' });
+      }
     }
 
     const { data, error } = await supabase()

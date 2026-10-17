@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireScreen } from '../auth.js';
-import { notFound, parseOr422 } from '../http.js';
+import { conflict, notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 
 /** Mirrors mockV2.ts's WorkerType — kept in sync by hand for now, same
@@ -49,7 +49,10 @@ function toWorker(row: WorkerRow): WorkerRow {
 export async function v2WorkerRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/workers', async (_request, reply) => {
+  // Not manager-locked like the write routes below -- Live/Yard Board and
+  // Dashboards all need worker names to show who's assigned, so any of the
+  // four screens that actually touch a worker's name unlocks the read.
+  app.get('/api/v2/workers', { preHandler: requireScreen('live', 'yard', 'workers', 'dashboards') }, async (_request, reply) => {
     const { data, error } = await supabase().from('workers').select('*').order('name');
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.send({ workers: (data as WorkerRow[]).map(toWorker) });
@@ -75,6 +78,33 @@ export async function v2WorkerRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/api/v2/workers/:id', { preHandler: requireScreen('workers') }, async (request, reply) => {
     const { id } = request.params as { id: string };
+
+    // The FK (tasks.worker_id, "on delete set null") would otherwise null out
+    // *finished* tasks too, not just the pending ones the client already
+    // unassigns itself -- silently losing who actually did completed work.
+    // Checked here, not left to the DB, since the column has no state check
+    // of its own.
+    const { data: doneOrRunning, error: taskErr } = await supabase()
+      .from('tasks')
+      .select('id')
+      .eq('worker_id', id)
+      .in('state', ['running', 'done'])
+      .limit(1);
+    if (taskErr) throw app.httpErrors.internalServerError(taskErr.message);
+    if ((doneOrRunning ?? []).length > 0) {
+      return reply.code(409).send(conflict('This worker has running or completed task history and can\'t be removed. Reassign or finish their work first.'));
+    }
+
+    // A login tied to this worker would survive the delete with
+    // worker_id set to null -- invisible to Access Management from then on,
+    // since that screen only lists logins by walking the worker list. Revoke
+    // access there first, so removing a login stays a manager-only action.
+    const { data: login, error: userErr } = await supabase().from('users').select('id').eq('worker_id', id).maybeSingle();
+    if (userErr) throw app.httpErrors.internalServerError(userErr.message);
+    if (login) {
+      return reply.code(409).send(conflict('This worker has a login. Remove their access from Access Management before deleting them.'));
+    }
+
     const { error } = await supabase().from('workers').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.code(204).send();

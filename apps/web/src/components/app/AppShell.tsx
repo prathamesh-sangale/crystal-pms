@@ -34,7 +34,7 @@ export function AppShell(): React.ReactElement {
   const [powerBusy, setPowerBusy] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { user, signIn, signOut, can } = useAuth();
+  const { user, signIn, signOut, can, hasScreenAccess } = useAuth();
   const { theme, toggle } = useTheme();
   const { containers, gateIn, drafts, saveDraft, discardDraft, powerDown, setPowerDown } = useV2Data();
   const toast = useToast();
@@ -213,13 +213,15 @@ export function AppShell(): React.ReactElement {
             onClick={() => navigate('/ims-stock')}
           />
 
-          <IconButton
-            icon="power"
-            label={powerDown ? 'Mark power restored' : 'Mark power down'}
-            bare
-            pressed={powerDown}
-            onClick={() => setPowerConfirmOpen(true)}
-          />
+          {hasScreenAccess('dashboards') && (
+            <IconButton
+              icon="power"
+              label={powerDown ? 'Mark power restored' : 'Mark power down'}
+              bare
+              pressed={powerDown}
+              onClick={() => setPowerConfirmOpen(true)}
+            />
+          )}
 
           <IconButton
             icon={theme === 'dark' ? 'sun' : 'moon'}

@@ -77,7 +77,7 @@ export function WorkerDetailDrawer({
   onOpenChange: (open: boolean) => void;
   onToggleActive: (workerId: string) => void;
   onUpdateWorker: (workerId: string, updates: { name: string; type: WorkerType; notes: string }) => void;
-  onRemoveWorker: (workerId: string) => void;
+  onRemoveWorker: (workerId: string) => Promise<void>;
   onAssignWorker: (containerId: string, kind: SectionKind, key: string, workerId: string) => void;
   onScheduleTask: (containerId: string, kind: SectionKind, key: string, date: string | null) => void;
   onUnassignTask: (containerId: string, kind: SectionKind, key: string) => void;
@@ -96,6 +96,7 @@ export function WorkerDetailDrawer({
 
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [draft, setDraft] = useState({ name: '', type: 'painter' as WorkerType, notes: '' });
   const [hoursWindow, setHoursWindow] = useState<HoursWindow>('all');
 
@@ -122,12 +123,19 @@ export function WorkerDetailDrawer({
     setEditOpen(false);
   };
 
-  const handleDelete = (): void => {
+  const handleDelete = async (): Promise<void> => {
     if (!worker) return;
     const name = worker.name;
-    onRemoveWorker(worker.id);
-    toast.ok('Worker removed', `${name} is off the roster.`);
-    setDeleteOpen(false);
+    setDeleteBusy(true);
+    try {
+      await onRemoveWorker(worker.id);
+      toast.ok('Worker removed', `${name} is off the roster.`);
+      setDeleteOpen(false);
+    } catch (err) {
+      toast.error('Could not remove this worker', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setDeleteBusy(false);
+    }
   };
 
   return (
@@ -168,7 +176,7 @@ export function WorkerDetailDrawer({
             <Button variant="ghost" size="sm" icon="edit" onClick={() => setEditOpen(true)}>
               Edit
             </Button>
-            <Button variant="ghost" size="sm" icon="trash" onClick={() => setDeleteOpen(true)} disabled={running.length > 0}>
+            <Button variant="ghost" size="sm" icon="trash" onClick={() => setDeleteOpen(true)} disabled={running.length > 0 || done.length > 0}>
               Delete
             </Button>
           </span>
@@ -222,11 +230,16 @@ export function WorkerDetailDrawer({
             <div className="cluster" style={{ marginTop: 'var(--s-3)' }}>
               <SwitchField checked={worker.active} onCheckedChange={() => onToggleActive(worker.id)} label="Available for assignment" />
             </div>
-            {running.length > 0 && (
+            {running.length > 0 ? (
               <p className="subtle" style={{ fontSize: '11px', margin: 'var(--s-2) 0 0' }}>
                 Stop {worker.name.split(' ')[0]}&rsquo;s running task to remove them.
               </p>
-            )}
+            ) : done.length > 0 ? (
+              <p className="subtle" style={{ fontSize: '11px', margin: 'var(--s-2) 0 0' }}>
+                {worker.name.split(' ')[0]} has completed work on record, so they can&rsquo;t be deleted — that would lose who did it. Turn off
+                &ldquo;Available for assignment&rdquo; instead to retire them.
+              </p>
+            ) : null}
           </DataPanel>
 
           <div className="stack stack-loose">
@@ -324,7 +337,8 @@ export function WorkerDetailDrawer({
           }
           confirmLabel={`Delete ${worker.name}`}
           destructive
-          onConfirm={handleDelete}
+          busy={deleteBusy}
+          onConfirm={() => void handleDelete()}
         />
       )}
 

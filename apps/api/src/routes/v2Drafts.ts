@@ -26,7 +26,7 @@ function toDraft(row: DraftRow): Record<string, unknown> {
 export async function v2DraftRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/drafts', async (_request, reply) => {
+  app.get('/api/v2/drafts', { preHandler: requireScreen('live', 'yard') }, async (_request, reply) => {
     const { data, error } = await supabase().from('drafts').select('*').order('saved_at', { ascending: false });
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.send({ drafts: (data as DraftRow[]).map(toDraft) });
