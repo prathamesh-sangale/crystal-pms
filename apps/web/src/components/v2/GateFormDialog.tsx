@@ -125,23 +125,24 @@ function FieldRow({
   );
 }
 
-/** Plain Yes/No, not the three-way SeverityToggle Machine Check still uses
- * — the Repair checklist doesn't need a minor/major severity grade, and
- * grading it invited a real bug: an admin could tap through every item as
- * "Good" (or leave them unassessed) and silently end up with "Repair
+/** Plain Good/Damage, not the three-way SeverityToggle Machine Check still
+ * uses — the Repair checklist doesn't need a minor/major severity grade,
+ * and grading it invited a real bug: an admin could tap through every item
+ * as "Good" (or leave them unassessed) and silently end up with "Repair
  * Required? Yes" producing zero actual repair work, with nothing on screen
- * flagging the contradiction. A plain Yes/No with the description required
- * right under it removes that gap — either an item needs repair and says
- * what, or it doesn't. */
+ * flagging the contradiction. A plain two-way toggle with the description
+ * required right under it removes that gap — either an item is damaged and
+ * says how, or it isn't. (Labelled "Good"/"Damage" rather than "No"/"Yes",
+ * by direct request — reads as a condition, not a question's answer.) */
 function RepairToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
-  const isYes = value === 'flagged';
+  const isDamaged = value === 'flagged';
   return (
-    <span className="cluster" style={{ gap: '6px', flex: 'none' }} role="group" aria-label="Needs repair">
-      <button type="button" className="chip" aria-pressed={!isYes} onClick={() => onChange('good')}>
-        No
+    <span className="cluster" style={{ gap: '6px', flex: 'none' }} role="group" aria-label="Condition">
+      <button type="button" className="chip" aria-pressed={!isDamaged} onClick={() => onChange('good')}>
+        Good
       </button>
-      <button type="button" className="chip" aria-pressed={isYes} onClick={() => onChange('flagged')}>
-        Yes
+      <button type="button" className="chip" aria-pressed={isDamaged} onClick={() => onChange('flagged')}>
+        Damage
       </button>
     </span>
   );
@@ -1241,7 +1242,7 @@ export function GateFormDialog({
                 <>
                   <div className="divider-lbl">Container Inspection Checklist</div>
                   <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>
-                    Does this need repair? Yes reveals a box for what's wrong.
+                    Mark each part Good or Damage — Damage reveals a box for what's wrong.
                   </p>
                   <div className="checklist-grid" style={{ paddingLeft: 'var(--s-2)', borderLeft: '2px solid var(--line)' }}>
                     {repairFields.map((f) => (
