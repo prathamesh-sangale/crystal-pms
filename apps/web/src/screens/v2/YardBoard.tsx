@@ -1,6 +1,8 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../lib/auth';
 import { ContainerDetailDrawer } from '../../components/v2/ContainerDetailDrawer';
+import { ImsQuickAddDialog } from '../../components/v2/ImsQuickAddDialog';
 import {
   agingStatus,
   isReadyToMove,
@@ -94,6 +96,8 @@ export function YardBoard(): React.ReactElement {
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
+  const [imsQuickAddOpen, setImsQuickAddOpen] = useState(false);
+  const { can } = useAuth();
   const [workerFilter, setWorkerFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -280,15 +284,22 @@ export function YardBoard(): React.ReactElement {
             Ready to move ({counts.ready})
           </Chip>
         </div>
-        <Segmented
-          value={displayMode}
-          onChange={setDisplayMode}
-          label="Display as"
-          options={[
-            { value: 'cards', label: 'Cards' },
-            { value: 'list', label: 'List' },
-          ]}
-        />
+        <div className="cluster" style={{ gap: 'var(--s-3)' }}>
+          {can('container:create') && (
+            <Button variant="secondary" size="sm" icon="search" onClick={() => setImsQuickAddOpen(true)}>
+              Add from IMS
+            </Button>
+          )}
+          <Segmented
+            value={displayMode}
+            onChange={setDisplayMode}
+            label="Display as"
+            options={[
+              { value: 'cards', label: 'Cards' },
+              { value: 'list', label: 'List' },
+            ]}
+          />
+        </div>
       </div>
 
       <div
@@ -448,6 +459,8 @@ export function YardBoard(): React.ReactElement {
         onSetPriority={setPriority}
         onGateOut={gateOut}
       />
+
+      <ImsQuickAddDialog open={imsQuickAddOpen} onOpenChange={setImsQuickAddOpen} />
     </div>
   );
 }

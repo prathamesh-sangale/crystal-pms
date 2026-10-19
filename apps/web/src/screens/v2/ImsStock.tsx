@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { GATE_PHOTO_SLOTS, STANDARD_COLORS, surveyFields, type GateLogEntry, type GatePhotoKey, type MockContainer } from '../../lib/mockV2';
+import { buildQuickAddContainer } from '../../lib/imsQuickAdd';
+import type { MockContainer } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { CategoryBadge, StatCard } from '../../components/crystal/Data';
@@ -79,53 +80,10 @@ export function ImsStock(): React.ReactElement {
    * direct request). For anything that actually needs inspecting, "Add &
    * survey" is the other button. */
   const handleQuickAdd = useCallback(async (item: ImsMatch): Promise<void> => {
-    if (!item.suggestedTypeCode || !item.suggestedSize) return;
+    const container = buildQuickAddContainer(item, user?.email ?? '');
+    if (!container) return;
     setQuickAddingId(item.containerId);
     try {
-      const isReefer = item.suggestedTypeCode.startsWith('Reefer');
-      const now = new Date();
-      const emptyPhotos = Object.fromEntries(GATE_PHOTO_SLOTS.map((s) => [s.key, ''])) as Record<GatePhotoKey, string>;
-      const entry: GateLogEntry = {
-        kind: 'in',
-        loggedAt: now.toISOString(),
-        loggedBy: user?.email ?? '',
-        movementDate: now.toISOString().slice(0, 10),
-        indentRef: '',
-        customerName: '',
-        location: '',
-        transporterName: '',
-        transporterNumber: '',
-        vehicleNumber: '',
-        lrCopyName: null,
-        ptiCheck: 'No',
-        ptiVideoName: null,
-        ptiVideoUrl: null,
-        photos: { ...emptyPhotos, additional: [] },
-        paintingRequired: false,
-        repairRequired: false,
-        repairFields: [],
-        machineIssueFound: false,
-        machineFields: [],
-        cleaningRequired: false,
-        estBudget: '',
-        remarks: 'Added directly from IMS Stock — no inspection run, nothing flagged.',
-      };
-      const container: MockContainer = {
-        id: item.containerId,
-        typeCode: item.suggestedTypeCode,
-        size: item.suggestedSize,
-        color: isReefer ? 'White' : STANDARD_COLORS[0]!,
-        survey: { performedAt: now.toISOString(), fields: surveyFields(isReefer), outcome: 'ready' },
-        priority: false,
-        registeredAt: now.toISOString(),
-        sections: [],
-        readyAt: null,
-        readyPhotoUrl: null,
-        currentSite: null,
-        gateIn: entry,
-        gateOut: null,
-        departedAt: null,
-      };
       await handleGateIn(container);
     } catch (err) {
       toast.error('Could not add to yard', err instanceof Error ? err.message : 'Try again.');
