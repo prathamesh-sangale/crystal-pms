@@ -242,7 +242,11 @@ export function AppShell(): React.ReactElement {
             items={[
               { heading: user?.email ?? '' },
               { label: `Signed in as ${user ? roleDisplayLabel(user.role) : ''}`, icon: 'user', onSelect: () => {}, disabled: true },
-              { label: 'Change password', icon: 'edit', onSelect: () => setChangePasswordOpen(true) },
+              // Worker credentials stay fully admin-controlled, by direct
+              // request -- a worker who needs a different password asks a
+              // manager to reset it in Access Management, same as before
+              // self-service existed. Mirrored server-side (routes/auth.ts).
+              ...(user?.role === 'manager' ? [{ label: 'Change password', icon: 'edit' as const, onSelect: () => setChangePasswordOpen(true) }] : []),
               ...switchSection,
               'separator',
               { label: 'Sign out', icon: 'power', onSelect: signOut, danger: true },

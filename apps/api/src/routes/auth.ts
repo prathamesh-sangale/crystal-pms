@@ -63,15 +63,17 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/auth/me', { preHandler: authenticate }, async (request) => ({ user: request.user }));
 
-  /** Self-service, by direct request: today the only way to set someone's
-   * password is another manager doing it for them in Access Management.
-   * Requires proving the *current* password first -- an already-open
-   * session being used to lock the real owner out is exactly the scenario
-   * that check exists for. Bumps `token_version` same as an admin-driven
-   * reset would (changing your password is itself reason enough to kill
-   * any other session using the old one) -- which would invalidate the very
-   * token this request came in on, so a fresh one is signed and returned
-   * here rather than forcing an immediate re-login right after. */
+  /** Self-service, by direct request, manager-only by a later, equally
+   * direct request: a worker's credentials stay fully admin-controlled --
+   * if theirs needs to change, a manager resets it for them in Access
+   * Management, same as before this route existed. Requires proving the
+   * *current* password first -- an already-open session being used to lock
+   * the real owner out is exactly the scenario that check exists for. Bumps
+   * `token_version` same as an admin-driven reset would (changing your
+   * password is itself reason enough to kill any other session using the
+   * old one) -- which would invalidate the very token this request came in
+   * on, so a fresh one is signed and returned here rather than forcing an
+   * immediate re-login right after. */
   app.post(
     '/api/auth/change-password',
     {
@@ -80,6 +82,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       config: { rateLimit: { max: env.NODE_ENV === 'test' ? 1000 : 10, timeWindow: '1 minute' } },
     },
     async (request, reply) => {
+      if (request.user.role !== 'manager') {
+        return reply.code(403).send({
+          error: 'forbidden',
+          message: 'Ask an admin to change this for you in Access Management.',
+        });
+      }
       const body = await parseOr422(changePasswordSchema, request.body, reply);
       if (!body) return;
 
