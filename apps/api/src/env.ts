@@ -36,6 +36,11 @@ const schema = z.object({
   // gitignored credentials file from (serverless deployments). See
   // googleAuth.ts for the fallback logic.
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  // Optional, by design — unset simply means the developer-only action-log
+  // route (routes/devLogs.ts) never accepts a password and stays
+  // unreachable, not a reason to fail the whole API at boot like the
+  // Supabase vars above. Nothing to do with the app's own users/sessions.
+  DEV_LOGS_PASSWORD: z.string().min(16, 'must be at least 16 characters').optional(),
 });
 
 const parsed = schema.safeParse(process.env);

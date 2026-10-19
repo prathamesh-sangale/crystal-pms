@@ -5,10 +5,12 @@ import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { logAction } from './actionLog.js';
 import { env, isProduction } from './env.js';
 import { zodToApiError } from './http.js';
 import { SupabaseRateLimitStore } from './rateLimitStore.js';
 import { authRoutes } from './routes/auth.js';
+import { devLogsRoutes } from './routes/devLogs.js';
 import { externalApiRoutes } from './routes/externalApi.js';
 import { hydraMovementRoutes } from './routes/hydraMovements.js';
 import { v2ContainerRoutes } from './routes/v2Containers.js';
@@ -97,6 +99,14 @@ export async function buildApp(): Promise<FastifyInstance> {
     })
   );
 
+  // The one global hook in this app -- every other `preHandler` is scoped to
+  // its own route file by Fastify's plugin encapsulation, but the
+  // developer-only action log (devLogs.ts) needs every mutating request,
+  // regardless of which file handles it. Runs after the real response has
+  // already been sent, so it can never slow down or affect the request
+  // itself -- see actionLog.ts for what gets logged and why.
+  app.addHook('onResponse', logAction);
+
   app.get('/api/health', async () => ({ ok: true, service: 'crystal-pms' }));
 
   await app.register(authRoutes);
@@ -110,6 +120,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(v2UserRoutes);
   await app.register(hydraMovementRoutes);
   await app.register(externalApiRoutes);
+  await app.register(devLogsRoutes);
 
   return app;
 }
