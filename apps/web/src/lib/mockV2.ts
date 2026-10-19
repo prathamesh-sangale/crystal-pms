@@ -324,7 +324,11 @@ export interface GateLogEntry {
   ptiVideoUrl: string | null;
   photos: GatePhotos;
   /** Null on Gate Out — repairs are assumed closed out before a container
-   * ever clears Ready to Move, so it isn't asked again on the way out. */
+   * ever clears Ready to Move, so it isn't asked again on the way out.
+   * Independent of `repairRequired` by direct request: Painting (primer/1st
+   * coat/2nd coat/Logo) is its own question now, not something that only
+   * happens as a side effect of repair work being flagged. */
+  paintingRequired: boolean | null;
   repairRequired: boolean | null;
   repairFields: MockSurveyField[];
   machineIssueFound: boolean | null;
@@ -357,6 +361,7 @@ export interface ContainerDraftData {
   transporterNumber: string;
   vehicleNumber: string;
   ptiCheck: PtiCheckAnswer;
+  paintingRequired: boolean;
   repairRequired: boolean;
   machineIssueFound: boolean;
   cleaningRequired: boolean;

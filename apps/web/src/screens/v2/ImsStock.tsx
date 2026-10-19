@@ -1,9 +1,9 @@
 import { createColumnHelper } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import type { MockContainer } from '../../lib/mockV2';
+import { GATE_PHOTO_SLOTS, STANDARD_COLORS, surveyFields, type GateLogEntry, type GatePhotoKey, type MockContainer } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { CategoryBadge, StatCard } from '../../components/crystal/Data';
@@ -50,6 +50,7 @@ export function ImsStock(): React.ReactElement {
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
   const [gateInId, setGateInId] = useState<string | null>(null);
+  const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { user, can } = useAuth();
@@ -61,11 +62,77 @@ export function ImsStock(): React.ReactElement {
   // disabled here instead, before the admin gets that far.
   const activeIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
 
-  const handleGateIn = async (container: MockContainer): Promise<void> => {
-    await gateIn(container);
-    toast.ok('Container registered', `${container.id} ${container.sections.length ? `has ${container.sections.length} section(s) open.` : 'is ready to move.'}`);
-    navigate('/yard');
-  };
+  const handleGateIn = useCallback(
+    async (container: MockContainer): Promise<void> => {
+      await gateIn(container);
+      toast.ok('Container registered', `${container.id} ${container.sections.length ? `has ${container.sections.length} section(s) open.` : 'is ready to move.'}`);
+      navigate('/yard');
+    },
+    [gateIn, navigate, toast]
+  );
+
+  /** The true one-click path, by direct request: a container IMS already
+   * knows about doesn't need any form at all, let alone a survey, if the
+   * admin already knows there's nothing to flag — this registers it exactly
+   * like a clean "nothing flagged" Gate-In would, with zero fields asked. No
+   * transport/vehicle details are captured (not asked for this path, by
+   * direct request). For anything that actually needs inspecting, "Add &
+   * survey" is the other button. */
+  const handleQuickAdd = useCallback(async (item: ImsMatch): Promise<void> => {
+    if (!item.suggestedTypeCode || !item.suggestedSize) return;
+    setQuickAddingId(item.containerId);
+    try {
+      const isReefer = item.suggestedTypeCode.startsWith('Reefer');
+      const now = new Date();
+      const emptyPhotos = Object.fromEntries(GATE_PHOTO_SLOTS.map((s) => [s.key, ''])) as Record<GatePhotoKey, string>;
+      const entry: GateLogEntry = {
+        kind: 'in',
+        loggedAt: now.toISOString(),
+        loggedBy: user?.email ?? '',
+        movementDate: now.toISOString().slice(0, 10),
+        indentRef: '',
+        customerName: '',
+        location: '',
+        transporterName: '',
+        transporterNumber: '',
+        vehicleNumber: '',
+        lrCopyName: null,
+        ptiCheck: 'No',
+        ptiVideoName: null,
+        ptiVideoUrl: null,
+        photos: { ...emptyPhotos, additional: [] },
+        paintingRequired: false,
+        repairRequired: false,
+        repairFields: [],
+        machineIssueFound: false,
+        machineFields: [],
+        cleaningRequired: false,
+        estBudget: '',
+        remarks: 'Added directly from IMS Stock — no inspection run, nothing flagged.',
+      };
+      const container: MockContainer = {
+        id: item.containerId,
+        typeCode: item.suggestedTypeCode,
+        size: item.suggestedSize,
+        color: isReefer ? 'White' : STANDARD_COLORS[0]!,
+        survey: { performedAt: now.toISOString(), fields: surveyFields(isReefer), outcome: 'ready' },
+        priority: false,
+        registeredAt: now.toISOString(),
+        sections: [],
+        readyAt: null,
+        readyPhotoUrl: null,
+        currentSite: null,
+        gateIn: entry,
+        gateOut: null,
+        departedAt: null,
+      };
+      await handleGateIn(container);
+    } catch (err) {
+      toast.error('Could not add to yard', err instanceof Error ? err.message : 'Try again.');
+    } finally {
+      setQuickAddingId(null);
+    }
+  }, [handleGateIn, toast, user?.email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,25 +226,44 @@ export function ImsStock(): React.ReactElement {
               header: '',
               meta: { label: 'Action' },
               cell: (ctx) => {
-                const id = ctx.row.original.containerId;
-                const already = activeIds.has(id);
+                const item = ctx.row.original;
+                const already = activeIds.has(item.containerId);
+                if (already) {
+                  return (
+                    <Button variant="secondary" size="sm" icon="check" disabled>
+                      Already in yard
+                    </Button>
+                  );
+                }
                 return (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon="arrow-right"
-                    disabled={already}
-                    onClick={() => setGateInId(id)}
-                  >
-                    {already ? 'Already in yard' : 'Gate in'}
-                  </Button>
+                  <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="plus"
+                      disabled={!item.suggestedTypeCode || !item.suggestedSize || quickAddingId !== null}
+                      loading={quickAddingId === item.containerId}
+                      onClick={() => void handleQuickAdd(item)}
+                    >
+                      Add to yard
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="doc"
+                      disabled={quickAddingId !== null}
+                      onClick={() => setGateInId(item.containerId)}
+                    >
+                      Add &amp; survey
+                    </Button>
+                  </span>
                 );
               },
             }),
           ]
         : []),
     ],
-    [can, activeIds]
+    [can, activeIds, quickAddingId, handleQuickAdd]
   );
 
   return (
@@ -312,18 +398,36 @@ export function ImsStock(): React.ReactElement {
                 {i.yom && <div>YOM: {i.yom}</div>}
                 {i.reeferUnit && <div>Reefer unit: {i.reeferUnit}</div>}
               </div>
-              {can('container:create') && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon="arrow-right"
-                  disabled={activeIds.has(i.containerId)}
-                  onClick={() => setGateInId(i.containerId)}
-                  style={{ marginTop: 'var(--s-3)', width: '100%' }}
-                >
-                  {activeIds.has(i.containerId) ? 'Already in yard' : 'Gate in'}
-                </Button>
-              )}
+              {can('container:create') &&
+                (activeIds.has(i.containerId) ? (
+                  <Button variant="secondary" size="sm" icon="check" disabled style={{ marginTop: 'var(--s-3)', width: '100%' }}>
+                    Already in yard
+                  </Button>
+                ) : (
+                  <div className="cluster" style={{ gap: 'var(--s-2)', marginTop: 'var(--s-3)' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon="plus"
+                      disabled={!i.suggestedTypeCode || !i.suggestedSize || quickAddingId !== null}
+                      loading={quickAddingId === i.containerId}
+                      onClick={() => void handleQuickAdd(i)}
+                      style={{ flex: 1 }}
+                    >
+                      Add to yard
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="doc"
+                      disabled={quickAddingId !== null}
+                      onClick={() => setGateInId(i.containerId)}
+                      style={{ flex: 1 }}
+                    >
+                      Add &amp; survey
+                    </Button>
+                  </div>
+                ))}
             </div>
           ))}
         </div>
@@ -336,6 +440,7 @@ export function ImsStock(): React.ReactElement {
           if (!next) setGateInId(null);
         }}
         prefillId={gateInId}
+        fast
         onGateIn={handleGateIn}
         existingIds={[...activeIds]}
         onSaveDraft={saveDraft}

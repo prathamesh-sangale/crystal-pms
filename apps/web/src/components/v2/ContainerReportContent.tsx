@@ -118,6 +118,12 @@ function GateLogPanel({ title, entry }: { title: string; entry: GateLogEntry }):
                 ))}
             </dd>
           </div>
+          {entry.paintingRequired !== null && (
+            <div>
+              <dt>Painting required</dt>
+              <dd>{entry.paintingRequired ? 'Yes' : 'No'}</dd>
+            </div>
+          )}
           {entry.repairRequired !== null && (
             <div>
               <dt>Repair required</dt>

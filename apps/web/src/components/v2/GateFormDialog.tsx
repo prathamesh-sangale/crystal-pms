@@ -344,6 +344,7 @@ export function GateFormDialog({
   onDiscardDraft,
   loggedInEmail,
   prefillId,
+  fast,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -364,6 +365,13 @@ export function GateFormDialog({
    * admin re-typing or re-clicking anything. Still just a starting point —
    * every field stays editable, same as a manual IMS check. */
   prefillId?: string | null;
+  /** `mode === 'in'` + `prefillId` only, by direct request: a container IMS
+   * already knows about needs the survey/inspection, not the whole intake
+   * form over again — the container ID input, "Check IMS" panel, and the
+   * entire Transport Details block (location/transporter/vehicle/LR copy,
+   * none of which IMS has anyway) are skipped. Type/Size stay visible and
+   * editable, pre-filled from the IMS match. */
+  fast?: boolean;
 }): React.ReactElement {
   const isOut = mode === 'out';
   const [step, setStep] = useState<'intake' | 'result'>('intake');
@@ -419,6 +427,11 @@ export function GateFormDialog({
   const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
 
   // Assessment
+  // Independent of Repair Required, by direct request: Painting (primer/1st
+  // coat/2nd coat/Logo) is its own part of the survey now, not a side effect
+  // of repair work being flagged. Repair Required still drives only the
+  // itemized damage checklist below (Repairment).
+  const [paintingRequired, setPaintingRequired] = useState(false);
   const [repairRequired, setRepairRequired] = useState(false);
   // 'good' (not 'unassessed') — the Repair checklist's Yes/No toggle has no
   // third "not yet checked" state to represent, so an untouched item must
@@ -492,6 +505,9 @@ export function GateFormDialog({
     setTransporterNumber(d.transporterNumber);
     setVehicleNumber(d.vehicleNumber);
     setPtiCheck(d.ptiCheck);
+    // `?? false` guards against a draft saved before Painting became its own
+    // field — an old one simply won't have it.
+    setPaintingRequired(d.paintingRequired ?? false);
     setRepairRequired(d.repairRequired);
     setMachineIssueFound(d.machineIssueFound);
     setCleaningRequired(d.cleaningRequired);
@@ -552,6 +568,7 @@ export function GateFormDialog({
     setPtiVideoFile(null);
     setPhotos(emptyPhotos());
     setAdditionalFiles([]);
+    setPaintingRequired(false);
     setRepairRequired(false);
     setRepairFields(blankFields(REPAIR_ITEMS, 'good'));
     setMachineIssueFound(false);
@@ -610,7 +627,7 @@ export function GateFormDialog({
     setIdError(null);
     const needsRepair = repairRequired && repairFields.some(fieldNeedsAttention);
     setSections({
-      painting: needsRepair || logoChoice !== 'na',
+      painting: paintingRequired || logoChoice !== 'na',
       // "PTI Check: Yes" + video means a Pre-Trip Inspection walkthrough
       // already happened as part of this gate-in, so the yard's own PTI
       // section (Lights, Strip & Curtain) would be redoing work already on
@@ -653,13 +670,14 @@ export function GateFormDialog({
     const required = (Object.keys(sections) as SectionKind[]).filter((k) => sections[k]);
     const outcome: 'ready' | 'needs-work' = required.length === 0 ? 'ready' : 'needs-work';
     const surveyFieldsArr = buildSurveyFields();
-    const needsRepair = repairRequired && repairFields.some(fieldNeedsAttention);
     // SPEC.md §4.3 "Painter Helper": tape display + gasket before any spray
     // work; paint the compressor + display as its own step after the main
     // coats — only needed when paint is actually sprayed, not for a
-    // ready-made logo sticker with nothing else wrong.
-    const paintingNeedsSpray = needsRepair || logoChoice === 'physical';
-    const lastMainPaintKey = needsRepair ? 'coat2' : paintingNeedsSpray ? 'tape_display' : null;
+    // ready-made logo sticker with nothing else wrong. Driven by
+    // `paintingRequired` now, not `needsRepair` -- Painting is its own
+    // question on the survey, independent of whether repair work was found.
+    const paintingNeedsSpray = paintingRequired || logoChoice === 'physical';
+    const lastMainPaintKey = paintingRequired ? 'coat2' : paintingNeedsSpray ? 'tape_display' : null;
     const paintingTaskList: MockTask[] = [
       ...(paintingNeedsSpray
         ? [
@@ -677,7 +695,7 @@ export function GateFormDialog({
             },
           ]
         : []),
-      ...(needsRepair
+      ...(paintingRequired
         ? [
             { key: 'primer', label: 'Primer', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['tape_display'] },
             { key: 'coat1', label: '1st coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['primer'] },
@@ -763,6 +781,7 @@ export function GateFormDialog({
         ptiVideoName,
         ptiVideoUrl,
         photos: photosResult,
+        paintingRequired,
         repairRequired,
         repairFields: repairRequired ? repairFields.filter(fieldNeedsAttention) : [],
         machineIssueFound,
@@ -836,6 +855,7 @@ export function GateFormDialog({
         ptiVideoName,
         ptiVideoUrl,
         photos: photosResult,
+        paintingRequired: null,
         repairRequired: null,
         repairFields: [],
         machineIssueFound: null,
@@ -858,14 +878,14 @@ export function GateFormDialog({
   const handleSaveDraft = (): void => {
     const isEmpty =
       !id.trim() && !loggedBy.trim() && !indentRef.trim() && !customerName.trim() && !location.trim() &&
-      !transporterName.trim() && !vehicleNumber.trim() && logoChoice === 'na' && !priority && !repairRequired &&
-      !machineIssueFound && !cleaningRequired && !estBudget.trim() && !remarks.trim();
+      !transporterName.trim() && !vehicleNumber.trim() && logoChoice === 'na' && !priority && !paintingRequired &&
+      !repairRequired && !machineIssueFound && !cleaningRequired && !estBudget.trim() && !remarks.trim();
     if (!isEmpty) {
       onSaveDraft?.({
         id, typeCode, size, color, customColor, logoChoice, priority,
         fields: [...repairFields, ...machineFields],
         loggedBy, indentRef, customerName, location, transporterName, transporterNumber, vehicleNumber,
-        ptiCheck, repairRequired, machineIssueFound, cleaningRequired, estBudget, remarks,
+        ptiCheck, paintingRequired, repairRequired, machineIssueFound, cleaningRequired, estBudget, remarks,
       });
     }
     if (resumeDraft) onDiscardDraft?.(resumeDraft.id);
@@ -969,35 +989,43 @@ export function GateFormDialog({
                 </>
               ) : (
                 <>
-                  <Field label="Container / tank ID" hint="Leave blank to auto-generate a placeholder ID" error={idError ?? undefined}>
-                    {(props) => (
-                      <input
-                        {...props}
-                        value={id}
-                        onChange={(e) => {
-                          setId(e.target.value);
-                          setIdError(null);
-                          setImsStatus('idle');
-                          setImsMatches([]);
-                          setImsElsewhere([]);
-                          setImsApplied(null);
-                        }}
-                        placeholder="RFCU 445 129-8"
-                        autoComplete="off"
-                        spellCheck={false}
+                  {fast ? (
+                    <div className="subtle" style={{ fontSize: '12.5px', marginBottom: 'var(--s-2)' }}>
+                      <b className="mono" style={{ color: 'var(--text)' }}>{id}</b> — matched from IMS Stock.
+                    </div>
+                  ) : (
+                    <>
+                      <Field label="Container / tank ID" hint="Leave blank to auto-generate a placeholder ID" error={idError ?? undefined}>
+                        {(props) => (
+                          <input
+                            {...props}
+                            value={id}
+                            onChange={(e) => {
+                              setId(e.target.value);
+                              setIdError(null);
+                              setImsStatus('idle');
+                              setImsMatches([]);
+                              setImsElsewhere([]);
+                              setImsApplied(null);
+                            }}
+                            placeholder="RFCU 445 129-8"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        )}
+                      </Field>
+                      <ImsLookupPanel
+                        status={imsStatus}
+                        matches={imsMatches}
+                        elsewhere={imsElsewhere}
+                        applied={imsApplied}
+                        disabled={!id.trim()}
+                        onCheck={checkIms}
+                        onApply={applyImsMatch}
+                        onDismiss={() => { setImsStatus('idle'); setImsMatches([]); setImsElsewhere([]); setImsApplied(null); }}
                       />
-                    )}
-                  </Field>
-                  <ImsLookupPanel
-                    status={imsStatus}
-                    matches={imsMatches}
-                    elsewhere={imsElsewhere}
-                    applied={imsApplied}
-                    disabled={!id.trim()}
-                    onCheck={checkIms}
-                    onApply={applyImsMatch}
-                    onDismiss={() => { setImsStatus('idle'); setImsMatches([]); setImsElsewhere([]); setImsApplied(null); }}
-                  />
+                    </>
+                  )}
                   <Field label="Type / product code">
                     {(props) => (
                       <select {...props} value={typeCode} onChange={(e) => setTypeCode(e.target.value)}>
@@ -1037,31 +1065,35 @@ export function GateFormDialog({
             </div>
 
             <div className="stack">
-              <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
-                Transport Details
-              </div>
-              <Field label="Location" required>
-                {(props) => <input {...props} value={location} onChange={(e) => setLocation(e.target.value)} />}
-              </Field>
-              <Field label="Transporter Name" required>
-                {(props) => <input {...props} value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />}
-              </Field>
-              <Field label="Transporter Number">
-                {(props) => <input {...props} value={transporterNumber} onChange={(e) => setTransporterNumber(e.target.value)} />}
-              </Field>
-              <Field label="Vehicle Number" required>
-                {(props) => <input {...props} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />}
-              </Field>
-              <Field label="LR Copy" hint={lrCopyName ?? 'No file chosen'}>
-                {(props) => (
-                  <input
-                    {...props}
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => setLrCopyName(e.target.files?.[0]?.name ?? null)}
-                  />
-                )}
-              </Field>
+              {!fast && (
+                <>
+                  <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
+                    Transport Details
+                  </div>
+                  <Field label="Location" required>
+                    {(props) => <input {...props} value={location} onChange={(e) => setLocation(e.target.value)} />}
+                  </Field>
+                  <Field label="Transporter Name" required>
+                    {(props) => <input {...props} value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />}
+                  </Field>
+                  <Field label="Transporter Number">
+                    {(props) => <input {...props} value={transporterNumber} onChange={(e) => setTransporterNumber(e.target.value)} />}
+                  </Field>
+                  <Field label="Vehicle Number" required>
+                    {(props) => <input {...props} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />}
+                  </Field>
+                  <Field label="LR Copy" hint={lrCopyName ?? 'No file chosen'}>
+                    {(props) => (
+                      <input
+                        {...props}
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setLrCopyName(e.target.files?.[0]?.name ?? null)}
+                      />
+                    )}
+                  </Field>
+                </>
+              )}
 
               <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
                 PTI Check
@@ -1124,7 +1156,22 @@ export function GateFormDialog({
                 Assessment
               </div>
               <div className="card">
+                {/* Paint (primer/coats/logo) is its own part of the survey,
+                   by direct request — kept visually separate from the
+                   damage/repair questions below, since one no longer implies
+                   the other. */}
+                <div className="subtle" style={{ fontSize: '11px', fontWeight: 700, marginBottom: 'var(--s-1)' }}>
+                  Paint
+                </div>
                 <div className="formgrid">
+                  <Field label="Painting required?" required>
+                    {(props) => (
+                      <select {...props} value={paintingRequired ? 'Yes' : 'No'} onChange={(e) => setPaintingRequired(e.target.value === 'Yes')}>
+                        <option value="No">No</option>
+                        <option value="Yes">Yes</option>
+                      </select>
+                    )}
+                  </Field>
                   <Field label="Logo">
                     {(props) => (
                       <select {...props} value={logoChoice} onChange={(e) => setLogoChoice(e.target.value as LogoChoice)}>
@@ -1152,6 +1199,12 @@ export function GateFormDialog({
                       <input className="input" style={{ height: '38px', padding: '8px 10px', fontSize: '12.5px' }} value={customColor} onChange={(e) => setCustomColor(e.target.value)} placeholder="e.g. Traffic Red" />
                     )}
                   </div>
+                </div>
+
+                <div className="subtle" style={{ fontSize: '11px', fontWeight: 700, margin: 'var(--s-3) 0 var(--s-1)' }}>
+                  Repairment &amp; other
+                </div>
+                <div className="formgrid">
                   <Field label="Repair Required?" required>
                     {(props) => (
                       <select {...props} value={repairRequired ? 'Yes' : 'No'} onChange={(e) => setRepairRequired(e.target.value === 'Yes')}>

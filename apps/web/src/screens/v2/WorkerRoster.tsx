@@ -1,6 +1,7 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
-import { isScheduledFor, offsetDate, tasksForWorker, WORKER_TYPE_LABELS, WORKER_TYPES, type MockWorker, type WorkerType } from '../../lib/mockV2';
+import { useNavigate } from 'react-router-dom';
+import { isScheduledFor, offsetDate, overallStatus, tasksForWorker, WORKER_TYPE_LABELS, WORKER_TYPES, type MockContainer, type MockWorker, type WorkerType } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
@@ -8,16 +9,22 @@ import { Button, Segmented } from '../../components/crystal/Button';
 import { CategoryBadge, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
-import { Field } from '../../components/crystal/Form';
+import { Field, InputWithIcon } from '../../components/crystal/Form';
 import { Modal } from '../../components/crystal/Overlay';
 
 const helper = createColumnHelper<MockWorker>();
+const containerHelper = createColumnHelper<MockContainer>();
 
 const EMPTY_DRAFT = { name: '', type: 'painter' as WorkerType, notes: '' };
 type DisplayMode = 'cards' | 'list';
+/** "staff par container search ka tab do" -- a second tab on this screen,
+ * separate from the worker list, so finding a container doesn't require
+ * going through Assign Work. */
+type RosterView = 'workers' | 'containers';
 
 export function WorkerRoster(): React.ReactElement {
   const { workers, containers, addWorker, updateWorker, removeWorker, toggleWorkerActive, assignWorker, scheduleTask, unassignTask, addTask } = useV2Data();
+  const [view, setView] = useState<RosterView>('workers');
   const [typeFilter, setTypeFilter] = useState<WorkerType | 'all'>('all');
   const [displayMode, setDisplayMode] = useState<DisplayMode>('cards');
   const [addOpen, setAddOpen] = useState(false);
@@ -26,10 +33,19 @@ export function WorkerRoster(): React.ReactElement {
   // Assigning directly from a roster row — no need to open the full profile
   // drawer first, same as the crew table on Live Board.
   const [assignWorkerId, setAssignWorkerId] = useState<string | null>(null);
+  const [containerQuery, setContainerQuery] = useState('');
   const toast = useToast();
+  const navigate = useNavigate();
 
   const rows = useMemo(() => (typeFilter === 'all' ? workers : workers.filter((w) => w.type === typeFilter)), [workers, typeFilter]);
   const openWorker = workers.find((w) => w.id === openId) ?? null;
+
+  const containerRows = useMemo(() => {
+    const needle = containerQuery.trim().toUpperCase();
+    const active = containers.filter((c) => !c.departedAt);
+    if (!needle) return active;
+    return active.filter((c) => c.id.toUpperCase().includes(needle) || c.typeCode.toUpperCase().includes(needle));
+  }, [containers, containerQuery]);
 
   const handleAddWorker = async (): Promise<void> => {
     if (!draft.name.trim()) return;
@@ -109,8 +125,87 @@ export function WorkerRoster(): React.ReactElement {
     [containers]
   );
 
+  const containerColumns = useMemo(
+    () => [
+      containerHelper.accessor('id', {
+        header: 'Container',
+        meta: { label: 'Container', lead: true },
+        cell: (ctx) => <span className="mono">{ctx.getValue()}</span>,
+      }),
+      containerHelper.accessor('typeCode', {
+        header: 'Type',
+        meta: { label: 'Type' },
+        cell: (ctx) => <CategoryBadge>{ctx.getValue()}</CategoryBadge>,
+      }),
+      containerHelper.accessor('size', {
+        header: 'Size',
+        meta: { label: 'Size', secondary: true },
+      }),
+      containerHelper.display({
+        id: 'status',
+        header: 'Status',
+        meta: { label: 'Status' },
+        cell: (ctx) => <StatusPill status={overallStatus(ctx.row.original)} />,
+      }),
+      containerHelper.accessor('currentSite', {
+        header: 'Site',
+        meta: { label: 'Site', secondary: true },
+        cell: (ctx) => ctx.getValue() || '—',
+      }),
+      containerHelper.display({
+        id: 'view',
+        header: '',
+        meta: { label: 'Action' },
+        cell: (ctx) => (
+          <Button variant="ghost" size="sm" icon="arrow-right" onClick={() => navigate(`/containers/${encodeURIComponent(ctx.row.original.id)}/report`)}>
+            View
+          </Button>
+        ),
+      }),
+    ],
+    [navigate]
+  );
+
   return (
     <div className="stack stack-loose">
+      <Segmented
+        value={view}
+        onChange={setView}
+        label="View"
+        options={[
+          { value: 'workers', label: 'Workers' },
+          { value: 'containers', label: 'Containers' },
+        ]}
+      />
+
+      {view === 'containers' ? (
+        <div className="stack stack-loose">
+          <InputWithIcon
+            icon="search"
+            placeholder="Search container number or type…"
+            value={containerQuery}
+            onChange={(e) => setContainerQuery(e.target.value)}
+            style={{ width: '280px' }}
+          />
+          {containerRows.length === 0 ? (
+            <EmptyState icon="package" title="Nothing matches">
+              {containers.filter((c) => !c.departedAt).length === 0 ? 'No containers in the yard right now.' : 'Try a different search.'}
+            </EmptyState>
+          ) : (
+            <DataTable
+              data={containerRows}
+              columns={containerColumns}
+              getRowId={(c) => c.id}
+              caption="Containers in the yard"
+              pageSize={15}
+              onRowOpen={(c) => navigate(`/containers/${encodeURIComponent(c.id)}/report`)}
+              rowLabel={(c) => `${c.id}, ${c.typeCode}`}
+              empty={<EmptyState icon="package" title="Nothing matches">Try a different search.</EmptyState>}
+            />
+          )}
+        </div>
+      ) : (
+        <>
       <div className="cluster" style={{ justifyContent: 'space-between' }}>
         <div className="cluster" style={{ gap: 'var(--s-2)' }}>
           <button type="button" className="chip" aria-pressed={typeFilter === 'all'} onClick={() => setTypeFilter('all')}>
@@ -247,6 +342,8 @@ export function WorkerRoster(): React.ReactElement {
             );
           })}
         </div>
+      )}
+        </>
       )}
 
       <Modal
