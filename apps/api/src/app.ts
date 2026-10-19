@@ -7,6 +7,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { env, isProduction } from './env.js';
 import { zodToApiError } from './http.js';
+import { SupabaseRateLimitStore } from './rateLimitStore.js';
 import { authRoutes } from './routes/auth.js';
 import { externalApiRoutes } from './routes/externalApi.js';
 import { hydraMovementRoutes } from './routes/hydraMovements.js';
@@ -18,6 +19,18 @@ import { v2PowerRoutes } from './routes/v2Power.js';
 import { v2UploadRoutes } from './routes/v2Uploads.js';
 import { v2UserRoutes } from './routes/v2Users.js';
 import { v2WorkerRoutes } from './routes/v2Workers.js';
+
+/** @fastify/rate-limit's own .d.ts for a custom store's `child()` declares
+ * a `RouteOptions` parameter that doesn't match what the plugin actually
+ * passes at runtime (confirmed by reading the installed source, not
+ * guessed) -- so a correctly-typed store can never structurally satisfy
+ * the stale type. This is the real, minimal shape instead, used only to
+ * cast `SupabaseRateLimitStore` at the one call site that needs it. */
+interface RateLimitStore {
+  incr(key: string, callback: (error: Error | null, result?: { current: number; ttl: number }) => void): void;
+  child(routeOptions: unknown): RateLimitStore;
+}
+type RateLimitStoreCtor = new (options: unknown) => RateLimitStore;
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -39,7 +52,21 @@ export async function buildApp(): Promise<FastifyInstance> {
     credentials: true,
     allowedHeaders: ['content-type', 'authorization'],
   });
-  await app.register(rateLimit, { global: false, max: 300, timeWindow: '1 minute' });
+  await app.register(rateLimit, {
+    global: false,
+    max: 300,
+    timeWindow: '1 minute',
+    // A shared, Supabase-backed counter -- the default in-memory store
+    // doesn't hold under concurrency on Vercel, where every serverless
+    // instance keeps its own independent count (see rateLimitStore.ts).
+    // Cast explained above (RateLimitStoreCtor).
+    store: SupabaseRateLimitStore as unknown as RateLimitStoreCtor,
+    // A Supabase hiccup should never be the reason login itself goes down
+    // -- fails open (lets the request through unthrottled) rather than
+    // 500ing, same tradeoff this app already makes elsewhere for anything
+    // non-essential to the request actually succeeding.
+    skipOnError: true,
+  });
   await app.register(jwt, { secret: env.JWT_SECRET });
   await app.register(multipart);
 

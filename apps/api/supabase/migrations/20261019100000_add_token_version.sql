@@ -1,0 +1,13 @@
+-- Real-time access revocation. Today, a JWT keeps working exactly as signed
+-- for its full 12h life even if the admin removes the login, demotes it, or
+-- narrows its allowed_screens -- nothing re-checks the account after login.
+-- This column is the fix: bumped (to the current epoch ms, so any new value
+-- is guaranteed different -- an exact increment isn't needed, just "did
+-- this change since the token was issued") whenever a login's role or
+-- allowed_screens actually changes (apps/api/src/routes/v2Users.ts). Every
+-- authenticated request now re-checks it (apps/api/src/auth.ts's
+-- `authenticate`), so a revoked/changed account is rejected on its very
+-- next request -- not up to 12h later -- while an account whose access
+-- never changed is never asked to re-sign-in early; the JWT's own 12h
+-- expiry is untouched.
+alter table public.users add column token_version bigint not null default 0;

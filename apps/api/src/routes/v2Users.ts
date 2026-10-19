@@ -107,11 +107,19 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
     if (!body) return;
 
     const { password, ...rest } = body;
+    // Bumping this is what makes a role/screen change (or a password reset
+    // -- might as well kill other sessions too) take effect immediately
+    // instead of waiting up to 12h for the old token to expire on its own.
+    // Set to the current timestamp, not incremented -- the only requirement
+    // is "different from whatever's in any token issued before now", which
+    // a timestamp guarantees without a read-then-write race.
+    const revokesSessions = rest.role !== undefined || rest.allowedScreens !== undefined || password !== undefined;
     const patch: Record<string, unknown> = {
       ...(rest.name !== undefined && { name: rest.name }),
       ...(rest.role !== undefined && { role: rest.role }),
       ...(rest.allowedScreens !== undefined && { allowed_screens: rest.allowedScreens }),
       ...(password !== undefined && { password_hash: hashPassword(password) }),
+      ...(revokesSessions && { token_version: Date.now() }),
     };
 
     const { data, error } = await supabase().from('users').update(patch).eq('id', id).select(USER_SELECT).maybeSingle();

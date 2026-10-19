@@ -1,5 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { supabase } from './supabase.js';
 
 /* ------------------------------------------------------------------------- */
 /* Passwords — scrypt from node:crypto, so there is no native module to build  */
@@ -56,6 +57,11 @@ export interface SessionUser {
    * original admin account, which isn't a roster entry. */
   workerId: string | null;
   allowedScreens: Screen[];
+  /** Stamped from `users.token_version` at login, re-checked against the
+   * live value on every request (see `authenticate` below) — the mechanism
+   * that makes access revocation actually real-time instead of "whenever
+   * this 12h token happens to expire." */
+  tokenVersion: number;
 }
 
 /**
@@ -69,10 +75,31 @@ declare module '@fastify/jwt' {
   }
 }
 
-/** Rejects anonymous requests. Attaches the caller to `request.user`. */
+/** Rejects anonymous requests. Attaches the caller to `request.user`.
+ *
+ * Also the real-time revocation check: a valid, unexpired JWT alone is no
+ * longer enough. The signature only proves the token hasn't been tampered
+ * with -- it says nothing about whether the account behind it still has
+ * the access it had at login, 10 minutes or 10 hours ago. This re-reads
+ * `token_version` from `users` on every request and compares it to what
+ * was stamped into the token at login; a mismatch means something about
+ * this login (role, allowed_screens) changed since, or the login was
+ * deleted outright, so the token is treated as dead regardless of its own
+ * expiry. An account whose access was never touched sees no difference at
+ * all -- same 12h session, no extra sign-ins. */
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    request.user = await request.jwtVerify<SessionUser>();
+    const payload = await request.jwtVerify<SessionUser>();
+    const { data, error } = await supabase().from('users').select('token_version').eq('id', payload.id).maybeSingle();
+    if (error) throw error;
+    if (!data || (data as { token_version: number }).token_version !== payload.tokenVersion) {
+      await reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Your access has changed. Sign in again to continue.',
+      });
+      return;
+    }
+    request.user = payload;
   } catch {
     await reply.code(401).send({
       error: 'unauthorized',
