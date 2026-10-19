@@ -30,20 +30,21 @@ function categoryFor(path: string): string {
   return 'other';
 }
 
-const REDACT_KEYS = new Set(['password', 'currentPassword', 'newPassword']);
+// Matched by pattern rather than an exact set of today's field names
+// (password, currentPassword, newPassword), so a future field like `pwd` or
+// `passwordConfirm` gets caught without this file needing to know about it
+// in advance.
+const SENSITIVE_KEY = /password|secret|token/i;
 
-/** Walks one level of nesting (this app's request bodies are all flat or
- * one level deep -- survey fields, gate-in photos) rather than a full
- * recursive deep-clone; good enough to catch every password field that
- * actually exists anywhere in this app today (routes/auth.ts,
- * routes/v2Users.ts), without the cost/complexity of a generic deep walker
- * nothing here needs. */
+/** Fully recursive -- every object/array value gets passed back through
+ * redact() regardless of depth, not just the one level deep this app's
+ * request bodies actually reach today (survey fields, gate-in photos). */
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
   if (!value || typeof value !== 'object') return value;
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    out[k] = REDACT_KEYS.has(k) ? '[redacted]' : v && typeof v === 'object' ? redact(v) : v;
+    out[k] = SENSITIVE_KEY.test(k) ? '[redacted]' : redact(v);
   }
   return out;
 }
@@ -70,7 +71,7 @@ export async function logAction(request: FastifyRequest, reply: FastifyReply): P
         user_email: user?.email ?? null,
         user_role: user?.role ?? null,
         body: redact(request.body),
-        query: request.query ?? null,
+        query: redact(request.query) ?? null,
         ip: request.ip,
       });
     if (error) throw error;

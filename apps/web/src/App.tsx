@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/app/AppShell';
 import { Icon } from './components/crystal/Icon';
 import { useAuth } from './lib/auth';
@@ -9,7 +9,6 @@ import { AccessManagement } from './screens/v2/AccessManagement';
 import { Login } from './screens/Login';
 import { ContainerReport } from './screens/v2/ContainerReport';
 import { DashboardsV2 } from './screens/v2/DashboardsV2';
-import { DevLogs } from './screens/dev/DevLogs';
 import { Guide } from './screens/v2/Guide';
 import { Hydra } from './screens/v2/Hydra';
 import { ImsStock } from './screens/v2/ImsStock';
@@ -69,17 +68,7 @@ function Guarded({ screen, managerOnly, children }: { screen?: Screen; managerOn
 }
 
 export function App(): React.ReactElement {
-  const location = useLocation();
   const { status } = useAuth();
-
-  // Deliberately checked before anything about the normal session, by
-  // direct request: this page must never show the regular Sign In screen,
-  // for a developer, never an app account, reached only by knowing the
-  // exact URL. DevLogs reads nothing from AuthProvider/V2DataProvider --
-  // whether someone is signed into the real app or not never affects it
-  // either way. `useAuth()` above is still called unconditionally either
-  // way (rules of hooks), its result just goes unused on this path.
-  if (location.pathname.startsWith('/dev/logs')) return <DevLogs />;
 
   if (status === 'loading') return <Booting />;
   if (status === 'signed-out') return <Login />;

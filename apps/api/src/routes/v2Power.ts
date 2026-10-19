@@ -14,7 +14,14 @@ const setPowerSchema = z.object({ isDown: z.boolean() });
 export async function v2PowerRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
-  app.get('/api/v2/power-status', async (_request, reply) => {
+  // V2DataProvider loads this for every signed-in user regardless of which
+  // screen they're on (power state affects TnT clocks app-wide, not just
+  // Dashboards), so this can't be scoped to one screen like the POST below
+  // -- gated on having access to *any* screen instead, which only turns away
+  // an account with none at all (nothing it could see this reflected in
+  // anyway), closing the actual gap: an authenticated account with an empty
+  // allowedScreens array could otherwise still probe this.
+  app.get('/api/v2/power-status', { preHandler: requireScreen('live', 'yard', 'workers', 'dashboards', 'hydra', 'ims-stock') }, async (_request, reply) => {
     const { data, error } = await supabase()
       .from('yard_power_status')
       .select('is_down, changed_at')
