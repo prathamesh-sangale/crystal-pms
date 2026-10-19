@@ -49,6 +49,12 @@ interface AuthValue {
   status: 'loading' | 'signed-in' | 'signed-out';
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
+  /** Self-service password change for whoever's currently signed in -- the
+   * server bumps `token_version` on success (so any other open session
+   * using the old password stops working), which would also invalidate the
+   * token this very call is using, so the fresh one that comes back
+   * replaces it here rather than forcing an immediate re-login. */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   can: (permission: Permission) => boolean;
   /** Access management's own gate — unrelated to `can` above. `manager`
    * always passes (can never be locked out of their own system); everyone
@@ -115,16 +121,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     [queryClient]
   );
 
+  const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+    const result = await api.changePassword(currentPassword, newPassword);
+    token.set(result.token);
+    setUser(result.user);
+  }, []);
+
   const value = useMemo<AuthValue>(
     () => ({
       user,
       status,
       signIn,
       signOut,
+      changePassword,
       can: (permission) => (user ? PERMISSIONS[user.role].includes(permission) : false),
       hasScreenAccess: (screen) => (user ? user.role === 'manager' || user.allowedScreens.includes(screen) : false),
     }),
-    [user, status, signIn, signOut]
+    [user, status, signIn, signOut, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

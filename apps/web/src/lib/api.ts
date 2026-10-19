@@ -134,6 +134,12 @@ export const api = {
 
   me: () => request<{ user: SessionUser }>('/api/auth/me'),
 
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ token: string; user: SessionUser }>('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   v2Workers: () => request<{ workers: MockWorker[] }>('/api/v2/workers'),
 
   v2CreateWorker: (worker: MockWorker) =>

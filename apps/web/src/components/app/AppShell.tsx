@@ -15,6 +15,7 @@ import { useToast } from '../crystal/Feedback';
 import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, type MenuItem, NavSheet } from '../crystal/Overlay';
 import { GateFormDialog } from '../v2/GateFormDialog';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { CommandPalette } from './CommandPalette';
 
 /**
@@ -32,6 +33,7 @@ export function AppShell(): React.ReactElement {
   const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
   const [powerConfirmOpen, setPowerConfirmOpen] = useState(false);
   const [powerBusy, setPowerBusy] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { user, signIn, signOut, can, hasScreenAccess } = useAuth();
@@ -240,6 +242,7 @@ export function AppShell(): React.ReactElement {
             items={[
               { heading: user?.email ?? '' },
               { label: `Signed in as ${user ? roleDisplayLabel(user.role) : ''}`, icon: 'user', onSelect: () => {}, disabled: true },
+              { label: 'Change password', icon: 'edit', onSelect: () => setChangePasswordOpen(true) },
               ...switchSection,
               'separator',
               { label: 'Sign out', icon: 'power', onSelect: signOut, danger: true },
@@ -363,6 +366,8 @@ export function AppShell(): React.ReactElement {
         onConfirm={() => void handleTogglePower()}
         busy={powerBusy}
       />
+
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </div>
   );
 }
