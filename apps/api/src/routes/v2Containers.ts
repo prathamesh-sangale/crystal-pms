@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { authenticate, requireScreen, userHasScreen } from '../auth.js';
 import { notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
+import { recordTntCompletions } from '../tntRecords.js';
 import { fromContainerRow, toTaskInsert, type ContainerRow } from '../v2Mappers.js';
 
-const CONTAINER_SELECT = '*, sections(*, tasks(*))';
+const CONTAINER_SELECT = '*, sections(*, tasks(*), tnt_records(*))';
 
 const taskInputSchema = z.object({
   key: z.string().min(1),
@@ -289,8 +290,22 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     if (sectionErr) throw app.httpErrors.internalServerError(sectionErr.message);
     if (!section) return reply.code(404).send(notFound('Section'));
 
-    const { error: taskErr } = await supabase().from('tasks').update(toDbTaskPatch(body)).eq('section_id', (section as { id: string }).id).eq('key', key);
+    const sectionId = (section as { id: string }).id;
+    const { error: taskErr } = await supabase().from('tasks').update(toDbTaskPatch(body)).eq('section_id', sectionId).eq('key', key);
     if (taskErr) throw app.httpErrors.internalServerError(taskErr.message);
+
+    // Only a task settling can newly complete a whole TnT clock's group --
+    // every other kind of patch (worker assignment, scheduling) can't, so
+    // it's skipped for those. Checked (and, inside, recorded) before the
+    // refetch below, so a freshly-completed clock's record is already
+    // there in this same response.
+    if (body.state === 'done' || body.state === 'na') {
+      try {
+        await recordTntCompletions(sectionId);
+      } catch (err) {
+        throw app.httpErrors.internalServerError(err instanceof Error ? err.message : 'Could not record turnaround time.');
+      }
+    }
 
     const { data: full, error: refetchErr } = await supabase().from('containers').select(CONTAINER_SELECT).eq('id', id).single();
     if (refetchErr) throw app.httpErrors.internalServerError(refetchErr.message);

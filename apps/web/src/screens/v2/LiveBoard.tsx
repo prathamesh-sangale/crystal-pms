@@ -8,6 +8,7 @@ import {
   taskElapsedSec,
   tasksBySection,
   tasksForWorker,
+  tntStatusForTask,
   WORKER_TYPE_LABELS,
   WORKER_TYPES,
   type CrewLoad,
@@ -26,7 +27,7 @@ import { MiniStageLegend, MiniStageStrip } from '../../components/v2/MiniStageSt
 import { useStartGuard } from '../../components/v2/useStartGuard';
 import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
-import { Person } from '../../components/crystal/Data';
+import { Person, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
@@ -220,9 +221,16 @@ function StageTaskCard({
   onStop: (containerId: string, kind: SectionKind, key: string) => void;
   onCancel: (containerId: string, kind: SectionKind, key: string) => void;
 }): React.ReactElement {
+  const section = container?.sections.find((s) => s.kind === row.section);
+  const tnt = section ? tntStatusForTask(section, row.task) : null;
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
     <div className="card hoverable" style={{ breakInside: 'avoid', marginBottom: 'var(--s-4)' }} onClick={() => onOpenContainer(row.containerId)}>
+      {tnt && (
+        <div style={{ marginBottom: 'var(--s-2)' }}>
+          <StatusPill status={tnt} />
+        </div>
+      )}
       <div className="cluster" style={{ justifyContent: 'space-between' }}>
         <span className="cluster" style={{ gap: 'var(--s-1)' }}>
           <button
@@ -539,6 +547,17 @@ export function LiveBoard(): React.ReactElement {
           {containerPriority[ctx.getValue()] && <Icon name="alert" size="sm" title="Fast-track" />}
         </span>
       ),
+    }),
+    liveTaskColumnHelper.display({
+      id: 'tat',
+      header: 'TAT',
+      meta: { label: 'TAT' },
+      cell: (ctx) => {
+        const c = activeContainers.find((x) => x.id === ctx.row.original.containerId);
+        const section = c?.sections.find((s) => s.kind === ctx.row.original.section);
+        const tnt = section ? tntStatusForTask(section, ctx.row.original.task) : null;
+        return tnt ? <StatusPill status={tnt} /> : <span className="subtle">—</span>;
+      },
     }),
     ...(activeSection === 'all'
       ? [

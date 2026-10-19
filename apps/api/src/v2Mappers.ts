@@ -26,10 +26,19 @@ export interface TaskRow {
   tnt_paused_ms: number;
 }
 
+export interface TntRecordRow {
+  clock_key: string;
+  target_hrs: number;
+  started_at: string;
+  completed_at: string;
+  elapsed_ms: number;
+}
+
 export interface SectionRow {
   id: string;
   kind: string;
   tasks: TaskRow[];
+  tnt_records?: TntRecordRow[];
 }
 
 export interface ContainerRow {
@@ -49,6 +58,16 @@ export interface ContainerRow {
   gate_in: unknown;
   gate_out: unknown;
   sections?: SectionRow[];
+}
+
+function fromTntRecordRow(row: TntRecordRow): Record<string, unknown> {
+  return {
+    clockKey: row.clock_key,
+    targetHrs: Number(row.target_hrs),
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    elapsedMs: row.elapsed_ms,
+  };
 }
 
 function fromTaskRow(row: TaskRow): Record<string, unknown> {
@@ -92,7 +111,11 @@ export function fromContainerRow(row: ContainerRow): Record<string, unknown> {
       : null,
     gateIn: row.gate_in ?? null,
     gateOut: row.gate_out ?? null,
-    sections: (row.sections ?? []).map((s) => ({ kind: s.kind, tasks: (s.tasks ?? []).map(fromTaskRow) })),
+    sections: (row.sections ?? []).map((s) => ({
+      kind: s.kind,
+      tasks: (s.tasks ?? []).map(fromTaskRow),
+      tntRecords: (s.tnt_records ?? []).map(fromTntRecordRow),
+    })),
   };
 }
 

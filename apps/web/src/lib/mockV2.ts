@@ -138,6 +138,9 @@ export interface MockTask {
 export interface MockSection {
   kind: SectionKind;
   tasks: MockTask[];
+  /** Finished TnT clocks for this section (see `TntRecord` below) — absent
+   * or empty until at least one clock's group has fully settled. */
+  tntRecords?: TntRecord[];
 }
 
 /** Not a plain pass/fail — "unassessed" is its own state (distinct from
@@ -671,6 +674,41 @@ export function sectionTntStatus(section: MockSection, nowMs: number = Date.now(
  * only painting work or runs after a repair-paint job. */
 const LOGO_TNT_HRS = 11;
 
+/** The "Paint work" clock — stays visible through every non-Logo task, not
+ * just the narrower primer/coat run — paint_compressor normally finishes
+ * *after* coat2 (same dependency chain), so without this the badge would
+ * vanish the instant coat2 is marked done, right as the 10h target would
+ * actually start showing. Split out of `paintingTntStatuses` (which just
+ * combines this with `logoTntStatus` below) so `tntStatusForTask` can call
+ * the one clock a given task actually belongs to, not guess from a
+ * combined list. */
+function paintWorkTntStatus(section: MockSection, nowMs: number = Date.now()): Status | null {
+  const nonLogoTasks = section.tasks.filter((t) => t.key !== 'logo');
+  const nonLogoOpen = nonLogoTasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
+  if (nonLogoOpen.length === 0) return null;
+  const coat2 = section.tasks.find((t) => t.key === 'coat2');
+  const targetHrs = coat2 && coat2.state === 'done' ? 10 : 4;
+  const earliest = nonLogoOpen.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
+  const paused = nonLogoOpen.some((t) => Boolean(t.tntPausedAt));
+  const elapsedMs = tntElapsedMs(new Date(earliest.tntStartedAt!).getTime(), earliest.tntPausedAt, earliest.tntPausedMs, nowMs);
+  return tntStatus('Paint work', elapsedMs, targetHrs, paused);
+}
+
+/** Logo's own clock — only waits on the sequential primer/coat run
+ * (PAINT_WORK_KEYS), not on paint_compressor, which runs in parallel with
+ * it once that run settles, confirmed directly against how these tasks are
+ * actually built (GateFormDialog.tsx's confirmGateIn). */
+function logoTntStatus(section: MockSection, nowMs: number = Date.now()): Status | null {
+  const paintRun = section.tasks.filter((t) => PAINT_WORK_KEYS.includes(t.key));
+  const logo = section.tasks.find((t) => t.key === 'logo');
+  const paintRunStillOpen = paintRun.length > 0 && !paintRun.every(taskSettled);
+  if (!logo || taskSettled(logo) || !logo.tntStartedAt || paintRunStillOpen) return null;
+  const paintDoneMs = Math.max(0, ...paintRun.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
+  const startMs = Math.max(new Date(logo.tntStartedAt).getTime(), paintDoneMs);
+  const elapsedMs = tntElapsedMs(startMs, logo.tntPausedAt, logo.tntPausedMs, nowMs);
+  return tntStatus('Logo', elapsedMs, LOGO_TNT_HRS, Boolean(logo.tntPausedAt));
+}
+
 /** Painting's two independent clocks, confirmed directly as genuinely
  * separate rather than one lump total: paint-work (primer/1st/2nd coat,
  * only present when the Repair checklist called for it) and Logo. Logo's
@@ -681,39 +719,7 @@ const LOGO_TNT_HRS = 11;
  * depending on what this container's Painting section actually has. */
 export function paintingTntStatuses(section: MockSection, nowMs: number = Date.now()): Status[] {
   if (section.kind !== 'painting') return [];
-  const statuses: Status[] = [];
-
-  // The "Paint work" badge stays visible through every non-Logo task, not
-  // just the narrower primer/coat run — paint_compressor normally finishes
-  // *after* coat2 (same dependency chain), so without this the badge would
-  // vanish the instant coat2 is marked done, right as the 10h target would
-  // actually start showing.
-  const nonLogoTasks = section.tasks.filter((t) => t.key !== 'logo');
-  const nonLogoOpen = nonLogoTasks.filter((t) => !taskSettled(t) && t.tntStartedAt);
-  if (nonLogoOpen.length > 0) {
-    const coat2 = section.tasks.find((t) => t.key === 'coat2');
-    const targetHrs = coat2 && coat2.state === 'done' ? 10 : 4;
-    const earliest = nonLogoOpen.reduce((a, b) => (new Date(a.tntStartedAt!).getTime() < new Date(b.tntStartedAt!).getTime() ? a : b));
-    const paused = nonLogoOpen.some((t) => Boolean(t.tntPausedAt));
-    const elapsedMs = tntElapsedMs(new Date(earliest.tntStartedAt!).getTime(), earliest.tntPausedAt, earliest.tntPausedMs, nowMs);
-    statuses.push(tntStatus('Paint work', elapsedMs, targetHrs, paused));
-  }
-
-  // Logo's own clock only waits on the sequential primer/coat run
-  // (PAINT_WORK_KEYS) — not on paint_compressor, which runs in parallel
-  // with it once that run settles, confirmed directly against how these
-  // tasks are actually built (GateFormDialog.tsx's confirmGateIn).
-  const paintRun = section.tasks.filter((t) => PAINT_WORK_KEYS.includes(t.key));
-  const logo = section.tasks.find((t) => t.key === 'logo');
-  const paintRunStillOpen = paintRun.length > 0 && !paintRun.every(taskSettled);
-  if (logo && !taskSettled(logo) && logo.tntStartedAt && !paintRunStillOpen) {
-    const paintDoneMs = Math.max(0, ...paintRun.map((t) => (t.completedAt ? new Date(t.completedAt).getTime() : 0)));
-    const startMs = Math.max(new Date(logo.tntStartedAt).getTime(), paintDoneMs);
-    const elapsedMs = tntElapsedMs(startMs, logo.tntPausedAt, logo.tntPausedMs, nowMs);
-    statuses.push(tntStatus('Logo', elapsedMs, LOGO_TNT_HRS, Boolean(logo.tntPausedAt)));
-  }
-
-  return statuses;
+  return [paintWorkTntStatus(section, nowMs), logoTntStatus(section, nowMs)].filter((s): s is Status => s !== null);
 }
 
 /** Every applicable TnT status for one section, whichever kind it is — the
@@ -723,6 +729,54 @@ export function tntStatusesFor(section: MockSection, nowMs: number = Date.now())
   if (section.kind === 'painting') return paintingTntStatuses(section, nowMs);
   const status = sectionTntStatus(section, nowMs);
   return status ? [status] : [];
+}
+
+/** A TnT clock's final numbers, saved permanently the moment every task in
+ * its group settles (apps/api/src/tntRecords.ts) — so the badge survives a
+ * refresh or a report pulled up weeks later, not just until the next
+ * re-render. `clockKey` matches what each task maps to in `tntStatusForTask`
+ * below. */
+export interface TntRecord {
+  clockKey: 'pti' | 'repairment' | 'paint_work' | 'logo';
+  targetHrs: number;
+  startedAt: string;
+  completedAt: string;
+  elapsedMs: number;
+}
+
+/** A settled fact, not a ticking clock — `check-circle` rather than
+ * `clock`/`alert`, and past tense, so a finished badge never reads like
+ * it's still running. */
+function recordedTntStatus(label: string, record: TntRecord): Status {
+  const hrs = Math.floor(record.elapsedMs / (3600 * 1000));
+  const over = record.elapsedMs > record.targetHrs * 3600 * 1000;
+  return over
+    ? { tone: 'bad', icon: 'check-circle', label: `${label} ${hrs}h/${record.targetHrs}h`, detail: `${label} finished in ${hrs}h, past its ${record.targetHrs}h target.` }
+    : { tone: 'ok', icon: 'check-circle', label: `${label} ${hrs}h/${record.targetHrs}h`, detail: `${label} finished in ${hrs}h, within its ${record.targetHrs}h target.` };
+}
+
+const TNT_CLOCK_LABEL: Record<TntRecord['clockKey'], string> = {
+  pti: SECTION_LABELS.pti,
+  repairment: SECTION_LABELS.all_rounder,
+  paint_work: 'Paint work',
+  logo: 'Logo',
+};
+
+/** Which clock (if any) one task belongs to — Cleaning/Sailing Crew tasks
+ * have none. Checks for a permanently recorded result first (the clock's
+ * group already finished) and only falls back to a live computation when
+ * nothing's been recorded yet, so a settled clock's badge stops ticking and
+ * stays exactly what it was the moment the group actually finished. */
+export function tntStatusForTask(section: MockSection, task: MockTask, nowMs: number = Date.now()): Status | null {
+  const clockKey: TntRecord['clockKey'] | null =
+    section.kind === 'pti' ? 'pti' : section.kind === 'all_rounder' ? 'repairment' : section.kind === 'painting' ? (task.key === 'logo' ? 'logo' : 'paint_work') : null;
+  if (!clockKey) return null;
+
+  const recorded = section.tntRecords?.find((r) => r.clockKey === clockKey);
+  if (recorded) return recordedTntStatus(TNT_CLOCK_LABEL[clockKey], recorded);
+
+  if (section.kind === 'painting') return clockKey === 'logo' ? logoTntStatus(section, nowMs) : paintWorkTntStatus(section, nowMs);
+  return sectionTntStatus(section, nowMs);
 }
 
 export function isDeparted(container: MockContainer): boolean {

@@ -20,6 +20,7 @@ import {
   taskElapsedSec,
   tasksForWorker,
   taskSettled,
+  tntStatusForTask,
   TYPE_CODES,
   WORKER_TYPE_LABELS,
   type GateLogEntry,
@@ -213,6 +214,20 @@ function TaskActionCell({
           Start
         </Button>
       )}
+    </span>
+  );
+}
+
+/** The task's own actual worked time — distinct from TAT (the turnaround
+ * target/elapsed, which never factors in whether anyone's actually working
+ * it). Pulled out the same way `TaskActionCell` above is: its own scoped
+ * `useLiveTick`, so a running task's clock updates without re-rendering the
+ * rest of the table. */
+function TaskTimeCell({ task }: { task: MockTask }): React.ReactElement {
+  const now = useLiveTick(task.state === 'running');
+  return (
+    <span className="mono" style={{ fontSize: '12px', color: task.state === 'running' ? 'var(--accent)' : 'var(--text-3)' }}>
+      {task.state === 'running' && <Icon name="clock" size="sm" />} {formatElapsed(taskElapsedSec(task, now))}
     </span>
   );
 }
@@ -529,6 +544,15 @@ export function ContainerDetailDrawer({
               },
             }),
             taskColumnHelper.display({
+              id: 'tat',
+              header: 'TAT',
+              meta: { label: 'TAT' },
+              cell: (ctx) => {
+                const tnt = tntStatusForTask(section, ctx.row.original);
+                return tnt ? <StatusPill status={tnt} /> : <span className="subtle">—</span>;
+              },
+            }),
+            taskColumnHelper.display({
               id: 'worker',
               header: 'Worker',
               meta: { label: 'Worker' },
@@ -538,6 +562,14 @@ export function ContainerDetailDrawer({
                 if (worker && task.state !== 'na') return <Person name={worker.name} detail={WORKER_TYPE_LABELS[worker.type]} />;
                 return <span className="subtle">{task.state === 'pending' ? 'Unassigned' : '—'}</span>;
               },
+            }),
+            taskColumnHelper.display({
+              id: 'time',
+              header: 'Time',
+              // Secondary (drops out of the modal's narrower layout first) --
+              // the task's own actual worked time, separate from TAT above.
+              meta: { label: 'Time', secondary: true },
+              cell: (ctx) => <TaskTimeCell task={ctx.row.original} />,
             }),
             taskColumnHelper.display({
               id: 'scheduled',
