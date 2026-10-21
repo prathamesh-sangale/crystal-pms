@@ -1,12 +1,5 @@
 import type { SessionUser } from './api';
 
-/**
- * Seeded fixture accounts (apps/api/scripts/seedUsers.ts) — dev/test convenience
- * only. This module is only ever imported behind `import.meta.env.DEV` checks,
- * so it never ships in a production build.
- */
-export const DEV_PASSWORD = 'readiness';
-
 export interface DevAccount {
   role: SessionUser['role'];
   label: string;
@@ -14,19 +7,15 @@ export interface DevAccount {
   password: string;
 }
 
-export const DEV_ACCOUNTS: DevAccount[] = [
-  { role: 'manager', label: 'Manager', email: 'admin@crystalpms.com', password: 'admin123' },
-  { role: 'supervisor', label: 'Supervisor', email: 'supervisor@reeferready.example', password: DEV_PASSWORD },
-  { role: 'technician', label: 'Technician', email: 'tech@reeferready.example', password: DEV_PASSWORD },
-  { role: 'viewer', label: 'Viewer', email: 'viewer@reeferready.example', password: DEV_PASSWORD },
-];
-
 /**
- * The product is moving to a single Admin account (SPEC.md) — the manager
- * role is the closest match today, so it's what the UI now labels "Admin"
- * and the only account the on-screen shortcuts offer. The other three
- * accounts above still work exactly as before; they're just reached by
- * typing credentials (see README.md) rather than a one-click shortcut,
- * since the real routes/permissions haven't changed yet.
+ * The one-click dev shortcut (Login.tsx, AppShell's account switcher) —
+ * `import.meta.env.DEV`-gated, so it never ships in a production build. The
+ * product moved to a single Admin account (SPEC.md), so this is the only
+ * account a shortcut offers; everything else signs in by typing real
+ * credentials. This used to also list three seeded dev/test fixture
+ * accounts (supervisor/technician/viewer, sharing one placeholder password)
+ * — removed by direct request along with the seed script that created them
+ * (apps/api/scripts/seedUsers.ts), once they weren't wanted sitting in
+ * Access Management as fake logins anymore.
  */
-export const ADMIN_ACCOUNT: DevAccount = { ...DEV_ACCOUNTS[0]!, label: 'Admin' };
+export const ADMIN_ACCOUNT: DevAccount = { role: 'manager', label: 'Admin', email: 'admin@crystalpms.com', password: 'admin123' };

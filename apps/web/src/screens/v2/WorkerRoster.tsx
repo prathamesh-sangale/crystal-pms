@@ -247,11 +247,18 @@ export function WorkerRoster(): React.ReactElement {
           empty={<EmptyState icon="user" title="No workers in this view">Try a different type filter.</EmptyState>}
         />
       ) : (
-        // CSS multi-column, not CSS Grid: a grid row's height is set by its
-        // tallest cell, so a worker card with no notes still gets stretched
-        // or left floating above bare space next to a taller one. Columns
-        // pack each card tight to its own content instead.
-        <div style={{ columnWidth: '260px', columnGap: 'var(--s-4)' }}>
+        // CSS Grid, not multi-column: column-width only adds a new column
+        // when there's room for a *full* one, so any leftover sliver of
+        // width short of that sits unused at the row's end instead of
+        // joining the existing columns — visible, jarring dead space at
+        // wider viewports. Grid's 1fr tracks divide the actual available
+        // width evenly instead, with no leftover. align-items: start keeps
+        // each row's own height independent of the row's tallest card
+        // (what the old column layout's own comment was protecting against)
+        // — a shorter card simply doesn't stretch to match a taller
+        // neighbor, it just leaves blank space below itself within that
+        // row, same as before.
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 'var(--s-4)', alignItems: 'start' }}>
           {rows.map((w) => {
             const todayCount = tasksForWorker(containers, w.id).filter((t) => isScheduledFor(t.task, offsetDate(0))).length;
             return (
@@ -274,7 +281,7 @@ export function WorkerRoster(): React.ReactElement {
               <div
                 key={w.id}
                 className="card hoverable"
-                style={{ textAlign: 'left', cursor: 'pointer', breakInside: 'avoid', marginBottom: 'var(--s-4)' }}
+                style={{ textAlign: 'left', cursor: 'pointer' }}
                 onClick={() => setOpenId(w.id)}
               >
                 <div className="cluster" style={{ justifyContent: 'space-between' }}>

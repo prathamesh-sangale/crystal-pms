@@ -1,7 +1,7 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type AccessUser, type Screen } from '../../lib/api';
-import { roleDisplayLabel } from '../../lib/auth';
+import { roleDisplayLabel, useAuth } from '../../lib/auth';
 import { WORKER_TYPE_LABELS, WORKER_TYPES, type MockWorker, type WorkerType } from '../../lib/mockV2';
 import { NAV_ITEMS } from '../../lib/nav';
 import { useV2Data } from '../../lib/v2Store';
@@ -76,6 +76,7 @@ function emptyDraft(kind: DraftKind, workerId: string | null = null): Draft {
 }
 
 export function AccessManagement(): React.ReactElement {
+  const { user: signedInUser } = useAuth();
   const { workers, addWorker } = useV2Data();
   const [users, setUsers] = useState<AccessUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,6 +99,13 @@ export function AccessManagement(): React.ReactElement {
   const workerById = useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers]);
   const workerIdsWithLogin = useMemo(() => new Set(users.filter((u) => u.workerId).map((u) => u.workerId as string)), [users]);
   const workersWithoutLogin = useMemo(() => workers.filter((w) => !workerIdsWithLogin.has(w.id)), [workers, workerIdsWithLogin]);
+  // The signed-in account manages everyone else here, rather than being one
+  // more row to manage itself — still fully editable by anyone else with
+  // manager access, just not shown to itself by default. `users` (not this)
+  // stays the source every lookup above reads from, so nothing about
+  // whether a worker already has a login depends on who happens to be
+  // looking at the page right now.
+  const visibleUsers = useMemo(() => users.filter((u) => u.id !== signedInUser?.id), [users, signedInUser?.id]);
 
   const displayName = (u: AccessUser): string => (u.workerId && workerById.get(u.workerId)?.name) || u.name;
 
@@ -318,26 +326,30 @@ export function AccessManagement(): React.ReactElement {
         <EmptyState icon="shield" title="Loading access list…">
           One moment.
         </EmptyState>
-      ) : users.length === 0 ? (
-        <EmptyState icon="shield" title="No one has access yet">
+      ) : visibleUsers.length === 0 ? (
+        <EmptyState icon="shield" title="No one else has access yet">
           Use New login or New worker with access above.
         </EmptyState>
       ) : displayMode === 'list' ? (
         <DataTable
-          data={users}
+          data={visibleUsers}
           columns={columns}
           getRowId={(u) => u.id}
           caption="Everyone who can sign in"
           pageSize={10}
           rowLabel={(u) => displayName(u)}
-          empty={<EmptyState icon="shield" title="No one has access yet">Use New login or New worker with access above.</EmptyState>}
+          empty={<EmptyState icon="shield" title="No one else has access yet">Use New login or New worker with access above.</EmptyState>}
         />
       ) : (
-        <div style={{ columnWidth: '300px', columnGap: 'var(--s-4)' }}>
-          {users.map((u) => {
+        // CSS Grid, not multi-column: column-width only adds a new column
+        // when there's room for a *full* one, leaving a leftover sliver of
+        // width as dead space at the row's end instead of distributing it —
+        // Grid's 1fr tracks divide the real available width evenly instead.
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 'var(--s-4)', alignItems: 'start' }}>
+          {visibleUsers.map((u) => {
             const worker = u.workerId ? workerById.get(u.workerId) : null;
             return (
-              <div key={u.id} className="card" style={{ breakInside: 'avoid', marginBottom: 'var(--s-4)' }}>
+              <div key={u.id} className="card">
                 <div className="stack">
                   <div className="cluster" style={{ justifyContent: 'space-between' }}>
                     <Person name={displayName(u)} detail={worker ? `${roleDisplayLabel(u.role)} · ${WORKER_TYPE_LABELS[worker.type]}` : roleDisplayLabel(u.role)} />
