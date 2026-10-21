@@ -40,7 +40,12 @@ const schema = z.object({
   // route (routes/devLogs.ts) never accepts a password and stays
   // unreachable, not a reason to fail the whole API at boot like the
   // Supabase vars above. Nothing to do with the app's own users/sessions.
-  DEV_LOGS_PASSWORD: z.string().min(16, 'must be at least 16 characters').optional(),
+  // No minimum beyond non-empty, by direct request -- matches the login
+  // route's own schema (routes/devLogs.ts), which already accepts any
+  // non-empty password. Rate-limited the same way the login route is
+  // (10/min), which is the actual guard against guessing a short value, not
+  // length validation at boot.
+  DEV_LOGS_PASSWORD: z.string().min(1).optional(),
 });
 
 const parsed = schema.safeParse(process.env);
