@@ -1,6 +1,7 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type HydraMovement } from '../../lib/api';
+import { isValidContainerNo } from '../../lib/containerNo';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
@@ -57,9 +58,11 @@ export function Hydra(): React.ReactElement {
   }, []);
 
   const isShifting = draft.movementType === 'Shifting';
+  const containerNoTrimmed = draft.containerNo.trim();
+  const containerNoInvalid = containerNoTrimmed !== '' && !isValidContainerNo(containerNoTrimmed);
 
   const handleSubmit = async (): Promise<void> => {
-    if (!draft.containerNo.trim()) return;
+    if (!containerNoTrimmed || containerNoInvalid) return;
     setSubmitting(true);
     try {
       let fileId: string | null = null;
@@ -162,7 +165,7 @@ export function Hydra(): React.ReactElement {
             <Field label="Date" required>
               {(props) => <input {...props} type="date" value={draft.movementDate} onChange={(e) => setDraft((d) => ({ ...d, movementDate: e.target.value }))} />}
             </Field>
-            <Field label="Container No." required>
+            <Field label="Container No." required error={containerNoInvalid ? 'Invalid container number' : undefined}>
               {(props) => (
                 <input
                   {...props}
@@ -226,7 +229,7 @@ export function Hydra(): React.ReactElement {
                 />
               )}
             </Field>
-            <Button variant="primary" icon="check-circle" onClick={handleSubmit} loading={submitting} disabled={!draft.containerNo.trim()}>
+            <Button variant="primary" icon="check-circle" onClick={handleSubmit} loading={submitting} disabled={!containerNoTrimmed || containerNoInvalid}>
               Submit
             </Button>
           </div>
