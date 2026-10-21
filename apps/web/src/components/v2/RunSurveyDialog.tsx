@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   buildSurveyFields,
-  MACHINE_CHECK_FIELDS,
   recommendedSurveySections,
   REPAIR_ITEMS,
   surveySectionTasks,
@@ -15,7 +14,7 @@ import { Button } from '../crystal/Button';
 import { useToast } from '../crystal/Feedback';
 import { CheckboxField, Field } from '../crystal/Form';
 import { Modal } from '../crystal/Overlay';
-import { blankFields, FieldRow, RepairFieldRow, type DraftField } from './GateFormDialog';
+import { blankFields, RepairFieldRow, type DraftField } from './GateFormDialog';
 
 /** Everything a mid-survey draft needs to resume exactly where it left off
  * — the dialog's own full assessment state, nothing from the container
@@ -31,7 +30,7 @@ export interface SurveyDraftData {
   repairRequired: boolean;
   repairFields: DraftField[];
   machineIssueFound: boolean;
-  machineFields: DraftField[];
+  machineRepairNote: string;
   cleaningRequired: boolean;
   remarks: string;
   sections: Record<SectionKind, boolean>;
@@ -118,7 +117,7 @@ export function RunSurveyDialog({
   const [repairRequired, setRepairRequired] = useState(false);
   const [repairFields, setRepairFields] = useState<DraftField[]>(() => blankFields(REPAIR_ITEMS, 'good'));
   const [machineIssueFound, setMachineIssueFound] = useState(false);
-  const [machineFields, setMachineFields] = useState<DraftField[]>(() => blankFields(MACHINE_CHECK_FIELDS));
+  const [machineRepairNote, setMachineRepairNote] = useState('');
   const [cleaningRequired, setCleaningRequired] = useState(false);
   const [remarks, setRemarks] = useState('');
   const [sections, setSections] = useState<Record<SectionKind, boolean>>(BLANK_SECTIONS);
@@ -137,7 +136,7 @@ export function RunSurveyDialog({
     setRepairRequired(d?.repairRequired ?? false);
     setRepairFields(d?.repairFields ?? blankFields(REPAIR_ITEMS, 'good'));
     setMachineIssueFound(d?.machineIssueFound ?? false);
-    setMachineFields(d?.machineFields ?? blankFields(MACHINE_CHECK_FIELDS));
+    setMachineRepairNote(d?.machineRepairNote ?? '');
     setCleaningRequired(d?.cleaningRequired ?? false);
     setRemarks(d?.remarks ?? '');
     setSections(d?.sections ?? BLANK_SECTIONS);
@@ -149,8 +148,8 @@ export function RunSurveyDialog({
   // over -- a plain dependency array on every field would re-run this
   // effect (and its cleanup) on every keystroke, which is exactly what a
   // ref avoids.
-  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], machineIssueFound: false, machineFields: [], cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
-  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, machineIssueFound, machineFields, cleaningRequired, remarks, sections };
+  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], machineIssueFound: false, machineRepairNote: '', cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
+  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, machineIssueFound, machineRepairNote, cleaningRequired, remarks, sections };
   // Set right before a successful confirm() closes the dialog, so the
   // effect below knows not to turn a just-submitted survey back into a
   // leftover draft of itself.
@@ -181,12 +180,6 @@ export function RunSurveyDialog({
   const setRepairNote = (key: string, note: string): void => {
     setRepairFields((cur) => cur.map((f) => (f.key === key ? { ...f, note } : f)));
   };
-  const setMachineSeverity = (key: string, severity: DraftField['severity']): void => {
-    setMachineFields((cur) => cur.map((f) => (f.key === key ? { ...f, severity, note: severity === 'minor' || severity === 'major' ? f.note : '' } : f)));
-  };
-  const setMachineNote = (key: string, note: string): void => {
-    setMachineFields((cur) => cur.map((f) => (f.key === key ? { ...f, note } : f)));
-  };
 
   const assessment = {
     isReefer,
@@ -197,7 +190,7 @@ export function RunSurveyDialog({
     repairRequired,
     repairFields,
     machineIssueFound,
-    machineFields,
+    machineRepairNote,
     cleaningRequired,
     remarks,
   };
@@ -344,11 +337,9 @@ export function RunSurveyDialog({
           {isReefer && machineIssueFound && (
             <>
               <div className="divider-lbl">Machine Check</div>
-              <div className="checklist-grid" style={{ paddingLeft: 'var(--s-2)', borderLeft: '2px solid var(--line)' }}>
-                {machineFields.map((f) => (
-                  <FieldRow key={f.key} field={f} onSeverity={(s) => setMachineSeverity(f.key, s)} onNote={(n) => setMachineNote(f.key, n)} />
-                ))}
-              </div>
+              <Field label="What repairment is required?" hint="Describe the machine issue — no itemized checklist, just what needs fixing.">
+                {(props) => <textarea {...props} rows={3} value={machineRepairNote} onChange={(e) => setMachineRepairNote(e.target.value)} />}
+              </Field>
             </>
           )}
 

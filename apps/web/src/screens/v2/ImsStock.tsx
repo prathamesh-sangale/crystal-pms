@@ -12,7 +12,6 @@ import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import type { IconName } from '../../components/crystal/Icon';
-import { GateFormDialog } from '../../components/v2/GateFormDialog';
 
 type DisplayMode = 'cards' | 'list';
 
@@ -50,35 +49,33 @@ export function ImsStock(): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
-  const [gateInId, setGateInId] = useState<string | null>(null);
   const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { user, can } = useAuth();
-  const { containers, gateIn, saveDraft, discardDraft } = useV2Data();
+  const { containers, gateIn } = useV2Data();
   const toast = useToast();
 
-  // Containers already active in our own yard — offering "Gate in" again for
-  // one of these would just hit the dialog's own duplicate-id error, so it's
+  // Containers already active in our own yard — offering this again for one
+  // of these would just hit the server's own duplicate-id error, so it's
   // disabled here instead, before the admin gets that far.
   const activeIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
 
   const handleGateIn = useCallback(
     async (container: MockContainer): Promise<void> => {
       await gateIn(container);
-      toast.ok('Container registered', `${container.id} ${container.sections.length ? `has ${container.sections.length} section(s) open.` : 'is ready to move.'}`);
+      toast.ok('Container registered', `${container.id} is ready to move.`);
       navigate('/yard');
     },
     [gateIn, navigate, toast]
   );
 
-  /** The true one-click path, by direct request: a container IMS already
-   * knows about doesn't need any form at all, let alone a survey, if the
-   * admin already knows there's nothing to flag — this registers it exactly
-   * like a clean "nothing flagged" Gate-In would, with zero fields asked. No
-   * transport/vehicle details are captured (not asked for this path, by
-   * direct request). For anything that actually needs inspecting, "Add &
-   * survey" is the other button. */
+  /** The only path now, by direct request: an IMS-known container never
+   * goes through the Gate-In form at all — that's exclusively for a
+   * genuinely new arrival not yet in IMS. This registers it exactly like a
+   * clean "nothing flagged" Gate-In would, with zero fields asked. A survey
+   * can still be run on it afterward, any time, via "Run survey" in its own
+   * detail drawer — a separate action now, not a second button here. */
   const handleQuickAdd = useCallback(async (item: ImsMatch): Promise<void> => {
     const container = buildQuickAddContainer(item, user?.email ?? '');
     if (!container) return;
@@ -194,27 +191,16 @@ export function ImsStock(): React.ReactElement {
                   );
                 }
                 return (
-                  <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon="plus"
-                      disabled={!item.suggestedTypeCode || !item.suggestedSize || quickAddingId !== null}
-                      loading={quickAddingId === item.containerId}
-                      onClick={() => void handleQuickAdd(item)}
-                    >
-                      Add to yard
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="doc"
-                      disabled={quickAddingId !== null}
-                      onClick={() => setGateInId(item.containerId)}
-                    >
-                      Add &amp; survey
-                    </Button>
-                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="plus"
+                    disabled={!item.suggestedTypeCode || !item.suggestedSize || quickAddingId !== null}
+                    loading={quickAddingId === item.containerId}
+                    onClick={() => void handleQuickAdd(item)}
+                  >
+                    Add to yard
+                  </Button>
                 );
               },
             }),
@@ -362,49 +348,22 @@ export function ImsStock(): React.ReactElement {
                     Already in yard
                   </Button>
                 ) : (
-                  <div className="cluster" style={{ gap: 'var(--s-2)', marginTop: 'var(--s-3)' }}>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      icon="plus"
-                      disabled={!i.suggestedTypeCode || !i.suggestedSize || quickAddingId !== null}
-                      loading={quickAddingId === i.containerId}
-                      onClick={() => void handleQuickAdd(i)}
-                      style={{ flex: 1 }}
-                    >
-                      Add to yard
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon="doc"
-                      disabled={quickAddingId !== null}
-                      onClick={() => setGateInId(i.containerId)}
-                      style={{ flex: 1 }}
-                    >
-                      Add &amp; survey
-                    </Button>
-                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon="plus"
+                    disabled={!i.suggestedTypeCode || !i.suggestedSize || quickAddingId !== null}
+                    loading={quickAddingId === i.containerId}
+                    onClick={() => void handleQuickAdd(i)}
+                    style={{ marginTop: 'var(--s-3)', width: '100%' }}
+                  >
+                    Add to yard
+                  </Button>
                 ))}
             </div>
           ))}
         </div>
       )}
-
-      <GateFormDialog
-        mode="in"
-        open={gateInId !== null}
-        onOpenChange={(next) => {
-          if (!next) setGateInId(null);
-        }}
-        prefillId={gateInId}
-        fast
-        onGateIn={handleGateIn}
-        existingIds={[...activeIds]}
-        onSaveDraft={saveDraft}
-        onDiscardDraft={discardDraft}
-        loggedInEmail={user?.email}
-      />
     </div>
   );
 }

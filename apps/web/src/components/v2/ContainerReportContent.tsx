@@ -3,8 +3,8 @@ import {
   FIELD_SEVERITY_LABELS,
   formatElapsed,
   formatSurveyDate,
-  GATE_PHOTO_SLOTS,
   isReadyToMove,
+  MACHINE_REPAIR_LABEL,
   SECTION_LABELS,
   taskSettled,
   WORKER_TYPE_LABELS,
@@ -15,7 +15,7 @@ import {
   type MockWorker,
 } from '../../lib/mockV2';
 import { DataPanel, Person, StatusPill } from '../crystal/Data';
-import { Icon } from '../crystal/Icon';
+import { gateLogPhotoEntries, PhotoThumb } from './PhotoThumb';
 
 const SEVERITY_DOT: Record<FieldSeverity, string> = {
   unassessed: 'var(--text-3)',
@@ -44,35 +44,8 @@ function SeverityRow({ field }: { field: MockSurveyField }): React.ReactElement 
  * the nine required inspection photos (and any additional ones) as actual
  * thumbnails, since they're what the real gate portal treats as the primary
  * evidence of condition at that movement. */
-/** A real Drive link (https://drive.google.com/...) is a viewer *page*, not
- * raw image bytes — embedding it directly as an <img src> shows a broken
- * image, not the photo. Only a `blob:` URL (the old, pre-upload, in-tab-only
- * representation — shouldn't occur going forward, kept only so an
- * already-open draft from before this change doesn't render broken) can
- * actually be inlined; anything else opens in Drive instead. */
-function PhotoThumb({ url, label }: { url: string; label: string }): React.ReactElement {
-  if (url.startsWith('blob:')) {
-    return <img src={url} alt={label} className="photo-thumb" />;
-  }
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      className="photo-thumb"
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'var(--s-1)', color: 'var(--text-2)', textDecoration: 'none' }}
-    >
-      <Icon name="external" size="md" />
-      <span style={{ fontSize: '10.5px', fontWeight: 600 }}>View photo</span>
-    </a>
-  );
-}
-
 function GateLogPanel({ title, entry }: { title: string; entry: GateLogEntry }): React.ReactElement {
-  const photoEntries = [
-    ...GATE_PHOTO_SLOTS.map((slot) => ({ label: slot.label, url: entry.photos[slot.key] })).filter((p) => p.url),
-    ...entry.photos.additional.map((url, i) => ({ label: `Additional ${i + 1}`, url })),
-  ];
+  const photoEntries = gateLogPhotoEntries(entry);
   return (
     <DataPanel title={title} meta={`${formatSurveyDate(entry.movementDate)} · logged by ${entry.loggedBy || 'unspecified'}`}>
       <div className="stack stack-tight">
@@ -160,15 +133,10 @@ function GateLogPanel({ title, entry }: { title: string; entry: GateLogEntry }):
             </ul>
           </div>
         )}
-        {entry.machineFields.length > 0 && (
-          <div>
-            <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11px', color: 'var(--text-2)', margin: 'var(--s-2) 0 2px' }}>
-              Machine issues flagged
-            </div>
-            <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', fontSize: '12.5px' }}>
-              {entry.machineFields.map((f) => <SeverityRow key={f.label} field={f} />)}
-            </ul>
-          </div>
+        {entry.machineIssueFound && entry.machineRepairNote.trim() && (
+          <p style={{ margin: 0, fontSize: '12.5px' }}>
+            <b style={{ fontWeight: 600 }}>Machine repair needed</b> — {entry.machineRepairNote}
+          </p>
         )}
 
         {photoEntries.length > 0 && (
@@ -207,7 +175,7 @@ export function ContainerReportContent({
   const ready = Boolean(container.readyAt) || isReadyToMove(container);
 
   const inspectionFields = container.survey?.fields.slice(0, CONTAINER_INSPECTION_FIELDS.length) ?? [];
-  const machineFields = container.survey?.fields.slice(CONTAINER_INSPECTION_FIELDS.length) ?? [];
+  const machineRepairField = container.survey?.fields.find((f) => f.label === MACHINE_REPAIR_LABEL) ?? null;
 
   return (
     <div className="stack stack-loose">
@@ -271,16 +239,36 @@ export function ContainerReportContent({
               </div>
             )}
 
-            {machineFields.length > 0 && (
+            {machineRepairField && (
               <div>
                 <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11px', color: 'var(--text-2)', margin: 'var(--s-2) 0 2px' }}>
                   Machine Check
                 </div>
-                <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', fontSize: '12.5px' }}>
-                  {machineFields.map((f) => (
-                    <SeverityRow key={f.label} field={f} />
+                <p style={{ margin: 0, fontSize: '12.5px' }}>{machineRepairField.note || 'Flagged, no remark given.'}</p>
+              </div>
+            )}
+
+            {/* Direct request: it must be clear which of the three real
+               moments (Gate In, Gate Out, or this — the completion photo
+               required before "Mark ready to move") any shown photo
+               belongs to. Gate In/Out already have their own titled panels
+               above; this was previously missing from the report
+               entirely, even though it's a required photo. */}
+            {container.readyPhotoUrls.length > 0 && (
+              <div>
+                <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11px', color: 'var(--text-2)', margin: 'var(--s-2) 0 2px' }}>
+                  Ready to Move Photos{container.readyAt && ` — ${formatSurveyDate(container.readyAt)}`}
+                </div>
+                <div className="photo-grid">
+                  {container.readyPhotoUrls.map((url, i) => (
+                    <figure key={url} style={{ margin: 0 }}>
+                      <PhotoThumb url={url} label={`Ready to move ${i + 1}`} />
+                      <figcaption className="subtle" style={{ fontSize: '10.5px', marginTop: '4px' }}>
+                        Ready to move {i + 1}
+                      </figcaption>
+                    </figure>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
           </div>

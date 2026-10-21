@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { authenticate, requireScreen } from '../auth.js';
+import { parseOr422 } from '../http.js';
 import { uploadToDrive } from '../googleDrive.js';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB — covers the PTI video, the largest file this form ever sends.
@@ -12,6 +14,14 @@ const ALLOWED_MIME_EXACT = ['application/pdf'];
 function isAllowedMimeType(mimetype: string): boolean {
   return ALLOWED_MIME_EXACT.includes(mimetype) || ALLOWED_MIME_PREFIXES.some((prefix) => mimetype.startsWith(prefix));
 }
+
+// A query param, not a multipart form field — `request.file()` resolves as
+// soon as it hits the first file part of the stream, so a field sent after
+// the file in the same FormData isn't guaranteed to be captured yet. The
+// query string has no such ordering gotcha. Defaults to 'other' for a
+// caller that genuinely doesn't have one of the three real moments (Hydra's
+// own upload today) rather than failing the upload outright.
+const uploadQuerySchema = z.object({ category: z.enum(['gate-in', 'gate-out', 'survey', 'other']).default('other') });
 
 /** Keeps the original name recognisable (so "IMG_0231.jpg" still reads as
  * that in Drive) while dropping path separators and anything that isn't
@@ -35,6 +45,8 @@ export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
 
   app.post('/api/v2/uploads', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
+    const query = await parseOr422(uploadQuerySchema, request.query, reply);
+    if (!query) return;
     const file = await request.file({ limits: { fileSize: MAX_BYTES } });
     if (!file) {
       return reply.code(422).send({ error: 'validation_failed', message: 'No file was sent with this request.' });
@@ -44,7 +56,7 @@ export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
     }
     const buffer = await file.toBuffer();
     try {
-      const uploaded = await uploadToDrive(buffer, sanitizeFilename(file.filename), file.mimetype);
+      const uploaded = await uploadToDrive(buffer, sanitizeFilename(file.filename), file.mimetype, query.category);
       return reply.code(201).send(uploaded);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not upload this file.';

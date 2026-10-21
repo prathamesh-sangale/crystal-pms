@@ -20,43 +20,38 @@ import { Select } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
 import { Modal } from '../crystal/Overlay';
 
-/** Which section a worker's type actually does, and — inside that section —
- * which tasks are theirs. A plain function, not a lookup table, because
- * Painter Helper needs a real predicate (only the tape/gasket and
- * compressor-and-display tasks, SPEC.md §4.3), not just a section match. */
-function roleFilterFor(type: WorkerType): { kind: SectionKind; matchesTask: (task: MockTask) => boolean } {
-  switch (type) {
-    case 'painter':
-      return { kind: 'painting', matchesTask: (t) => !t.ownerType || t.ownerType === 'painter' };
-    case 'painter_helper':
-      return { kind: 'painting', matchesTask: (t) => t.ownerType === 'painter_helper' };
-    case 'technician':
-      return { kind: 'pti', matchesTask: () => true };
-    // Covers cleaning when needed, per the Tea Boy roster note — no section
-    // of their own in the data model, so this is the closest real fit.
-    case 'cleaner':
-    case 'tea_boy':
-      return { kind: 'cleaning', matchesTask: () => true };
-    case 'all_rounder':
-      return { kind: 'all_rounder', matchesTask: () => true };
-    case 'sailing_crew':
-      return { kind: 'sailing', matchesTask: () => true };
-  }
-}
+/** Which section a worker's designation normally does — used only to pick a
+ * sensible *default* section when the dialog opens, never as a restriction:
+ * any worker can be given work in any section, direct request, with
+ * designation kept purely as a label. */
+const DEFAULT_SECTION_FOR: Record<WorkerType, SectionKind> = {
+  painter: 'painting',
+  painter_helper: 'painting',
+  technician: 'pti',
+  // Covers cleaning when needed, per the Tea Boy roster note — no section
+  // of their own in the data model, so this is the closest real fit.
+  cleaner: 'cleaning',
+  tea_boy: 'cleaning',
+  all_rounder: 'all_rounder',
+  sailing_crew: 'sailing',
+};
 
-/** Preset labels offered under "Add a new task" for each role — on top of
- * whatever's already pending from Gate-In. Client request: these roles had
- * no way to get new, specifically-labelled work added once a container was
- * already in the yard (sticker removal, office cleaning, a new repair, a
- * Sailing Crew container move — none of these come from the fixed Gate-In
- * builders). A free-text "Other" option is always offered alongside these,
- * regardless of role. */
-const ROLE_TASK_PRESETS: Partial<Record<WorkerType, string[]>> = {
-  cleaner: ['Yard cleaning', 'Washroom cleaning', 'Kitchen cleaning', 'Office cleaning'],
-  tea_boy: ['Yard cleaning', 'Washroom cleaning', 'Kitchen cleaning', 'Office cleaning'],
+const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
+
+/** Preset labels offered under "Add a new task" for whichever section is
+ * currently selected — on top of whatever's already pending from Gate-In.
+ * Client request: these had no way to get new, specifically-labelled work
+ * added once a container was already in the yard (sticker removal, office
+ * cleaning, a new repair, a Sailing Crew container move — none of these
+ * come from the fixed Gate-In builders). A free-text "Other" option is
+ * always offered alongside these, regardless of section. Keyed by section
+ * rather than worker type now, since any worker can be the one picking a
+ * section's presets. */
+const SECTION_TASK_PRESETS: Partial<Record<SectionKind, string[]>> = {
+  cleaning: ['Yard cleaning', 'Washroom cleaning', 'Kitchen cleaning', 'Office cleaning'],
   all_rounder: ['Painting', 'Dry repair', 'Reefer repair'],
-  painter: ['Sticker removing'],
-  sailing_crew: ['Loading', 'Unloading', 'Shifting', 'Container list'],
+  painting: ['Sticker removing'],
+  sailing: ['Loading', 'Unloading', 'Shifting', 'Container list'],
 };
 
 /** A stable, readable task key from a label — lowercase, hyphenated, with a
@@ -102,6 +97,7 @@ export function AssignWorkDialog({
   initialDate?: string;
 }): React.ReactElement {
   const [date, setDate] = useState(initialDate ?? offsetDate(0));
+  const [sectionKind, setSectionKind] = useState<SectionKind>('painting');
   const [containerId, setContainerId] = useState('');
   // What's been picked so far, across every container visited this session
   // — switching the container dropdown used to wipe this, which meant a
@@ -117,6 +113,7 @@ export function AssignWorkDialog({
   useEffect(() => {
     if (open) {
       setDate(initialDate ?? offsetDate(0));
+      setSectionKind(worker ? DEFAULT_SECTION_FOR[worker.type] : 'painting');
       setContainerId('');
       setPicked([]);
       setNewTaskLabel('');
@@ -125,21 +122,25 @@ export function AssignWorkDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-running on every initialDate identity change would reset the in-progress date pick
   }, [open, worker?.id]);
 
-  const roleFilter = worker ? roleFilterFor(worker.type) : null;
-
   // What this worker already has on the selected date — the "manipulate
   // what's already given" half of the dialog.
   const alreadyScheduled: LiveTask[] = worker ? tasksForWorker(containers, worker.id).filter((r) => isScheduledFor(r.task, date)) : [];
 
   // Every active container, not just ones with a pre-existing matching
   // task — "Add a new task" below means there's always somewhere to put
-  // new work, even for a role (Sailing Crew) or label (sticker removing,
+  // new work, even for a section (Sailing Crew) or label (sticker removing,
   // office cleaning) nothing was ever generated for at Gate-In.
-  const eligibleContainers = roleFilter ? containers.filter((c) => !c.departedAt) : [];
+  const eligibleContainers = worker ? containers.filter((c) => !c.departedAt) : [];
 
   const selectedContainer = containers.find((c) => c.id === containerId) ?? null;
-  const section = selectedContainer?.sections.find((s) => s.kind === roleFilter?.kind) ?? null;
-  const pickableTasks = section && roleFilter ? section.tasks.filter((t) => !taskSettled(t) && t.state === 'pending' && !t.workerId && roleFilter.matchesTask(t)) : [];
+  const section = selectedContainer?.sections.find((s) => s.kind === sectionKind) ?? null;
+  // Any pending, unassigned task in the chosen section is pickable now —
+  // designation no longer gates which tasks a worker can be given, and
+  // neither does sequence: a worker can be put on 1st/2nd coat (or Logo)
+  // while an earlier painting step is still open, direct request. Only
+  // *starting* a task still waits on the sequence (enforced where Start
+  // actually happens — Container Detail / Live Board — not here).
+  const pickableTasks = section ? section.tasks.filter((t) => !taskSettled(t) && t.state === 'pending' && !t.workerId) : [];
 
   const isPicked = (key: string): boolean => picked.some((p) => p.containerId === containerId && p.key === key);
 
@@ -179,14 +180,14 @@ export function AssignWorkDialog({
   };
 
   const handleAddNewTask = async (): Promise<void> => {
-    if (!selectedContainer || !roleFilter || !worker) return;
+    if (!selectedContainer || !worker) return;
     const label = (newTaskLabel === 'Other' ? customLabel : newTaskLabel).trim();
     if (!label) return;
     const key = taskKeyFor(label);
     setAddingTask(true);
     try {
-      await onAddTask(selectedContainer.id, roleFilter.kind, { key, label, workerId: null, site: null });
-      setPicked((cur) => [...cur, { containerId: selectedContainer.id, kind: roleFilter.kind, key, label }]);
+      await onAddTask(selectedContainer.id, sectionKind, { key, label, workerId: null, site: null });
+      setPicked((cur) => [...cur, { containerId: selectedContainer.id, kind: sectionKind, key, label }]);
       setNewTaskLabel('');
       setCustomLabel('');
     } finally {
@@ -267,8 +268,18 @@ export function AssignWorkDialog({
 
           <div>
             <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
-              {SECTION_LABELS[roleFilter!.kind]} work to give them
+              Work to give them
             </div>
+            {/* Any worker can be given work in any section now, designation
+               kept as a label only — this picks which section's tasks show
+               below, defaulting to the worker's own but freely changeable. */}
+            <Select value={sectionKind} onChange={(e) => setSectionKind(e.target.value as SectionKind)} style={{ width: '100%', marginBottom: 'var(--s-2)' }}>
+              {SECTION_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {SECTION_LABELS[k]}
+                </option>
+              ))}
+            </Select>
             {eligibleContainers.length === 0 ? (
               <p className="subtle" style={{ fontSize: '12.5px', margin: 0 }}>
                 No containers currently in the yard.
@@ -292,7 +303,7 @@ export function AssignWorkDialog({
 
                 {selectedContainer && (
                   <div className="stack stack-tight" style={{ marginTop: 'var(--s-2)' }}>
-                    {roleFilter!.kind === 'painting' && selectedContainer.color && (
+                    {sectionKind === 'painting' && selectedContainer.color && (
                       <p className="subtle" style={{ fontSize: '11.5px', margin: '0 0 var(--s-1)' }}>
                         Paint colour: <b style={{ color: 'var(--text)' }}>{selectedContainer.color}</b>
                       </p>
@@ -350,7 +361,7 @@ export function AssignWorkDialog({
                       )
                     )}
 
-                    {roleFilter!.kind === 'pti' && (
+                    {sectionKind === 'pti' && (
                       <div className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderTop: '1px solid var(--line)', marginTop: 'var(--s-1)' }}>
                         <span className="subtle" style={{ fontSize: '12px' }}>
                           {repairFlaggedFor === selectedContainer.id ? 'Repair flagged — an All-Rounder can pick it up.' : 'Found something that needs fixing?'}
@@ -371,7 +382,7 @@ export function AssignWorkDialog({
                     <div style={{ marginTop: 'var(--s-2)', paddingTop: 'var(--s-2)', borderTop: '1px solid var(--line)' }}>
                       <span className="subtle" style={{ fontSize: '11px' }}>Add a new task</span>
                       <div className="cluster" style={{ gap: 'var(--s-2)', marginTop: 'var(--s-1)' }}>
-                        {(ROLE_TASK_PRESETS[worker.type] ?? []).map((preset) => (
+                        {(SECTION_TASK_PRESETS[sectionKind] ?? []).map((preset) => (
                           <button
                             key={preset}
                             type="button"

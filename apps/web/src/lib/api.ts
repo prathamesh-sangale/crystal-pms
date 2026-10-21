@@ -227,10 +227,13 @@ export const api = {
       body: JSON.stringify({ id: containerId, savedAt: new Date().toISOString(), data }),
     }),
 
-  v2Upload: (file: File) => {
+  /** `category` picks which of the three Drive folders (Gate In / Gate Out /
+   * Survey) this file lands in — 'other' (the default) for anything outside
+   * those three real moments, e.g. Hydra's own file. */
+  v2Upload: (file: File, category: 'gate-in' | 'gate-out' | 'survey' | 'other' = 'other') => {
     const form = new FormData();
     form.append('file', file, file.name);
-    return request<{ id: string; url: string }>('/api/v2/uploads', { method: 'POST', body: form });
+    return request<{ id: string; url: string }>(`/api/v2/uploads?category=${category}`, { method: 'POST', body: form });
   },
 
   v2ExportToSheet: () =>

@@ -40,6 +40,7 @@ import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, Modal } from '../crystal/Overlay';
 import { GateFormDialog } from './GateFormDialog';
 import { MiniStageStrip } from './MiniStageStrip';
+import { gateLogPhotoEntries, PhotoThumb } from './PhotoThumb';
 import { RunSurveyDialog, type SurveyDraftData } from './RunSurveyDialog';
 import { useStartGuard } from './useStartGuard';
 
@@ -125,6 +126,7 @@ function TaskActionCell({
   attemptStart: (containerId: string, sectionKind: SectionKind, taskKey: string, task: { label: string; workerId: string | null; scheduledFor?: string | null }) => void;
 }): React.ReactElement | null {
   const now = useLiveTick(task.state === 'running');
+  const toast = useToast();
   if (task.state === 'running') {
     return (
       <span className="cluster" style={{ gap: 'var(--s-2)' }}>
@@ -151,22 +153,33 @@ function TaskActionCell({
   if (task.state !== 'pending') return null;
   const hasWorker = Boolean(task.workerId);
   const hasSite = section.kind !== 'all_rounder' || task.site !== null;
-  const blockedBy = paintingTaskBlockedBy(section, task);
+  const blockedBy = paintingTaskBlockedBy(container, section, task);
+  // Any active worker can be assigned to any task now, regardless of
+  // designation — ownerType is kept only as a label for the Assign menu's
+  // title (what this task was originally meant for), not an eligibility
+  // filter.
   const ownerType = task.ownerType ?? SECTION_OWNER_TYPE[section.kind];
-  const eligible = workers.filter((w) => w.active && w.type === ownerType);
+  const eligible = workers.filter((w) => w.active);
+  // Assigning (and marking N/A) is allowed any time now, regardless of
+  // sequence — direct request: a worker can be put on 1st/2nd coat while
+  // Tape + gasket is still open. Only *starting* actually waits on the
+  // sequence; attempting it early doesn't disable the button, it just
+  // toasts why, same pattern as useStartGuard's own busy-worker notice.
+  const handleStart = (): void => {
+    if (blockedBy) {
+      toast.toast('info', 'Out of sequence', `${blockedBy.label} needs to finish first — ${task.label} can't start yet.`);
+      return;
+    }
+    attemptStart(container.id, section.kind, task.key, task);
+  };
   return (
     <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-      {/* Gated the same as Assign/Start below — skipping an optional step
-         early is exactly how a later task could end up reading "clear to
-         start" while an earlier one underneath it was still open. */}
-      {task.optional && !blockedBy && (
+      {task.optional && (
         <Button variant="ghost" size="sm" onClick={() => onMarkNA(container.id, section.kind, task.key)}>
           N/A
         </Button>
       )}
-      {blockedBy ? (
-        <span className="subtle" style={{ fontSize: '11px' }}>Waiting on {blockedBy.label}</span>
-      ) : !hasWorker ? (
+      {!hasWorker ? (
         <Menu
           label={`Assign ${WORKER_TYPE_LABELS[ownerType]} to ${task.label}`}
           trigger={
@@ -206,7 +219,7 @@ function TaskActionCell({
           size="sm"
           icon="clock"
           disabled={!hasWorker || !hasSite}
-          onClick={() => attemptStart(container.id, section.kind, task.key, task)}
+          onClick={handleStart}
         >
           Start
         </Button>
@@ -292,6 +305,7 @@ export function ContainerDetailDrawer({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [gateOutOpen, setGateOutOpen] = useState(false);
   const [surveyOpen, setSurveyOpen] = useState(false);
+  const [photosOpen, setPhotosOpen] = useState(false);
   const toast = useToast();
   // Only one section's tasks are ever on screen at a time — reset to the
   // first section whenever a different container opens, so the tab doesn't
@@ -371,12 +385,13 @@ export function ContainerDetailDrawer({
     try {
       const uploaded: string[] = [];
       for (const file of files) {
-        const { url } = await api.v2Upload(file);
+        const { url } = await api.v2Upload(file, 'survey');
         uploaded.push(url);
       }
       setReadyPhotos((cur) => [...cur, ...uploaded]);
-    } catch {
-      setReadyPhotoError('Could not upload that photo. Try again.');
+    } catch (err) {
+      console.error('Ready-photo upload failed:', err);
+      setReadyPhotoError(err instanceof Error ? err.message : 'Could not upload that photo. Try again.');
     } finally {
       setReadyPhotoUploading(false);
     }
@@ -437,6 +452,16 @@ export function ContainerDetailDrawer({
       headerActions={
         container && (
           <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+            {/* Direct request: once a photo's uploaded (Gate In, Gate Out, or
+               the ready-to-move completion photo) there was no way to look
+               at it again short of the full printed report. Available any
+               time any of the three actually has photos, regardless of the
+               container's current state. */}
+            {Boolean(container.gateIn || container.gateOut || container.readyPhotoUrls.length > 0) && (
+              <Button variant="ghost" size="sm" icon="gallery" onClick={() => setPhotosOpen(true)}>
+                Photos
+              </Button>
+            )}
             {/* Fast-tracking only means something while there's still a queue to
                jump — once everything's done and the container is cleared to
                move, there's nothing left to prioritize. */}
@@ -450,17 +475,16 @@ export function ContainerDetailDrawer({
                 {container.priority ? 'Remove from fast-track' : 'Fast-track'}
               </Button>
             )}
-            {/* Mirrors the server's own real guard (survey_performed_at is
-               null, apps/api/src/routes/v2Containers.ts) exactly, not just
-               "no sections yet" -- a "no issues found" survey leaves a
-               container with zero sections too, so sections.length alone
-               would leave this clickable on an already-surveyed container
-               and fail once clicked (confirmed live: it does, with a real
-               409, after this exact gap let a second submit through to the
-               server). */}
-            {onRunSurvey && !container.survey && !container.readyAt && !container.departedAt && (
+            {/* Repeatable now, direct request: an admin can flag more work
+               on a container any time, even one that's already ready,
+               already surveyed, or already mid-work -- only gated on not
+               having left the yard yet. The server (v2Containers.ts) is
+               additive on a re-run, not a one-shot gate anymore: a section
+               that already exists only gets genuinely new tasks, nothing
+               duplicated. */}
+            {onRunSurvey && !container.departedAt && (
               <Button variant="ghost" size="sm" icon="doc" onClick={() => setSurveyOpen(true)}>
-                Run survey
+                {container.survey ? 'Run survey again' : 'Run survey'}
               </Button>
             )}
             {onRemoveContainer && (
@@ -737,6 +761,74 @@ export function ContainerDetailDrawer({
           onSaveDraft={async (containerId, data) => onSaveSurveyDraft?.(containerId, data)}
           onDiscardDraft={async (draftId) => onDiscardSurveyDraft?.(draftId)}
         />
+      )}
+
+      {container && (
+        <Modal open={photosOpen} onOpenChange={setPhotosOpen} title="Photos" subtitle={<span className="mono">{container.id}</span>} size="lg">
+          <div className="stack stack-loose">
+            {container.gateIn && (
+              <div>
+                <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
+                  Gate In
+                </div>
+                {gateLogPhotoEntries(container.gateIn).length > 0 ? (
+                  <div className="photo-grid">
+                    {gateLogPhotoEntries(container.gateIn).map((p) => (
+                      <figure key={p.label} style={{ margin: 0 }}>
+                        <PhotoThumb url={p.url} label={p.label} />
+                        <figcaption className="subtle" style={{ fontSize: '10.5px', marginTop: '4px' }}>{p.label}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="subtle" style={{ fontSize: '12.5px', margin: 0 }}>No photos on this record.</p>
+                )}
+              </div>
+            )}
+
+            {container.gateOut && (
+              <div>
+                <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
+                  Gate Out
+                </div>
+                {gateLogPhotoEntries(container.gateOut).length > 0 ? (
+                  <div className="photo-grid">
+                    {gateLogPhotoEntries(container.gateOut).map((p) => (
+                      <figure key={p.label} style={{ margin: 0 }}>
+                        <PhotoThumb url={p.url} label={p.label} />
+                        <figcaption className="subtle" style={{ fontSize: '10.5px', marginTop: '4px' }}>{p.label}</figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="subtle" style={{ fontSize: '12.5px', margin: 0 }}>No photos on this record.</p>
+                )}
+              </div>
+            )}
+
+            {container.readyPhotoUrls.length > 0 && (
+              <div>
+                <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-2)' }}>
+                  Ready to Move
+                </div>
+                <div className="photo-grid">
+                  {container.readyPhotoUrls.map((url, i) => (
+                    <figure key={url} style={{ margin: 0 }}>
+                      <PhotoThumb url={url} label={`Ready to move ${i + 1}`} />
+                      <figcaption className="subtle" style={{ fontSize: '10.5px', marginTop: '4px' }}>Ready to move {i + 1}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!container.gateIn && !container.gateOut && container.readyPhotoUrls.length === 0 && (
+              <EmptyState icon="gallery" title="No photos yet">
+                Nothing uploaded on this container yet.
+              </EmptyState>
+            )}
+          </div>
+        </Modal>
       )}
 
       {container && (

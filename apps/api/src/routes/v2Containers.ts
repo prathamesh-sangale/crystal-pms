@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireScreen, userHasScreen } from '../auth.js';
-import { conflict, notFound, parseOr422 } from '../http.js';
+import { notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 import { recordTntCompletions } from '../tntRecords.js';
 import { fromContainerRow, toTaskInsert, type ContainerRow } from '../v2Mappers.js';
@@ -377,9 +377,17 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ container: fromContainerRow(full as ContainerRow) });
   });
 
-  /** Runs a retrofit survey (RunSurveyDialog.tsx) on a container that was
-   * gated in without a real one — refuses once it already has sections, so
-   * this can never run twice and silently double up on work. Yard-only,
+  /** Runs a survey (RunSurveyDialog.tsx) on a container — repeatable, direct
+   * request: an admin can flag more work any time, even on a container
+   * that's already ready, already surveyed, or already has sections with
+   * work in progress. Additive only — for a section kind that already
+   * exists, only tasks whose key isn't already present get added (so
+   * re-flagging Painting when it's already got Primer/1st coat/etc. doesn't
+   * duplicate them; a genuinely new repair item, or Painting's own Logo if
+   * it wasn't picked the first time, still gets added). A section kind with
+   * no existing row yet is created fresh with its full task list, same as
+   * the very first survey always worked. `survey_performed_at`/outcome/
+   * fields always reflect the latest run, not the first one. Yard-only,
    * same as Delete and the type/size/color edit above: this isn't something
    * Live Board's own drawer offers. */
   app.post('/api/v2/containers/:id/survey', { preHandler: requireScreen('yard') }, async (request, reply) => {
@@ -387,47 +395,61 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     const body = await parseOr422(runSurveySchema, request.body, reply);
     if (!body) return;
 
-    const { data: existing, error: existingErr } = await supabase().from('containers').select('id, sections(id)').eq('id', id).maybeSingle();
+    const { data: existing, error: existingErr } = await supabase()
+      .from('containers')
+      .select('id, sections(id, kind, tasks(key))')
+      .eq('id', id)
+      .maybeSingle();
     if (existingErr) throw app.httpErrors.internalServerError(existingErr.message);
     if (!existing) return reply.code(404).send(notFound('Container'));
-    if ((existing as { sections: Array<{ id: string }> }).sections.length > 0) {
-      return reply.code(422).send({ error: 'validation_failed', message: 'This container already has sections — a survey can’t be run again on it.' });
-    }
+    const existingSections = (existing as { sections: Array<{ id: string; kind: string; tasks: Array<{ key: string }> }> }).sections;
 
-    // Atomic from here on: two concurrent requests for the same container
-    // can both pass the sections check above before either writes (a
-    // double-click, a retried timeout, two tabs). Gating the update itself
-    // on survey_performed_at still being null — rather than trusting the
-    // read above to still hold — means only one of them can ever affect a
-    // row; the loser sees 0 rows back and 409s instead of silently merging
-    // a second outcome onto the same container.
-    const { data: updated, error: containerErr } = await supabase()
-      .from('containers')
-      .update({ survey_performed_at: new Date().toISOString(), survey_outcome: body.outcome, survey_fields: body.fields })
-      .eq('id', id)
-      .is('survey_performed_at', null)
-      .select('id');
-    if (containerErr) throw app.httpErrors.internalServerError(containerErr.message);
-    if (!updated || updated.length === 0) {
-      return reply.code(409).send(conflict('This container already has a survey recorded on it — a survey can’t be run again.'));
-    }
+    let addedAnyTask = false;
+    for (const s of body.sections) {
+      const existingSection = existingSections.find((es) => es.kind === s.kind);
+      let sectionId: string;
+      let existingKeys: Set<string>;
+      if (existingSection) {
+        sectionId = existingSection.id;
+        existingKeys = new Set(existingSection.tasks.map((t) => t.key));
+      } else {
+        const { data: newSection, error: insertSectionErr } = await supabase()
+          .from('sections')
+          .insert({ container_id: id, kind: s.kind })
+          .select('id')
+          .single();
+        if (insertSectionErr) throw app.httpErrors.internalServerError(insertSectionErr.message);
+        sectionId = (newSection as { id: string }).id;
+        existingKeys = new Set();
+      }
 
-    if (body.sections.length > 0) {
-      const { data: sectionRows, error: sectionErr } = await supabase()
-        .from('sections')
-        .insert(body.sections.map((s) => ({ container_id: id, kind: s.kind })))
-        .select('id, kind');
-      if (sectionErr) throw app.httpErrors.internalServerError(sectionErr.message);
-
-      const taskRows = body.sections.flatMap((s, i) => {
-        const sectionId = (sectionRows as Array<{ id: string; kind: string }>)[i]!.id;
-        return s.tasks.map((t) => toTaskInsert(sectionId, t));
-      });
-      if (taskRows.length > 0) {
-        const { error: taskErr } = await supabase().from('tasks').insert(taskRows);
+      const newTasks = s.tasks.filter((t) => !existingKeys.has(t.key));
+      if (newTasks.length > 0) {
+        const { error: taskErr } = await supabase()
+          .from('tasks')
+          .insert(newTasks.map((t) => toTaskInsert(sectionId, t)));
         if (taskErr) throw app.httpErrors.internalServerError(taskErr.message);
+        addedAnyTask = true;
       }
     }
+
+    // A re-run that actually adds real, new open work means the container
+    // isn't genuinely ready anymore, even if it was marked so before this
+    // request — otherwise "Ready to move" would keep showing with fresh
+    // unstarted work sitting underneath it. Only cleared when something was
+    // actually added; a re-run that flagged nothing new leaves an existing
+    // ready state alone.
+    const containerUpdate: Record<string, unknown> = {
+      survey_performed_at: new Date().toISOString(),
+      survey_outcome: body.outcome,
+      survey_fields: body.fields,
+    };
+    if (addedAnyTask) {
+      containerUpdate.ready_at = null;
+      containerUpdate.ready_photo_urls = [];
+    }
+    const { error: containerErr } = await supabase().from('containers').update(containerUpdate).eq('id', id);
+    if (containerErr) throw app.httpErrors.internalServerError(containerErr.message);
 
     const { data: full, error: refetchErr } = await supabase().from('containers').select(CONTAINER_SELECT).eq('id', id).single();
     if (refetchErr) throw app.httpErrors.internalServerError(refetchErr.message);

@@ -192,25 +192,6 @@ export const CONTAINER_INSPECTION_FIELDS = [
   'Mantrap',
 ];
 
-/** The depot's printed Machine Check — Reefer units only; a Dry or Tank unit
- * has no refrigeration machinery to check. */
-export const MACHINE_CHECK_FIELDS = [
-  'Compressor',
-  'Condenser Coil',
-  'Evaporator Coil',
-  'Condenser Fan',
-  'Evaporator Fan',
-  'Controller / Microprocessor',
-  'Power Cable & Plug',
-  'Refrigerant Gas Charge',
-  'Temperature Sensors / Probes',
-  'Defrost System',
-  'Cable 4 Core 4mm 18Mtr',
-  'Motor Condition',
-  'Contractor',
-  'ISO Plug',
-];
-
 /** Container Inspection items whose fix is physical repair work — not paint,
  * not cleaning, and not one of the three (Curtain/Tube Light/Mantrap) that
  * already map onto an existing PTI task by name. Routed to the Repairment
@@ -226,19 +207,22 @@ export const REPAIR_ITEMS = [
   'Gasket Door',
 ];
 
-/** The full checklist for a container of this type. */
-export function surveyFieldNames(isReefer: boolean): string[] {
-  return isReefer ? [...CONTAINER_INSPECTION_FIELDS, ...MACHINE_CHECK_FIELDS] : CONTAINER_INSPECTION_FIELDS;
+/** The full checklist every container gets — Reefer no longer adds its own
+ * itemized Machine Check half (direct request: PTI keeps just Lights, Strip
+ * & curtain, and a single Repairment task backed by a free-text remark
+ * instead of a 14-item checklist; see `buildSurveyFields`/
+ * `surveySectionTasks` below). */
+export function surveyFieldNames(): string[] {
+  return CONTAINER_INSPECTION_FIELDS;
 }
 
 /** A full checklist result — every item good except the ones named in
  * `issues`, which carry their own severity and a note on what's wrong. */
 export function surveyFields(
-  isReefer: boolean,
   issues: Array<{ label: string; severity: 'minor' | 'major'; note: string }> = []
 ): MockSurveyField[] {
   const byLabel = new Map(issues.map((i) => [i.label, i]));
-  return surveyFieldNames(isReefer).map((label) => {
+  return surveyFieldNames().map((label) => {
     const issue = byLabel.get(label);
     return issue ? { label, severity: issue.severity, note: issue.note } : { label, severity: 'good', note: '' };
   });
@@ -289,7 +273,7 @@ export type GatePhotos = Record<GatePhotoKey, string> & { additional: string[] }
 /**
  * One full submission of the Gate In/Gate Out form (SPEC: "Digital Lifecycle
  * Tracker"). Deliberately additive, not a replacement for `MockSurvey` —
- * `repairFields`/`machineFields` here are the same arrays folded into
+ * `repairFields` here is the same array folded into
  * `MockContainer.survey.fields` (via `surveyFields()`) at submit time; kept
  * here too so the Gate In/Out record itself renders standalone on the
  * report.
@@ -317,6 +301,13 @@ export interface GateLogEntry {
   vehicleNumber: string;
   /** Filename only — never an actual upload. */
   lrCopyName: string | null;
+  /** No longer asked at Gate-In at all, by direct request — Gate-In is
+   * intake only now; PTI (and every other assessment question) only ever
+   * gets asked in the separate survey step (RunSurveyDialog's own
+   * `needsPti`), run afterward, never bundled into registering the
+   * container. Kept here, always `'No'`/`null` going forward, purely so
+   * this historical-record shape doesn't change for a report rendering an
+   * *old* Gate-In that really did answer it. */
   ptiCheck: PtiCheckAnswer;
   /** The file's original name, kept for display even after upload. */
   ptiVideoName: string | null;
@@ -326,16 +317,19 @@ export interface GateLogEntry {
    * is set. */
   ptiVideoUrl: string | null;
   photos: GatePhotos;
-  /** Null on Gate Out — repairs are assumed closed out before a container
-   * ever clears Ready to Move, so it isn't asked again on the way out.
-   * Independent of `repairRequired` by direct request: Painting (primer/1st
-   * coat/2nd coat/Logo) is its own question now, not something that only
-   * happens as a side effect of repair work being flagged. */
+  /** Always `null` now on both Gate In and Gate Out, by direct request —
+   * none of this is asked at the gate anymore, only in the separate survey
+   * step afterward (RunSurveyDialog). Kept nullable rather than removed so
+   * this historical-record shape doesn't change for a report rendering an
+   * *old* Gate-In from when these questions genuinely lived here. */
   paintingRequired: boolean | null;
   repairRequired: boolean | null;
   repairFields: MockSurveyField[];
   machineIssueFound: boolean | null;
-  machineFields: MockSurveyField[];
+  /** Free text — what repairment is needed, not an itemized checklist
+   * (direct request: PTI's Machine Check dropped the 14-item grid in favor
+   * of a single remark). */
+  machineRepairNote: string;
   cleaningRequired: boolean | null;
   /** Free text, matching the real form (not a parsed number). */
   estBudget: string;
@@ -346,16 +340,21 @@ export interface GateLogEntry {
  * registering a container (interrupted by a call, the next arrival, etc.) —
  * everything needed to pre-fill GateFormDialog back to where they left off.
  * Photos are deliberately not included — a `File` can't round-trip through a
- * saved draft, so resuming always reopens with every photo slot empty. */
+ * saved draft, so resuming always reopens with every photo slot empty.
+ *
+ * Intake-only, by direct request — Gate-In itself no longer asks anything
+ * assessment-shaped (Painting/Logo/Repair/Machine/Cleaning/PTI/Est. Budget);
+ * that's the separate survey step's job now (RunSurveyDialog), run
+ * afterward, not bundled into registering the container in the first
+ * place. Those fields used to live here too, back when Gate-In's own
+ * Assessment step collected them directly. */
 export interface ContainerDraftData {
   id: string;
   typeCode: string;
   size: string;
   color: string;
   customColor: string;
-  logoChoice: LogoChoice;
   priority: boolean;
-  fields: MockSurveyField[];
   loggedBy: string;
   indentRef: string;
   customerName: string;
@@ -363,12 +362,6 @@ export interface ContainerDraftData {
   transporterName: string;
   transporterNumber: string;
   vehicleNumber: string;
-  ptiCheck: PtiCheckAnswer;
-  paintingRequired: boolean;
-  repairRequired: boolean;
-  machineIssueFound: boolean;
-  cleaningRequired: boolean;
-  estBudget: string;
   remarks: string;
 }
 
@@ -460,9 +453,9 @@ export function cleaningTasks(withWorker: string | null): MockTask[] {
 }
 
 /** One task per flagged checklist item named in `itemNames` — the actual
- * fix, not just a record that something's wrong. Shared by Repairment
- * (REPAIR_ITEMS, Painting site) and PTI's Machine Check add-ons
- * (MACHINE_CHECK_FIELDS, Light site). */
+ * fix, not just a record that something's wrong. Used by Repairment
+ * (REPAIR_ITEMS, Painting site); PTI's own Machine Check add-on is a single
+ * fixed task instead (see `surveySectionTasks`), not itemized like this. */
 export function repairTasksFor(fields: MockSurveyField[], itemNames: string[], site: SailingSite): MockTask[] {
   return fields
     .filter((f) => itemNames.includes(f.label) && fieldNeedsAttention(f))
@@ -582,20 +575,26 @@ export interface SurveyAssessment {
    * unless flagged, not pre-filtered. */
   repairFields: MockSurveyField[];
   machineIssueFound: boolean;
-  /** The draft checklist as answered — every MACHINE_CHECK_FIELDS entry. */
-  machineFields: MockSurveyField[];
+  /** Free text — what repairment is needed, not an itemized checklist
+   * (direct request: PTI's Machine Check dropped the 14-item grid in favor
+   * of a single remark the admin writes at survey time). */
+  machineRepairNote: string;
   cleaningRequired: boolean;
   remarks: string;
 }
 
-/** The full fixed-order checklist `container.survey.fields` expects — built
- * from whichever conditional checklists were actually touched, so
- * `ContainerReportContent`'s positional slicing (inspection vs. machine
- * fields) keeps working unchanged regardless of which flow produced it. */
+/** The label `buildSurveyFields` appends for a flagged machine issue — its
+ * own fixed entry, not one of `CONTAINER_INSPECTION_FIELDS`, so
+ * `ContainerReportContent` can find it by name regardless of position. */
+export const MACHINE_REPAIR_LABEL = 'Machine repair';
+
+/** The full fixed-order checklist `container.survey.fields` expects —
+ * `CONTAINER_INSPECTION_FIELDS` in order, plus one more entry at the end iff
+ * a Reefer's machine issue was flagged, carrying the admin's own remark
+ * rather than any itemized sub-field. */
 export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
   const repairByLabel = new Map(a.repairFields.map((f) => [f.label, f]));
-  const machineByLabel = new Map(a.machineFields.map((f) => [f.label, f]));
-  return surveyFieldNames(a.isReefer).map((label) => {
+  const base = surveyFieldNames().map((label) => {
     if (label === 'Contamination') {
       return a.cleaningRequired
         ? { label, severity: 'minor' as FieldSeverity, note: a.remarks.trim() || 'Flagged for cleaning.' }
@@ -605,12 +604,10 @@ export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
       const f = repairByLabel.get(label)!;
       return { label, severity: f.severity, note: f.note };
     }
-    if (a.machineIssueFound && machineByLabel.has(label)) {
-      const f = machineByLabel.get(label)!;
-      return { label, severity: f.severity, note: f.note };
-    }
     return { label, severity: 'good' as FieldSeverity, note: '' };
   });
+  if (!a.isReefer || !a.machineIssueFound) return base;
+  return [...base, { label: MACHINE_REPAIR_LABEL, severity: 'flagged' as FieldSeverity, note: a.machineRepairNote.trim() }];
 }
 
 /** Which sections the Assessment answers suggest — a starting point the
@@ -629,14 +626,24 @@ export function recommendedSurveySections(a: Pick<SurveyAssessment, 'paintingReq
 
 /** The actual task list for one confirmed section — `fields` is this
  * assessment's already-built `buildSurveyFields` result, since Repairment's
- * and PTI's Machine Check tasks are generated from flagged checklist items,
- * not the raw toggles. */
-export function surveySectionTasks(kind: SectionKind, a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'typeCode'>, fields: MockSurveyField[]): MockTask[] {
+ * tasks are generated from flagged checklist items, not the raw toggle;
+ * PTI's own Machine Check add-on is a single fixed task instead (direct
+ * request), driven straight off `machineIssueFound`, not `fields`. */
+export function surveySectionTasks(
+  kind: SectionKind,
+  a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'typeCode' | 'machineIssueFound'>,
+  fields: MockSurveyField[]
+): MockTask[] {
   switch (kind) {
     case 'painting':
       return paintingTasksFor(a.paintingRequired, a.logoChoice);
     case 'pti':
-      return [...ptiTasks(null, a.typeCode.includes('Anteroom')), ...repairTasksFor(fields, MACHINE_CHECK_FIELDS, 'Light site')];
+      return [
+        ...ptiTasks(null, a.typeCode.includes('Anteroom')),
+        ...(a.machineIssueFound
+          ? [{ key: 'repairment', label: 'Repairment', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 2, site: 'Light site' as const }]
+          : []),
+      ];
     case 'cleaning':
       return cleaningTasks(null);
     case 'all_rounder': {
@@ -719,8 +726,24 @@ export function scheduleLabel(date: string | null | undefined): string {
 }
 
 /** Painting only (SPEC.md §4.3): Primer → 1st coat → 2nd coat → Logo run in a
- * fixed order, unlike every other section's tasks. Returns the earliest task
+ * fixed order, unlike every other section's tasks — the only two sequencing
+ * rules left in the app, direct request ("remove the work hierarchy... let
+ * admin assign any task any time, but..."): every other section
+ * (PTI/Cleaning/Repairment/Sailing) has no ordering at all, tasks assignable
+ * and startable in any order, any time.
+ *
+ * Gates *starting* only, not assigning — a worker can be put on 1st/2nd
+ * coat (or Logo) any time, even while Tape + gasket is still open, direct
+ * request; only an actual Start attempt checks this (and toasts, rather
+ * than silently disabling, when it's too early). Returns the earliest task
  * still holding this one up, or null if it's clear to start.
+ *
+ * Also gates Painting on Repairment as a whole, cross-section: paint goes
+ * over a physically repaired surface, not the other way round, so no
+ * Painting task can *start* while the container's own Repairment
+ * (all_rounder) section still has open work. Only applies when that section
+ * actually has tasks — a container with no repair flagged has nothing to
+ * wait on.
  *
  * Walks the *whole* ancestor chain, not just the immediate dependency —
  * a dependency counting as "settled" (done, or marked N/A as skipped) says
@@ -729,14 +752,21 @@ export function scheduleLabel(date: string | null | undefined): string {
  * whether the step before *it* has finished; checking only one level would
  * report Logo as clear to start the instant 2nd coat is marked N/A, even
  * while 1st coat is still running underneath it. */
-export function paintingTaskBlockedBy(section: MockSection, task: MockTask): MockTask | null {
+export function paintingTaskBlockedBy(container: MockContainer, section: MockSection, task: MockTask): MockTask | null {
   if (section.kind !== 'painting') return null;
+
+  const repair = container.sections.find((s) => s.kind === 'all_rounder');
+  if (repair && repair.tasks.length > 0) {
+    const openRepair = repair.tasks.find((t) => !taskSettled(t));
+    if (openRepair) return openRepair;
+  }
+
   const deps: MockTask[] = task.dependsOn
     ? task.dependsOn.map((key) => section.tasks.find((t) => t.key === key)).filter((t): t is MockTask => Boolean(t))
     : section.tasks.slice(0, section.tasks.findIndex((t) => t.key === task.key));
   for (const dep of deps) {
     if (!taskSettled(dep)) return dep;
-    const upstream = paintingTaskBlockedBy(section, dep);
+    const upstream = paintingTaskBlockedBy(container, section, dep);
     if (upstream) return upstream;
   }
   return null;

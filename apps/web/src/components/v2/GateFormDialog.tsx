@@ -1,18 +1,10 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import {
-  cleaningTasks,
-  fieldNeedsAttention,
-  FIELD_SEVERITY_LABELS,
   formatSurveyDate,
   GATE_PHOTO_SLOTS,
-  MACHINE_CHECK_FIELDS,
   offsetDate,
-  ptiTasks,
-  REPAIR_ITEMS,
-  repairTasksFor,
   SIZE_OPTIONS,
   STANDARD_COLORS,
-  surveyFieldNames,
   TYPE_CODES,
   type ContainerDraft,
   type ContainerDraftData,
@@ -20,12 +12,8 @@ import {
   type GateLogEntry,
   type GatePhotoKey,
   type GatePhotos,
-  type LogoChoice,
   type MockContainer,
   type MockSurveyField,
-  type MockTask,
-  type PtiCheckAnswer,
-  type SectionKind,
 } from '../../lib/mockV2';
 import { api, type ImsMatch } from '../../lib/api';
 import { cx } from '../../lib/cx';
@@ -37,22 +25,6 @@ import { Modal } from '../crystal/Overlay';
 
 const CUSTOM_COLOR = 'Custom…';
 
-const LOGO_LABELS: Record<LogoChoice, string> = {
-  na: 'Not required',
-  readymade: 'Ready-made (sticker/decal)',
-  physical: 'Physical (painted)',
-  removal: 'Removal',
-};
-
-/** The actual task created at Gate-In once a Logo choice other than "Not
- * required" is picked — kept as an explicit lookup (not a ternary) so a new
- * LogoChoice value can't silently fall through into the wrong label. */
-const LOGO_TASK: Record<Exclude<LogoChoice, 'na'>, { label: string; estHrs: number }> = {
-  readymade: { label: 'Logo (ready-made)', estHrs: 0.25 },
-  physical: { label: 'Logo (painted)', estHrs: 0.75 },
-  removal: { label: 'Logo removal', estHrs: 0.5 },
-};
-
 export interface DraftField extends MockSurveyField {
   key: string;
 }
@@ -61,72 +33,8 @@ export function blankFields(labels: string[], defaultSeverity: FieldSeverity = '
   return labels.map((label) => ({ key: label, label, severity: defaultSeverity, note: '' }));
 }
 
-const SEVERITY_TONE: Record<'good' | 'minor' | 'major', { icon: IconName; color: string; bg: string }> = {
-  good: { icon: 'check', color: 'var(--success)', bg: 'var(--success-bg)' },
-  minor: { icon: 'alert', color: 'var(--warn)', bg: 'var(--warn-bg)' },
-  major: { icon: 'x-circle', color: 'var(--error)', bg: 'var(--error-bg)' },
-};
-
-/** Tap to set, tap the same one again to undo back to unassessed. Carried
- * over from the old SurveyIntakeDialog unchanged — still the fastest way to
- * work through a checklist once "Repair Required?"/"Machine issue found?"
- * reveals one. */
-export function SeverityToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
-  return (
-    <span className="cluster" style={{ gap: '6px', flex: 'none' }} role="group" aria-label="Severity">
-      {(['good', 'minor', 'major'] as const).map((s) => {
-        const active = value === s;
-        const tone = SEVERITY_TONE[s];
-        return (
-          <button
-            key={s}
-            type="button"
-            className="sev-btn"
-            title={FIELD_SEVERITY_LABELS[s]}
-            aria-label={FIELD_SEVERITY_LABELS[s]}
-            aria-pressed={active}
-            onClick={() => onChange(active ? 'unassessed' : s)}
-            style={{ '--sev-color': tone.color, '--sev-bg': tone.bg } as React.CSSProperties}
-          >
-            <Icon name={tone.icon} size="md" />
-          </button>
-        );
-      })}
-    </span>
-  );
-}
-
-export function FieldRow({
-  field,
-  onSeverity,
-  onNote,
-}: {
-  field: DraftField;
-  onSeverity: (severity: FieldSeverity) => void;
-  onNote: (note: string) => void;
-}): React.ReactElement {
-  const flagged = field.severity === 'minor' || field.severity === 'major';
-  return (
-    <div className="stack" style={{ gap: 'var(--s-1)' }}>
-      <div className="cluster" style={{ justifyContent: 'space-between', gap: 'var(--s-2)' }}>
-        <span style={{ fontSize: '12.5px', flex: 1, minWidth: 0 }}>{field.label}</span>
-        <SeverityToggle value={field.severity} onChange={onSeverity} />
-      </div>
-      {flagged && (
-        <input
-          className="input"
-          style={{ height: '38px', padding: '8px 10px', fontSize: '12.5px' }}
-          value={field.note}
-          onChange={(e) => onNote(e.target.value)}
-          placeholder="What's wrong?"
-        />
-      )}
-    </div>
-  );
-}
-
-/** Plain Good/Damage, not the three-way SeverityToggle Machine Check still
- * uses — the Repair checklist doesn't need a minor/major severity grade,
+/** Plain Good/Damage — the Repair checklist doesn't need a minor/major
+ * severity grade,
  * and grading it invited a real bug: an admin could tap through every item
  * as "Good" (or leave them unassessed) and silently end up with "Repair
  * Required? Yes" producing zero actual repair work, with nothing on screen
@@ -373,8 +281,6 @@ export function GateFormDialog({
   onSaveDraft,
   onDiscardDraft,
   loggedInEmail,
-  prefillId,
-  fast,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -389,25 +295,11 @@ export function GateFormDialog({
   onSaveDraft?: (data: ContainerDraftData) => void;
   onDiscardDraft?: (draftId: string) => void;
   loggedInEmail?: string;
-  /** `mode === 'in'` only — opens straight into a known container number
-   * (e.g. picked from IMS Stock) instead of a blank form, and runs the same
-   * "Check IMS" lookup automatically so its details pre-fill without the
-   * admin re-typing or re-clicking anything. Still just a starting point —
-   * every field stays editable, same as a manual IMS check. */
-  prefillId?: string | null;
-  /** `mode === 'in'` + `prefillId` only, by direct request: a container IMS
-   * already knows about needs the survey/inspection, not the whole intake
-   * form over again — the container ID input, "Check IMS" panel, and the
-   * entire Transport Details block (location/transporter/vehicle/LR copy,
-   * none of which IMS has anyway) are skipped. Type/Size stay visible and
-   * editable, pre-filled from the IMS match. */
-  fast?: boolean;
 }): React.ReactElement {
   const isOut = mode === 'out';
-  const [step, setStep] = useState<'intake' | 'result'>('intake');
-  // True while photos/the PTI video are uploading to Drive and the record
-  // is being saved — can take a few seconds for several files, so the
-  // confirm button needs its own loading state rather than looking frozen.
+  // True while photos are uploading to Drive and the record is being saved
+  // — can take a few seconds for several files, so the confirm button
+  // needs its own loading state rather than looking frozen.
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
 
@@ -432,7 +324,6 @@ export function GateFormDialog({
   const [customerName, setCustomerName] = useState('');
   const [color, setColor] = useState(STANDARD_COLORS[0]!);
   const [customColor, setCustomColor] = useState('');
-  const [logoChoice, setLogoChoice] = useState<LogoChoice>('na');
   const [priority, setPriority] = useState(false);
 
   // Transport Details
@@ -442,38 +333,11 @@ export function GateFormDialog({
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [lrCopyName, setLrCopyName] = useState<string | null>(null);
 
-  // PTI Check
-  const [ptiCheck, setPtiCheck] = useState<PtiCheckAnswer>('No');
-  const [ptiVideoName, setPtiVideoName] = useState<string | null>(null);
-  // The actual picked file — `ptiVideoName` alone used to be the only thing
-  // kept (the input's onChange only ever read `.name`), so there was
-  // nothing to upload even once Drive was wired up. Kept separately from
-  // `ptiVideoName` since the name still needs to display after upload,
-  // once this is cleared back to null post-submit.
-  const [ptiVideoFile, setPtiVideoFile] = useState<File | null>(null);
-
   // Inspection Photos
   const [photos, setPhotos] = useState<Record<GatePhotoKey, File | null>>(emptyPhotos);
   const [additionalFiles, setAdditionalFiles] = useState<File[]>([]);
 
-  // Assessment
-  // Independent of Repair Required, by direct request: Painting (primer/1st
-  // coat/2nd coat/Logo) is its own part of the survey now, not a side effect
-  // of repair work being flagged. Repair Required still drives only the
-  // itemized damage checklist below (Repairment).
-  const [paintingRequired, setPaintingRequired] = useState(false);
-  const [repairRequired, setRepairRequired] = useState(false);
-  // 'good' (not 'unassessed') — the Repair checklist's Yes/No toggle has no
-  // third "not yet checked" state to represent, so an untouched item must
-  // already read as "No" both visually and in `fieldNeedsAttention`.
-  const [repairFields, setRepairFields] = useState<DraftField[]>(() => blankFields(REPAIR_ITEMS, 'good'));
-  const [machineIssueFound, setMachineIssueFound] = useState(false);
-  const [machineFields, setMachineFields] = useState<DraftField[]>(() => blankFields(MACHINE_CHECK_FIELDS));
-  const [cleaningRequired, setCleaningRequired] = useState(false);
-  const [estBudget, setEstBudget] = useState('');
   const [remarks, setRemarks] = useState('');
-
-  const [sections, setSections] = useState<Record<SectionKind, boolean>>({ painting: false, pti: false, cleaning: false, all_rounder: false, sailing: false });
 
   const isReefer = isOut ? Boolean(container?.typeCode.startsWith('Reefer')) : typeCode.startsWith('Reefer');
 
@@ -517,6 +381,8 @@ export function GateFormDialog({
   };
 
   // Pre-fill from a draft the moment it's opened to resume — 'in' mode only.
+  // Intake-only, matching ContainerDraftData's own shape now that Gate-In
+  // no longer collects anything assessment-shaped.
   useEffect(() => {
     if (!open || isOut || !resumeDraft) return;
     const d = resumeDraft.data;
@@ -525,7 +391,6 @@ export function GateFormDialog({
     setSize(d.size);
     setColor(d.color);
     setCustomColor(d.customColor);
-    setLogoChoice(d.logoChoice);
     setPriority(d.priority);
     setLoggedBy(d.loggedBy);
     setIndentRef(d.indentRef);
@@ -534,45 +399,11 @@ export function GateFormDialog({
     setTransporterName(d.transporterName);
     setTransporterNumber(d.transporterNumber);
     setVehicleNumber(d.vehicleNumber);
-    setPtiCheck(d.ptiCheck);
-    // `?? false` guards against a draft saved before Painting became its own
-    // field — an old one simply won't have it.
-    setPaintingRequired(d.paintingRequired ?? false);
-    setRepairRequired(d.repairRequired);
-    setMachineIssueFound(d.machineIssueFound);
-    setCleaningRequired(d.cleaningRequired);
-    setEstBudget(d.estBudget);
     setRemarks(d.remarks);
-    const byLabel = new Map(d.fields.map((f) => [f.label, f]));
-    const restore = (label: string, defaultSeverity: FieldSeverity): DraftField => {
-      const found = byLabel.get(label);
-      return { key: label, label, severity: found?.severity ?? defaultSeverity, note: found?.note ?? '' };
-    };
-    // A draft saved before the Repair checklist moved to plain Yes/No could
-    // still carry 'minor'/'major'/'unassessed' from the old three-way
-    // severity toggle — anything that isn't already 'good' reads as "Yes"
-    // under the new model, matching `fieldNeedsAttention`'s own rule.
-    setRepairFields(REPAIR_ITEMS.map((label) => {
-      const f = restore(label, 'good');
-      return f.severity === 'good' ? f : { ...f, severity: 'flagged' };
-    }));
-    setMachineFields(MACHINE_CHECK_FIELDS.map((label) => restore(label, 'unassessed')));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/draft-id change.
   }, [open, isOut, resumeDraft?.id]);
 
-  // Pre-fill just the container number from an external picker (IMS Stock's
-  // "Gate in" action) and run the same lookup a manual "Check IMS" click
-  // would — resumeDraft takes priority if somehow both are set, since a
-  // saved draft represents more work already done than a fresh IMS pick.
-  useEffect(() => {
-    if (!open || isOut || !prefillId || resumeDraft) return;
-    setId(prefillId);
-    void checkIms(prefillId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/prefillId change.
-  }, [open, isOut, prefillId, resumeDraft]);
-
   const reset = (): void => {
-    setStep('intake');
     setLoggedBy(loggedInEmail ?? '');
     setId('');
     setIdError(null);
@@ -586,95 +417,15 @@ export function GateFormDialog({
     setCustomerName('');
     setColor(STANDARD_COLORS[0]!);
     setCustomColor('');
-    setLogoChoice('na');
     setPriority(false);
     setLocation('');
     setTransporterName('');
     setTransporterNumber('');
     setVehicleNumber('');
     setLrCopyName(null);
-    setPtiCheck('No');
-    setPtiVideoName(null);
-    setPtiVideoFile(null);
     setPhotos(emptyPhotos());
     setAdditionalFiles([]);
-    setPaintingRequired(false);
-    setRepairRequired(false);
-    setRepairFields(blankFields(REPAIR_ITEMS, 'good'));
-    setMachineIssueFound(false);
-    setMachineFields(blankFields(MACHINE_CHECK_FIELDS));
-    setCleaningRequired(false);
-    setEstBudget('');
     setRemarks('');
-  };
-
-  const setRepairSeverity = (key: string, severity: FieldSeverity): void => {
-    setRepairFields((cur) => cur.map((f) => (f.key === key ? { ...f, severity, note: severity === 'flagged' ? f.note : '' } : f)));
-  };
-  const setRepairNote = (key: string, note: string): void => {
-    setRepairFields((cur) => cur.map((f) => (f.key === key ? { ...f, note } : f)));
-  };
-  const setMachineSeverity = (key: string, severity: FieldSeverity): void => {
-    setMachineFields((cur) => cur.map((f) => (f.key === key ? { ...f, severity, note: severity === 'minor' || severity === 'major' ? f.note : '' } : f)));
-  };
-  const setMachineNote = (key: string, note: string): void => {
-    setMachineFields((cur) => cur.map((f) => (f.key === key ? { ...f, note } : f)));
-  };
-
-  /** The full fixed-order checklist `container.survey` expects — built from
-   * whichever conditional checklists the admin actually saw and touched, so
-   * `ContainerReportContent`'s positional slicing (inspection vs. machine
-   * fields) keeps working unchanged. Curtain/Tube Light/Mantrap (and either
-   * checklist when its Yes/No gate stayed No) default to "good" — this new
-   * form never asks about them directly. */
-  function buildSurveyFields(): MockSurveyField[] {
-    const repairByLabel = new Map(repairFields.map((f) => [f.label, f]));
-    const machineByLabel = new Map(machineFields.map((f) => [f.label, f]));
-    return surveyFieldNames(isReefer).map((label) => {
-      if (label === 'Contamination') {
-        return cleaningRequired
-          ? { label, severity: 'minor', note: remarks.trim() || 'Flagged for cleaning at gate-in.' }
-          : { label, severity: 'good', note: '' };
-      }
-      if (repairRequired && repairByLabel.has(label)) {
-        const f = repairByLabel.get(label)!;
-        return { label, severity: f.severity, note: f.note };
-      }
-      if (machineIssueFound && machineByLabel.has(label)) {
-        const f = machineByLabel.get(label)!;
-        return { label, severity: f.severity, note: f.note };
-      }
-      return { label, severity: 'good', note: '' };
-    });
-  }
-
-  const runSurvey = (): void => {
-    const trimmedId = id.trim();
-    if (trimmedId && existingIds?.includes(trimmedId)) {
-      setIdError(`${trimmedId} is already in the yard — use a different ID.`);
-      return;
-    }
-    setIdError(null);
-    const needsRepair = repairRequired && repairFields.some(fieldNeedsAttention);
-    setSections({
-      painting: paintingRequired || logoChoice !== 'na',
-      // "PTI Check: Yes" + video means a Pre-Trip Inspection walkthrough
-      // already happened as part of this gate-in, so the yard's own PTI
-      // section (Lights, Strip & Curtain) would be redoing work already on
-      // record — only needed when the answer is still "No". Previously
-      // hardcoded `true` unconditionally, which meant a container could
-      // never actually reach "no issues found" through the real form (every
-      // arrival got a PTI section regardless), blocking the one path a
-      // genuinely clean container should take straight to Ready to Move.
-      pti: ptiCheck === 'No',
-      cleaning: cleaningRequired,
-      all_rounder: needsRepair,
-      // Sailing Crew work is never generated at Gate-In -- it's only ever
-      // added afterward, via the ad-hoc "Add a new task" flow in
-      // AssignWorkDialog.
-      sailing: false,
-    });
-    setStep('result');
   };
 
   /** Uploads a picked file to the PMS Shared Drive, returning its real link
@@ -683,7 +434,7 @@ export function GateFormDialog({
    * works unchanged. */
   const uploadIfPresent = async (file: File | null): Promise<string> => {
     if (!file) return '';
-    const { url } = await api.v2Upload(file);
+    const { url } = await api.v2Upload(file, isOut ? 'gate-out' : 'gate-in');
     return url;
   };
 
@@ -697,103 +448,15 @@ export function GateFormDialog({
   };
 
   const confirmGateIn = async (): Promise<void> => {
-    const required = (Object.keys(sections) as SectionKind[]).filter((k) => sections[k]);
-    const outcome: 'ready' | 'needs-work' = required.length === 0 ? 'ready' : 'needs-work';
-    const surveyFieldsArr = buildSurveyFields();
-    // SPEC.md §4.3 "Painter Helper": tape display + gasket before any spray
-    // work; paint the compressor + display as its own step after the main
-    // coats — only needed when paint is actually sprayed, not for a
-    // ready-made logo sticker with nothing else wrong. Driven by
-    // `paintingRequired` now, not `needsRepair` -- Painting is its own
-    // question on the survey, independent of whether repair work was found.
-    const paintingNeedsSpray = paintingRequired || logoChoice === 'physical';
-    const lastMainPaintKey = paintingRequired ? 'coat2' : paintingNeedsSpray ? 'tape_display' : null;
-    const paintingTaskList: MockTask[] = [
-      ...(paintingNeedsSpray
-        ? [
-            {
-              key: 'tape_display',
-              label: 'Tape display + gasket',
-              workerId: null,
-              state: 'pending' as const,
-              startedAt: null,
-              elapsedSec: 0,
-              estHrs: 0,
-              site: 'Painting site' as const,
-              ownerType: 'painter_helper' as const,
-              dependsOn: [],
-            },
-          ]
-        : []),
-      ...(paintingRequired
-        ? [
-            { key: 'primer', label: 'Primer', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['tape_display'] },
-            { key: 'coat1', label: '1st coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['primer'] },
-            { key: 'coat2', label: '2nd coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, optional: true, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['coat1'] },
-          ]
-        : []),
-      ...(logoChoice !== 'na'
-        ? [
-            {
-              key: 'logo',
-              label: LOGO_TASK[logoChoice].label,
-              workerId: null,
-              state: 'pending' as const,
-              startedAt: null,
-              elapsedSec: 0,
-              estHrs: LOGO_TASK[logoChoice].estHrs,
-              site: 'Painting site' as const,
-              dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
-            },
-          ]
-        : []),
-      ...(paintingNeedsSpray
-        ? [
-            {
-              key: 'paint_compressor',
-              label: 'Paint compressor + display',
-              workerId: null,
-              state: 'pending' as const,
-              startedAt: null,
-              elapsedSec: 0,
-              estHrs: 0,
-              site: 'Painting site' as const,
-              ownerType: 'painter_helper' as const,
-              dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
-            },
-          ]
-        : []),
-    ];
-    if (paintingTaskList.length === 0) {
-      paintingTaskList.push({
-        key: 'other',
-        label: 'Painting (reason not specified)',
-        workerId: null,
-        state: 'pending',
-        startedAt: null,
-        elapsedSec: 0,
-        estHrs: 0,
-        site: 'Painting site',
-      });
+    const trimmedId = id.trim();
+    if (trimmedId && existingIds?.includes(trimmedId)) {
+      setIdError(`${trimmedId} is already in the yard — use a different ID.`);
+      return;
     }
-    const allRounderTasks: MockTask[] = repairTasksFor(surveyFieldsArr, REPAIR_ITEMS, 'Painting site');
-    if (allRounderTasks.length === 0) {
-      allRounderTasks.push({
-        key: 'other',
-        label: 'Repairment (reason not specified)',
-        workerId: null,
-        state: 'pending',
-        startedAt: null,
-        elapsedSec: 0,
-        estHrs: 2,
-        site: null,
-      });
-    }
-
+    setIdError(null);
     setSubmitting(true);
     try {
-      const [photosResult, ptiVideoUrl] = await Promise.all([buildPhotos(), uploadIfPresent(ptiVideoFile).then((u) => u || null)]);
-
+      const photosResult = await buildPhotos();
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'in',
@@ -807,43 +470,34 @@ export function GateFormDialog({
         transporterNumber,
         vehicleNumber,
         lrCopyName,
-        ptiCheck,
-        ptiVideoName,
-        ptiVideoUrl,
+        ptiCheck: 'No',
+        ptiVideoName: null,
+        ptiVideoUrl: null,
         photos: photosResult,
-        paintingRequired,
-        repairRequired,
-        repairFields: repairRequired ? repairFields.filter(fieldNeedsAttention) : [],
-        machineIssueFound,
-        machineFields: machineIssueFound ? machineFields.filter(fieldNeedsAttention) : [],
-        cleaningRequired,
-        estBudget,
+        paintingRequired: null,
+        repairRequired: null,
+        repairFields: [],
+        machineIssueFound: null,
+        machineRepairNote: '',
+        cleaningRequired: null,
+        estBudget: '',
         remarks,
       };
 
       const container: MockContainer = {
-        id: id.trim() || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`,
+        id: trimmedId || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`,
         typeCode,
         size,
         color: isReefer ? 'White' : color === CUSTOM_COLOR ? customColor.trim() || 'Unspecified' : color,
-        survey: { performedAt: new Date().toISOString(), fields: surveyFieldsArr, outcome },
+        // No survey yet -- Gate-In is intake only now, by direct request:
+        // the survey is a genuinely separate step, run afterward via
+        // ContainerDetailDrawer's "Run survey" (RunSurveyDialog), same as
+        // every other container that starts without one today (the IMS
+        // one-click "Add to yard" path).
+        survey: null,
         priority,
         registeredAt: new Date().toISOString(),
-        sections: required.map((kind) => ({
-          kind,
-          tasks:
-            kind === 'painting'
-              ? paintingTaskList
-              : kind === 'pti'
-                ? [...ptiTasks(null, typeCode.includes('Anteroom')), ...repairTasksFor(surveyFieldsArr, MACHINE_CHECK_FIELDS, 'Light site')]
-                : kind === 'cleaning'
-                  ? cleaningTasks(null)
-                  : allRounderTasks,
-        })),
-        // Even a container with nothing flagged now needs a completion photo
-        // before it's genuinely "ready to move" (client request) -- readyAt
-        // is never set until that photo is uploaded, so this no longer
-        // short-circuits straight to ready for a clean survey outcome.
+        sections: [],
         readyAt: null,
         readyPhotoUrls: [],
         currentSite: null,
@@ -867,7 +521,7 @@ export function GateFormDialog({
     if (!container) return;
     setSubmitting(true);
     try {
-      const [photosResult, ptiVideoUrl] = await Promise.all([buildPhotos(), uploadIfPresent(ptiVideoFile).then((u) => u || null)]);
+      const photosResult = await buildPhotos();
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'out',
@@ -881,15 +535,15 @@ export function GateFormDialog({
         transporterNumber,
         vehicleNumber,
         lrCopyName,
-        ptiCheck,
-        ptiVideoName,
-        ptiVideoUrl,
+        ptiCheck: 'No',
+        ptiVideoName: null,
+        ptiVideoUrl: null,
         photos: photosResult,
         paintingRequired: null,
         repairRequired: null,
         repairFields: [],
         machineIssueFound: null,
-        machineFields: [],
+        machineRepairNote: '',
         cleaningRequired: null,
         estBudget: '',
         remarks,
@@ -908,14 +562,12 @@ export function GateFormDialog({
   const handleSaveDraft = (): void => {
     const isEmpty =
       !id.trim() && !loggedBy.trim() && !indentRef.trim() && !customerName.trim() && !location.trim() &&
-      !transporterName.trim() && !vehicleNumber.trim() && logoChoice === 'na' && !priority && !paintingRequired &&
-      !repairRequired && !machineIssueFound && !cleaningRequired && !estBudget.trim() && !remarks.trim();
+      !transporterName.trim() && !vehicleNumber.trim() && !priority && !remarks.trim();
     if (!isEmpty) {
       onSaveDraft?.({
-        id, typeCode, size, color, customColor, logoChoice, priority,
-        fields: [...repairFields, ...machineFields],
+        id, typeCode, size, color, customColor, priority,
         loggedBy, indentRef, customerName, location, transporterName, transporterNumber, vehicleNumber,
-        ptiCheck, paintingRequired, repairRequired, machineIssueFound, cleaningRequired, estBudget, remarks,
+        remarks,
       });
     }
     if (resumeDraft) onDiscardDraft?.(resumeDraft.id);
@@ -965,7 +617,7 @@ export function GateFormDialog({
         onOpenChange(next);
         if (!next) reset();
       }}
-      title={isOut ? 'Gate out' : step === 'intake' ? 'New arrival — gate in' : 'Survey result'}
+      title={isOut ? 'Gate out' : 'New arrival — gate in'}
       subtitle={isOut && container ? <span className="mono">{container.id}</span> : undefined}
       size="lg"
       footer={
@@ -978,22 +630,13 @@ export function GateFormDialog({
               Confirm &amp; gate out
             </Button>
           </>
-        ) : step === 'intake' ? (
-          <>
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button variant="secondary" icon="doc" onClick={handleSaveDraft}>
-              Save as draft
-            </Button>
-            <Button variant="primary" icon="doc" onClick={runSurvey}>
-              Run survey
-            </Button>
-          </>
         ) : (
           <>
-            <Button variant="ghost" onClick={() => setStep('intake')} disabled={submitting}>
-              Back
+            <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="secondary" icon="doc" onClick={handleSaveDraft} disabled={submitting}>
+              Save as draft
             </Button>
             <Button variant="primary" icon="check-circle" onClick={confirmGateIn} loading={submitting}>
               Confirm &amp; gate in
@@ -1002,8 +645,7 @@ export function GateFormDialog({
         )
       }
     >
-      {(isOut || step === 'intake') ? (
-        <div className="stack stack-loose">
+      <div className="stack stack-loose">
           <div className="formgrid">
             <div className="stack">
               <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
@@ -1019,43 +661,35 @@ export function GateFormDialog({
                 </>
               ) : (
                 <>
-                  {fast ? (
-                    <div className="subtle" style={{ fontSize: '12.5px', marginBottom: 'var(--s-2)' }}>
-                      <b className="mono" style={{ color: 'var(--text)' }}>{id}</b> — matched from IMS Stock.
-                    </div>
-                  ) : (
-                    <>
-                      <Field label="Container / tank ID" hint="Leave blank to auto-generate a placeholder ID" error={idError ?? undefined}>
-                        {(props) => (
-                          <input
-                            {...props}
-                            value={id}
-                            onChange={(e) => {
-                              setId(e.target.value);
-                              setIdError(null);
-                              setImsStatus('idle');
-                              setImsMatches([]);
-                              setImsElsewhere([]);
-                              setImsApplied(null);
-                            }}
-                            placeholder="RFCU 445 129-8"
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                        )}
-                      </Field>
-                      <ImsLookupPanel
-                        status={imsStatus}
-                        matches={imsMatches}
-                        elsewhere={imsElsewhere}
-                        applied={imsApplied}
-                        disabled={!id.trim()}
-                        onCheck={checkIms}
-                        onApply={applyImsMatch}
-                        onDismiss={() => { setImsStatus('idle'); setImsMatches([]); setImsElsewhere([]); setImsApplied(null); }}
+                  <Field label="Container / tank ID" hint="Leave blank to auto-generate a placeholder ID" error={idError ?? undefined}>
+                    {(props) => (
+                      <input
+                        {...props}
+                        value={id}
+                        onChange={(e) => {
+                          setId(e.target.value);
+                          setIdError(null);
+                          setImsStatus('idle');
+                          setImsMatches([]);
+                          setImsElsewhere([]);
+                          setImsApplied(null);
+                        }}
+                        placeholder="RFCU 445 129-8"
+                        autoComplete="off"
+                        spellCheck={false}
                       />
-                    </>
-                  )}
+                    )}
+                  </Field>
+                  <ImsLookupPanel
+                    status={imsStatus}
+                    matches={imsMatches}
+                    elsewhere={imsElsewhere}
+                    applied={imsApplied}
+                    disabled={!id.trim()}
+                    onCheck={checkIms}
+                    onApply={applyImsMatch}
+                    onDismiss={() => { setImsStatus('idle'); setImsMatches([]); setImsElsewhere([]); setImsApplied(null); }}
+                  />
                   <Field label="Type / product code">
                     {(props) => (
                       <select {...props} value={typeCode} onChange={(e) => setTypeCode(e.target.value)}>
@@ -1064,6 +698,26 @@ export function GateFormDialog({
                     )}
                   </Field>
                   <Field label="Size">{(props) => <select {...props} value={size} onChange={(e) => setSize(e.target.value)}>{SIZE_OPTIONS.map((s) => <option key={s}>{s}</option>)}</select>}</Field>
+                  {isReefer ? (
+                    <Field label="Paint colour" hint="Reefers default to white">
+                      {(props) => <input {...props} value="White" disabled />}
+                    </Field>
+                  ) : (
+                    <>
+                      <Field label="Paint colour">
+                        {(props) => (
+                          <select {...props} value={color} onChange={(e) => setColor(e.target.value)}>
+                            {[...STANDARD_COLORS, CUSTOM_COLOR].map((c) => <option key={c}>{c}</option>)}
+                          </select>
+                        )}
+                      </Field>
+                      {color === CUSTOM_COLOR && (
+                        <Field label="Custom colour">
+                          {(props) => <input {...props} value={customColor} onChange={(e) => setCustomColor(e.target.value)} placeholder="e.g. Traffic Red" />}
+                        </Field>
+                      )}
+                    </>
+                  )}
                 </>
               )}
               <Field label="Indent Reference">
@@ -1095,74 +749,31 @@ export function GateFormDialog({
             </div>
 
             <div className="stack">
-              {!fast && (
-                <>
-                  <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
-                    Transport Details
-                  </div>
-                  <Field label="Location" required>
-                    {(props) => <input {...props} value={location} onChange={(e) => setLocation(e.target.value)} />}
-                  </Field>
-                  <Field label="Transporter Name" required>
-                    {(props) => <input {...props} value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />}
-                  </Field>
-                  <Field label="Transporter Number">
-                    {(props) => <input {...props} value={transporterNumber} onChange={(e) => setTransporterNumber(e.target.value)} />}
-                  </Field>
-                  <Field label="Vehicle Number" required>
-                    {(props) => <input {...props} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />}
-                  </Field>
-                  <Field label="LR Copy" hint={lrCopyName ?? 'No file chosen'}>
-                    {(props) => (
-                      <input
-                        {...props}
-                        type="file"
-                        accept="image/*,application/pdf"
-                        onChange={(e) => setLrCopyName(e.target.files?.[0]?.name ?? null)}
-                      />
-                    )}
-                  </Field>
-                </>
-              )}
-
-              <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
-                PTI Check
+              <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
+                Transport Details
               </div>
-              <Field label="PTI Check" required>
+              <Field label="Location" required>
+                {(props) => <input {...props} value={location} onChange={(e) => setLocation(e.target.value)} />}
+              </Field>
+              <Field label="Transporter Name" required>
+                {(props) => <input {...props} value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />}
+              </Field>
+              <Field label="Transporter Number">
+                {(props) => <input {...props} value={transporterNumber} onChange={(e) => setTransporterNumber(e.target.value)} />}
+              </Field>
+              <Field label="Vehicle Number" required>
+                {(props) => <input {...props} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />}
+              </Field>
+              <Field label="LR Copy" hint={lrCopyName ?? 'No file chosen'}>
                 {(props) => (
-                  <select
+                  <input
                     {...props}
-                    value={ptiCheck}
-                    onChange={(e) => {
-                      const next = e.target.value as PtiCheckAnswer;
-                      setPtiCheck(next);
-                      if (next === 'No') {
-                        setPtiVideoName(null);
-                        setPtiVideoFile(null);
-                      }
-                    }}
-                  >
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setLrCopyName(e.target.files?.[0]?.name ?? null)}
+                  />
                 )}
               </Field>
-              {ptiCheck === 'Yes' && (
-                <Field label="PTI Video" required hint={ptiVideoName ?? 'No file chosen'}>
-                  {(props) => (
-                    <input
-                      {...props}
-                      type="file"
-                      accept="video/*"
-                      onChange={(e) => {
-                        const picked = e.target.files?.[0] ?? null;
-                        setPtiVideoFile(picked);
-                        setPtiVideoName(picked?.name ?? null);
-                      }}
-                    />
-                  )}
-                </Field>
-              )}
 
               <Field label="Remarks">
                 {(props) => <textarea {...props} rows={3} value={remarks} onChange={(e) => setRemarks(e.target.value)} />}
@@ -1170,156 +781,8 @@ export function GateFormDialog({
             </div>
           </div>
 
-          {/* Assessment runs full-width below the two columns, and the two
-             itemized checklists sit right after the toggle that reveals them
-             — not detached at the end of the form — so "what does this
-             container need" reads as one continuous decision, not two
-             unrelated spots on the page. The simple yes/no questions (Logo,
-             Color, Repair Required, Machine issue, Cleaning, Budget) are
-             boxed together in their own .card, kept visually separate from
-             the itemized checklist that follows — one is a handful of
-             quick calls, the other is a 12/14-item inspection list, and
-             they shouldn't read as the same kind of thing. */}
-          {!isOut && (
-            <div className="stack" style={{ marginTop: 'var(--s-3)' }}>
-              <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)' }}>
-                Assessment
-              </div>
-              <div className="card">
-                {/* Paint (primer/coats/logo) is its own part of the survey,
-                   by direct request — kept visually separate from the
-                   damage/repair questions below, since one no longer implies
-                   the other. */}
-                <div className="subtle" style={{ fontSize: '11px', fontWeight: 700, marginBottom: 'var(--s-1)' }}>
-                  Paint
-                </div>
-                <div className="formgrid">
-                  <Field label="Painting required?" required>
-                    {(props) => (
-                      <select {...props} value={paintingRequired ? 'Yes' : 'No'} onChange={(e) => setPaintingRequired(e.target.value === 'Yes')}>
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    )}
-                  </Field>
-                  <Field label="Logo">
-                    {(props) => (
-                      <select {...props} value={logoChoice} onChange={(e) => setLogoChoice(e.target.value as LogoChoice)}>
-                        {(Object.keys(LOGO_LABELS) as LogoChoice[]).map((k) => <option key={k} value={k}>{LOGO_LABELS[k]}</option>)}
-                      </select>
-                    )}
-                  </Field>
-                  <div className="stack" style={{ gap: 'var(--s-1)' }}>
-                    <div className="cluster" style={{ justifyContent: 'space-between', gap: 'var(--s-2)' }}>
-                      <span style={{ fontSize: '12.5px', flex: 1, minWidth: 0 }}>Color</span>
-                      {isReefer ? (
-                        <input className="input" style={{ width: '150px', height: '38px', padding: '8px 10px', fontSize: '12.5px', flex: 'none' }} value="White" disabled />
-                      ) : (
-                        <select
-                          className="input"
-                          style={{ width: '150px', height: '38px', padding: '8px 10px', fontSize: '12.5px', flex: 'none' }}
-                          value={color}
-                          onChange={(e) => setColor(e.target.value)}
-                        >
-                          {[...STANDARD_COLORS, CUSTOM_COLOR].map((c) => <option key={c}>{c}</option>)}
-                        </select>
-                      )}
-                    </div>
-                    {!isReefer && color === CUSTOM_COLOR && (
-                      <input className="input" style={{ height: '38px', padding: '8px 10px', fontSize: '12.5px' }} value={customColor} onChange={(e) => setCustomColor(e.target.value)} placeholder="e.g. Traffic Red" />
-                    )}
-                  </div>
-                </div>
-
-                <div className="subtle" style={{ fontSize: '11px', fontWeight: 700, margin: 'var(--s-3) 0 var(--s-1)' }}>
-                  Repairment &amp; other
-                </div>
-                <div className="formgrid">
-                  <Field label="Repair Required?" required>
-                    {(props) => (
-                      <select {...props} value={repairRequired ? 'Yes' : 'No'} onChange={(e) => setRepairRequired(e.target.value === 'Yes')}>
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    )}
-                  </Field>
-                  {isReefer && (
-                    <Field label="Machine issue found?">
-                      {(props) => (
-                        <select {...props} value={machineIssueFound ? 'Yes' : 'No'} onChange={(e) => setMachineIssueFound(e.target.value === 'Yes')}>
-                          <option value="No">No</option>
-                          <option value="Yes">Yes</option>
-                        </select>
-                      )}
-                    </Field>
-                  )}
-                  <Field label="Cleaning required?" required>
-                    {(props) => (
-                      <select {...props} value={cleaningRequired ? 'Yes' : 'No'} onChange={(e) => setCleaningRequired(e.target.value === 'Yes')}>
-                        <option value="No">No</option>
-                        <option value="Yes">Yes</option>
-                      </select>
-                    )}
-                  </Field>
-                  <Field label="Est. Budget">
-                    {(props) => <input {...props} value={estBudget} onChange={(e) => setEstBudget(e.target.value)} placeholder="e.g. ₹8,000" />}
-                  </Field>
-                </div>
-              </div>
-
-              {repairRequired && (
-                <>
-                  <div className="divider-lbl">Container Inspection Checklist</div>
-                  <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>
-                    Mark each part Good or Damage — Damage reveals a box for what's wrong.
-                  </p>
-                  <div className="checklist-grid" style={{ paddingLeft: 'var(--s-2)', borderLeft: '2px solid var(--line)' }}>
-                    {repairFields.map((f) => (
-                      <RepairFieldRow key={f.key} field={f} onSeverity={(s) => setRepairSeverity(f.key, s)} onNote={(n) => setRepairNote(f.key, n)} />
-                    ))}
-                  </div>
-                </>
-              )}
-              {isReefer && machineIssueFound && (
-                <>
-                  <div className="divider-lbl">Machine Check</div>
-                  <div className="checklist-grid" style={{ paddingLeft: 'var(--s-2)', borderLeft: '2px solid var(--line)' }}>
-                    {machineFields.map((f) => (
-                      <FieldRow key={f.key} field={f} onSeverity={(s) => setMachineSeverity(f.key, s)} onNote={(n) => setMachineNote(f.key, n)} />
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
           {photoGrid}
-        </div>
-      ) : (
-        <div className="stack">
-          {Object.values(sections).every((v) => !v) ? (
-            <div className="empty" style={{ padding: 'var(--s-3) 0' }}>
-              <Button variant="ghost" style={{ pointerEvents: 'none' }} icon="check-circle" />
-              <b>No issues found</b>
-              <p>This unit can go straight to Ready to Move — check a box below if it needs a section anyway.</p>
-            </div>
-          ) : (
-            <p style={{ fontSize: '12.5px', color: 'var(--text-2)' }}>
-              Survey flagged the sections below. Adjust before confirming — this is what gets attached at gate-in.
-            </p>
-          )}
-          <div className="stack stack-tight">
-            {(Object.keys(sections) as SectionKind[]).map((kind) => (
-              <CheckboxField
-                key={kind}
-                checked={sections[kind]}
-                onCheckedChange={(v) => setSections((cur) => ({ ...cur, [kind]: v }))}
-                label={kind === 'painting' ? 'Painting' : kind === 'pti' ? 'PTI (Technician)' : kind === 'cleaning' ? 'Cleaning' : 'Repairment'}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+      </div>
     </Modal>
   );
 }

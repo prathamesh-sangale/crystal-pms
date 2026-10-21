@@ -15,10 +15,12 @@ interface StartableTask {
  * neither one can start a task more permissively than the other.
  *
  * Two different guards, two different responses, on purpose:
- * - A worker already running something else can't *also* run this — a
- *   person can only physically do one thing at a time. Nothing to confirm;
- *   the task simply stays queued (it's already sitting in their "today"
- *   list as pending/waiting) and a toast says why it didn't start.
+ * - A worker already running something else is allowed to start a second
+ *   (or third) task too, by direct request — one worker can genuinely run
+ *   multiple containers' work at once now. Nothing blocks it, but a toast
+ *   still flags it, since it's exactly the kind of thing an admin should
+ *   notice (and it's why a worker's "hours worked" can now exceed real
+ *   clock time — two running tasks both accrue time in parallel).
  * - A task scheduled for a different day is a plan, not a lock. Confirm,
  *   and the admin can start it anyway — plans change.
  */
@@ -48,10 +50,9 @@ export function useStartGuard(
           const worker = workers.find((w) => w.id === task.workerId);
           toast.toast(
             'info',
-            'Worker is busy',
-            `${worker?.name ?? 'This worker'} is already running ${busy.task.label} on ${busy.containerId} — ${task.label} stays queued for today, next up once they're free.`
+            'Worker already running another task',
+            `${worker?.name ?? 'This worker'} is already running ${busy.task.label} on ${busy.containerId} — starting ${task.label} too.`
           );
-          return;
         }
       }
       if (task.scheduledFor && task.scheduledFor !== offsetDate(0)) {

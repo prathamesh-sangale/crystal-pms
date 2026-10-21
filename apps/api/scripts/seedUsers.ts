@@ -19,7 +19,7 @@ import { supabase } from '../src/supabase.js';
 
 const ADMIN_PASSWORD = 'admin123';
 
-const USERS = [{ id: 'u-sitaram', email: 'admin@crystalpms.com', name: 'Sitaram Bhat', role: 'manager', password: ADMIN_PASSWORD }];
+const USERS = [{ id: 'u-sitaram', email: 'admin@crystalpms.com', name: 'Sitaram', role: 'manager', password: ADMIN_PASSWORD }];
 
 async function main() {
   // onConflict: 'id', not 'email' — the admin account's email just changed

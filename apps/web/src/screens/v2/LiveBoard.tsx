@@ -29,7 +29,7 @@ import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { Person, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
-import { EmptyState } from '../../components/crystal/Feedback';
+import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
 
@@ -138,6 +138,7 @@ function TaskQuickAction({
   onCancel: (containerId: string, kind: SectionKind, key: string) => void;
 }): React.ReactElement | null {
   const { task, containerId, section } = row;
+  const toast = useToast();
   // Stops the click from also bubbling up to a card's own "open detail"
   // onClick where this is used in the cards grid below — harmless where
   // it's used today, inside a table cell with no row-level click handler.
@@ -170,11 +171,11 @@ function TaskQuickAction({
     );
   }
   if (task.state === 'pending' && task.workerId) {
-    const sectionData = containers.find((c) => c.id === containerId)?.sections.find((s) => s.kind === section) ?? null;
-    const blockedBy = sectionData ? paintingTaskBlockedBy(sectionData, task) : null;
-    if (blockedBy) {
-      return <span className="subtle" style={{ fontSize: '11px' }}>Waiting on {blockedBy.label}</span>;
-    }
+    const containerData = containers.find((c) => c.id === containerId) ?? null;
+    const sectionData = containerData?.sections.find((s) => s.kind === section) ?? null;
+    const blockedBy = containerData && sectionData ? paintingTaskBlockedBy(containerData, sectionData, task) : null;
+    // Starting out of sequence doesn't disable the button — it toasts why
+    // and stays put, same pattern as Container Detail's own Start button.
     return (
       <Button
         variant="secondary"
@@ -182,6 +183,10 @@ function TaskQuickAction({
         icon="clock"
         onClick={(e) => {
           e.stopPropagation();
+          if (blockedBy) {
+            toast.toast('info', 'Out of sequence', `${blockedBy.label} needs to finish first — ${task.label} can't start yet.`);
+            return;
+          }
           onStart(containerId, section, task.key, task);
         }}
       >
