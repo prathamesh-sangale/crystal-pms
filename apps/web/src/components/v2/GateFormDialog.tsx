@@ -53,11 +53,11 @@ const LOGO_TASK: Record<Exclude<LogoChoice, 'na'>, { label: string; estHrs: numb
   removal: { label: 'Logo removal', estHrs: 0.5 },
 };
 
-interface DraftField extends MockSurveyField {
+export interface DraftField extends MockSurveyField {
   key: string;
 }
 
-function blankFields(labels: string[], defaultSeverity: FieldSeverity = 'unassessed'): DraftField[] {
+export function blankFields(labels: string[], defaultSeverity: FieldSeverity = 'unassessed'): DraftField[] {
   return labels.map((label) => ({ key: label, label, severity: defaultSeverity, note: '' }));
 }
 
@@ -71,7 +71,7 @@ const SEVERITY_TONE: Record<'good' | 'minor' | 'major', { icon: IconName; color:
  * over from the old SurveyIntakeDialog unchanged — still the fastest way to
  * work through a checklist once "Repair Required?"/"Machine issue found?"
  * reveals one. */
-function SeverityToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
+export function SeverityToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
   return (
     <span className="cluster" style={{ gap: '6px', flex: 'none' }} role="group" aria-label="Severity">
       {(['good', 'minor', 'major'] as const).map((s) => {
@@ -96,7 +96,7 @@ function SeverityToggle({ value, onChange }: { value: FieldSeverity; onChange: (
   );
 }
 
-function FieldRow({
+export function FieldRow({
   field,
   onSeverity,
   onNote,
@@ -134,7 +134,7 @@ function FieldRow({
  * required right under it removes that gap — either an item is damaged and
  * says how, or it isn't. (Labelled "Good"/"Damage" rather than "No"/"Yes",
  * by direct request — reads as a condition, not a question's answer.) */
-function RepairToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
+export function RepairToggle({ value, onChange }: { value: FieldSeverity; onChange: (severity: FieldSeverity) => void }): React.ReactElement {
   const isDamaged = value === 'flagged';
   return (
     <span className="cluster" style={{ gap: '6px', flex: 'none' }} role="group" aria-label="Condition">
@@ -148,7 +148,7 @@ function RepairToggle({ value, onChange }: { value: FieldSeverity; onChange: (se
   );
 }
 
-function RepairFieldRow({
+export function RepairFieldRow({
   field,
   onSeverity,
   onNote,
@@ -290,18 +290,49 @@ function PhotoSlot({
   onPick: (file: File) => void;
   onClear: () => void;
 }): React.ReactElement {
-  const inputId = useId();
+  const cameraId = useId();
+  const galleryId = useId();
   const previewUrl = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  if (file) {
+    return (
+      <div className={cx('photo-tile', 'has-photo')}>
+        {previewUrl && <img src={previewUrl} alt="" />}
+        <span className="photo-tile-label">
+          {label}
+          {required && <span className="req" aria-hidden="true">*</span>}
+        </span>
+        <button type="button" className="iconbtn bare photo-tile-remove" aria-label={`Remove ${label} photo`} onClick={onClear}>
+          <Icon name="x" size="sm" />
+        </button>
+      </div>
+    );
+  }
+
+  // Two explicit choices rather than one big tap target depending on
+  // whatever the device's own file picker happens to offer -- not every
+  // browser surfaces both a camera and a gallery option from a single
+  // <input>, and it isn't obvious either way which one tapping the tile
+  // would open.
   return (
-    <label htmlFor={inputId} className={cx('photo-tile', file && 'has-photo')}>
-      {previewUrl ? <img src={previewUrl} alt="" /> : <Icon name="upload" />}
+    <div className="photo-tile photo-tile-empty">
       <span className="photo-tile-label">
         {label}
         {required && <span className="req" aria-hidden="true">*</span>}
       </span>
+      <span className="photo-tile-choices">
+        <label htmlFor={cameraId} className="photo-tile-choice">
+          <Icon name="camera" size="sm" />
+          Camera
+        </label>
+        <label htmlFor={galleryId} className="photo-tile-choice">
+          <Icon name="gallery" size="sm" />
+          Gallery
+        </label>
+      </span>
       <input
-        id={inputId}
+        id={cameraId}
         type="file"
         accept="image/*"
         capture="environment"
@@ -312,20 +343,18 @@ function PhotoSlot({
           e.target.value = '';
         }}
       />
-      {file && (
-        <button
-          type="button"
-          className="iconbtn bare photo-tile-remove"
-          aria-label={`Remove ${label} photo`}
-          onClick={(e) => {
-            e.preventDefault();
-            onClear();
-          }}
-        >
-          <Icon name="x" size="sm" />
-        </button>
-      )}
-    </label>
+      <input
+        id={galleryId}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const picked = e.target.files?.[0];
+          if (picked) onPick(picked);
+          e.target.value = '';
+        }}
+      />
+    </div>
   );
 }
 
@@ -816,7 +845,7 @@ export function GateFormDialog({
         // is never set until that photo is uploaded, so this no longer
         // short-circuits straight to ready for a clean survey outcome.
         readyAt: null,
-        readyPhotoUrl: null,
+        readyPhotoUrls: [],
         currentSite: null,
         gateIn: entry,
         gateOut: null,

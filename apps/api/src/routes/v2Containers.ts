@@ -80,7 +80,7 @@ const patchContainerSchema = z
     priority: z.boolean().optional(),
     currentSite: z.string().nullable().optional(),
     readyAt: z.string().nullable().optional(),
-    readyPhotoUrl: z.string().nullable().optional(),
+    readyPhotoUrls: z.array(z.string()).optional(),
     departedAt: z.string().nullable().optional(),
     gateOut: z.record(z.string(), z.unknown()).nullable().optional(),
   })
@@ -108,7 +108,7 @@ const CONTAINER_FIELD_MAP: Record<string, string> = {
   priority: 'priority',
   currentSite: 'current_site',
   readyAt: 'ready_at',
-  readyPhotoUrl: 'ready_photo_url',
+  readyPhotoUrls: 'ready_photo_urls',
   departedAt: 'departed_at',
   gateOut: 'gate_out',
 };
@@ -254,18 +254,18 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
 
     // "Ready" without a photo was only ever a client-side rule (the Mark
     // Ready button), so a direct API call could set readyAt with nothing
-    // backing it up. Checked against the *resulting* photo, not just this
-    // request's body, since a request can set readyAt alone and rely on a
-    // readyPhotoUrl that was already saved earlier.
+    // backing it up. Checked against the *resulting* photos, not just this
+    // request's body, since a request can set readyAt alone and rely on
+    // readyPhotoUrls that were already saved earlier.
     if (body.readyAt !== undefined && body.readyAt !== null) {
-      let photoUrl = body.readyPhotoUrl;
-      if (photoUrl === undefined) {
-        const { data: existing, error: existingErr } = await supabase().from('containers').select('ready_photo_url').eq('id', id).maybeSingle();
+      let photoUrls = body.readyPhotoUrls;
+      if (photoUrls === undefined) {
+        const { data: existing, error: existingErr } = await supabase().from('containers').select('ready_photo_urls').eq('id', id).maybeSingle();
         if (existingErr) throw app.httpErrors.internalServerError(existingErr.message);
-        photoUrl = (existing as { ready_photo_url: string | null } | null)?.ready_photo_url ?? null;
+        photoUrls = (existing as { ready_photo_urls: string[] } | null)?.ready_photo_urls ?? [];
       }
-      if (!photoUrl) {
-        return reply.code(422).send({ error: 'validation_failed', message: 'A container can only be marked ready with a photo attached.' });
+      if (photoUrls.length === 0) {
+        return reply.code(422).send({ error: 'validation_failed', message: 'A container can only be marked ready with at least one photo attached.' });
       }
     }
 

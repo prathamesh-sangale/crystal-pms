@@ -658,6 +658,42 @@ body {
   color: var(--text-inv);
 }
 
+/* An empty tile isn't one big click target anymore -- two explicit choices
+   (camera vs. gallery) instead of leaving it to whatever the OS's own file
+   picker happens to offer, which varies by browser/device. */
+.photo-tile-empty {
+  cursor: default;
+}
+
+.photo-tile-choices {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: var(--s-1);
+  width: 100%;
+}
+
+.photo-tile-choice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--s-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.photo-tile-choice:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
 .photo-thumb {
   display: block;
   aspect-ratio: 4 / 3;

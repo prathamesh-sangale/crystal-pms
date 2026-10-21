@@ -90,6 +90,7 @@ export function YardBoard(): React.ReactElement {
     clearPendingOpen,
     updateContainer,
     removeContainer,
+    runSurvey,
     setPriority,
     gateOut,
   } = useV2Data();
@@ -189,8 +190,8 @@ export function YardBoard(): React.ReactElement {
     return [...advanced].sort((a, b) => Number(b.priority) - Number(a.priority));
   }, [activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery]);
 
-  const handleMarkReady = async (id: string, photoUrl: string): Promise<void> => {
-    await markReady(id, photoUrl);
+  const handleMarkReady = async (id: string, photoUrls: string[]): Promise<void> => {
+    await markReady(id, photoUrls);
     toast.ok('Ready to move', `${id} cleared for release.`);
   };
 
@@ -456,6 +457,7 @@ export function YardBoard(): React.ReactElement {
         onMarkReady={handleMarkReady}
         onUpdateContainer={updateContainer}
         onRemoveContainer={removeContainer}
+        onRunSurvey={runSurvey}
         onSetPriority={setPriority}
         onGateOut={gateOut}
       />

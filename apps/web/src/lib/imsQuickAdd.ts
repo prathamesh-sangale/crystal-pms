@@ -48,7 +48,7 @@ export function buildQuickAddContainer(item: ImsMatch, loggedBy: string): MockCo
     registeredAt: now.toISOString(),
     sections: [],
     readyAt: null,
-    readyPhotoUrl: null,
+    readyPhotoUrls: [],
     currentSite: null,
     gateIn: entry,
     gateOut: null,

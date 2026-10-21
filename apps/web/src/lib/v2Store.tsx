@@ -5,6 +5,7 @@ import {
   type ContainerDraftData,
   type GateLogEntry,
   type MockContainer,
+  type MockSurveyField,
   type MockWorker,
   type SailingSite,
   type SectionKind,
@@ -68,10 +69,11 @@ interface V2Data {
    * ad-hoc repair flagged from PTI, etc). Awaits the server since it's a
    * real insert, not a patch to something already in local state. */
   addTask: (containerId: string, kind: SectionKind, task: NewTaskInput) => Promise<void>;
-  /** A completion photo is required before a container can be marked ready
-   * (client request) — the photo URL and readyAt are set together in one
-   * call, so there's no in-between state where readyAt is set without one. */
-  markReady: (containerId: string, photoUrl: string) => Promise<void>;
+  /** At least one completion photo is required before a container can be
+   * marked ready (client request) — the photo URLs and readyAt are set
+   * together in one call, so there's no in-between state where readyAt is
+   * set without any. */
+  markReady: (containerId: string, photoUrls: string[]) => Promise<void>;
   gateIn: (container: MockContainer) => Promise<void>;
   /** Only ever called on a container that's already Ready to move — archives
    * it (sets `departedAt`) so it drops off the active Yard Board/Dashboards/
@@ -83,6 +85,16 @@ interface V2Data {
    * not a real-world event like load/offload. No confirmation lives here;
    * the caller (Container Detail) owns that. */
   removeContainer: (containerId: string) => Promise<void>;
+  /** Runs a retrofit survey on a container that was gated in without a real
+   * one (today, only the IMS "Add to yard" one-click flow produces that) —
+   * the other half of that flow staying a choice, not a one-way door: this
+   * is where a fast-added container gets a real look later, if one turns
+   * out to be needed. Refused server-side once the container already has
+   * sections. */
+  runSurvey: (
+    containerId: string,
+    result: { outcome: 'ready' | 'needs-work'; fields: MockSurveyField[]; sections: Array<{ kind: SectionKind; tasks: MockContainer['sections'][number]['tasks'] }> }
+  ) => Promise<void>;
   setPriority: (containerId: string, priority: boolean) => void;
   drafts: ContainerDraft[];
   saveDraft: (data: ContainerDraftData) => Promise<void>;
@@ -313,8 +325,8 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },
 
-      markReady: async (containerId, photoUrl) => {
-        const patch = { readyAt: todayDate(), readyPhotoUrl: photoUrl };
+      markReady: async (containerId, photoUrls) => {
+        const patch = { readyAt: todayDate(), readyPhotoUrls: photoUrls };
         const { container: saved } = await api.v2PatchContainer(containerId, patch);
         setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },
@@ -339,6 +351,11 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
       removeContainer: async (containerId) => {
         await api.v2RemoveContainer(containerId);
         setContainers((cur) => cur.filter((c) => c.id !== containerId));
+      },
+
+      runSurvey: async (containerId, result) => {
+        const { container: saved } = await api.v2RunSurvey(containerId, result);
+        setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },
 
       setPriority: (containerId, priority) => {

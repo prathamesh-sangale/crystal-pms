@@ -26,6 +26,7 @@ import {
   type GateLogEntry,
   type MockContainer,
   type MockSection,
+  type MockSurveyField,
   type MockTask,
   type MockWorker,
   type SailingSite,
@@ -43,6 +44,7 @@ import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, Modal } from '../crystal/Overlay';
 import { GateFormDialog } from './GateFormDialog';
 import { MiniStageStrip } from './MiniStageStrip';
+import { RunSurveyDialog } from './RunSurveyDialog';
 import { useStartGuard } from './useStartGuard';
 
 const CUSTOM_COLOR = 'Custom…';
@@ -247,6 +249,7 @@ export function ContainerDetailDrawer({
   onMarkReady,
   onUpdateContainer,
   onRemoveContainer,
+  onRunSurvey,
   onSetPriority,
   onGateOut,
 }: {
@@ -263,7 +266,7 @@ export function ContainerDetailDrawer({
   onAssignWorker: (containerId: string, sectionKind: SectionKind, taskKey: string, workerId: string) => void;
   onScheduleTask: (containerId: string, sectionKind: SectionKind, taskKey: string, date: string | null) => void;
   onSetTaskSite: (containerId: string, sectionKind: SectionKind, taskKey: string, site: SailingSite) => void;
-  onMarkReady: (containerId: string, photoUrl: string) => Promise<void>;
+  onMarkReady: (containerId: string, photoUrls: string[]) => Promise<void>;
   /** Absent on Live Board's own instance of this drawer, by direct design
    * decision — editing a container's type/size/color, and removing it
    * outright, are Yard Board's alone now, not something available from
@@ -272,6 +275,10 @@ export function ContainerDetailDrawer({
    * just cosmetic. */
   onUpdateContainer?: (containerId: string, updates: { typeCode: string; size: string; color: string | null }) => void;
   onRemoveContainer?: (containerId: string) => Promise<void>;
+  /** Same Yard-only split as onUpdateContainer/onRemoveContainer above —
+   * retrofitting a survey onto a container that skipped one is a Yard Board
+   * action, not something Live Board's drawer offers. */
+  onRunSurvey?: (containerId: string, result: { outcome: 'ready' | 'needs-work'; fields: MockSurveyField[]; sections: Array<{ kind: SectionKind; tasks: MockTask[] }> }) => Promise<void>;
   onSetPriority: (containerId: string, priority: boolean) => void;
   onGateOut: (containerId: string, entry: GateLogEntry) => Promise<void>;
 }): React.ReactElement {
@@ -284,6 +291,7 @@ export function ContainerDetailDrawer({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [gateOutOpen, setGateOutOpen] = useState(false);
+  const [surveyOpen, setSurveyOpen] = useState(false);
   const toast = useToast();
   const [editDraft, setEditDraft] = useState({ typeCode: TYPE_CODES[0]!, size: SIZE_OPTIONS[0]!, color: STANDARD_COLORS[0]! });
   // Separate from editDraft.color, same split GateFormDialog uses — the
@@ -355,6 +363,7 @@ export function ContainerDetailDrawer({
 
   useEffect(() => {
     setActiveSectionKind(container?.sections[0]?.kind ?? null);
+    setReadyPhotos([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a different container opening, not every section/task update.
   }, [container?.id]);
 
@@ -362,24 +371,50 @@ export function ContainerDetailDrawer({
   const status = container ? overallStatus(container) : null;
   const editIsReefer = editDraft.typeCode.startsWith('Reefer');
 
-  // A completion photo is required before "Mark ready to move" actually
-  // does anything (client request) -- uploading it and marking ready happen
-  // together, in the one action below, so readyAt is never set without one.
+  // At least one completion photo is required before "Mark ready to move"
+  // actually does anything (client request) -- photos are uploaded (one
+  // Drive call per file, camera or gallery, any number of times) and staged
+  // here first, so they can be reviewed/removed before the single action
+  // below sets readyAt together with all of them at once.
+  const [readyPhotos, setReadyPhotos] = useState<string[]>([]);
   const [readyPhotoUploading, setReadyPhotoUploading] = useState(false);
   const [readyPhotoError, setReadyPhotoError] = useState<string | null>(null);
-  const readyPhotoInputId = useId();
+  const [markReadyBusy, setMarkReadyBusy] = useState(false);
+  const readyCameraInputId = useId();
+  const readyGalleryInputId = useId();
 
-  const handleReadyPhoto = async (file: File | null): Promise<void> => {
-    if (!file || !container) return;
+  const handleReadyPhotos = async (files: File[]): Promise<void> => {
+    if (files.length === 0 || !container) return;
     setReadyPhotoError(null);
     setReadyPhotoUploading(true);
     try {
-      const { url } = await api.v2Upload(file);
-      await onMarkReady(container.id, url);
+      const uploaded: string[] = [];
+      for (const file of files) {
+        const { url } = await api.v2Upload(file);
+        uploaded.push(url);
+      }
+      setReadyPhotos((cur) => [...cur, ...uploaded]);
     } catch {
       setReadyPhotoError('Could not upload that photo. Try again.');
     } finally {
       setReadyPhotoUploading(false);
+    }
+  };
+
+  const removeReadyPhoto = (url: string): void => {
+    setReadyPhotos((cur) => cur.filter((u) => u !== url));
+  };
+
+  const handleMarkReady = async (): Promise<void> => {
+    if (!container || readyPhotos.length === 0) return;
+    setReadyPhotoError(null);
+    setMarkReadyBusy(true);
+    try {
+      await onMarkReady(container.id, readyPhotos);
+    } catch {
+      setReadyPhotoError('Could not mark ready. Try again.');
+    } finally {
+      setMarkReadyBusy(false);
     }
   };
 
@@ -449,6 +484,15 @@ export function ContainerDetailDrawer({
                 Edit
               </Button>
             )}
+            {/* Only offered on a container with no sections yet and not
+               already finalized — exactly what the server itself requires
+               (apps/api/src/routes/v2Containers.ts), so this never shows up
+               only to fail once clicked. */}
+            {onRunSurvey && container.sections.length === 0 && !container.readyAt && !container.departedAt && (
+              <Button variant="ghost" size="sm" icon="doc" onClick={() => setSurveyOpen(true)}>
+                Run survey
+              </Button>
+            )}
             {onRemoveContainer && (
               <Button variant="ghost" size="sm" icon="trash" onClick={() => setDeleteOpen(true)} disabled={anyRunning || Boolean(container.departedAt)}>
                 Delete
@@ -476,31 +520,85 @@ export function ContainerDetailDrawer({
             </Button>
           </span>
         ) : ready ? (
-          <span className="cluster" style={{ marginLeft: 'auto', gap: 'var(--s-2)', alignItems: 'center' }}>
+          <span className="stack" style={{ marginLeft: 'auto', alignItems: 'flex-end', gap: 'var(--s-2)' }}>
             {readyPhotoError && (
               <span className="subtle" style={{ color: 'var(--text-bad, #b42318)', fontSize: '12px' }}>
                 {readyPhotoError}
               </span>
             )}
-            <label
-              htmlFor={readyPhotoInputId}
-              className={cx('btn', 'btn-primary', readyPhotoUploading && 'loading')}
-              aria-disabled={readyPhotoUploading}
-            >
-              <Icon name="upload" size="sm" />
-              Upload completion photo to mark ready
-            </label>
-            <input
-              id={readyPhotoInputId}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              disabled={readyPhotoUploading}
-              onChange={(e) => {
-                void handleReadyPhoto(e.target.files?.[0] ?? null);
-                e.target.value = '';
-              }}
-            />
+            {readyPhotos.length > 0 && (
+              <span className="cluster" style={{ gap: 'var(--s-1)' }}>
+                {readyPhotos.map((url) => (
+                  <span key={url} style={{ position: 'relative' }}>
+                    <img
+                      src={url}
+                      alt=""
+                      style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}
+                    />
+                    <button
+                      type="button"
+                      className="iconbtn bare"
+                      aria-label="Remove this photo"
+                      onClick={() => removeReadyPhoto(url)}
+                      style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'var(--scrim)', color: 'var(--text-inv)' }}
+                    >
+                      <Icon name="x" size="sm" />
+                    </button>
+                  </span>
+                ))}
+              </span>
+            )}
+            <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+              <label
+                htmlFor={readyCameraInputId}
+                className={cx('btn', 'btn-secondary', 'btn-sm', readyPhotoUploading && 'loading')}
+                aria-disabled={readyPhotoUploading}
+              >
+                <Icon name="camera" size="sm" />
+                Camera
+              </label>
+              <input
+                id={readyCameraInputId}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                style={{ display: 'none' }}
+                disabled={readyPhotoUploading}
+                onChange={(e) => {
+                  void handleReadyPhotos([...(e.target.files ?? [])]);
+                  e.target.value = '';
+                }}
+              />
+              <label
+                htmlFor={readyGalleryInputId}
+                className={cx('btn', 'btn-secondary', 'btn-sm', readyPhotoUploading && 'loading')}
+                aria-disabled={readyPhotoUploading}
+              >
+                <Icon name="gallery" size="sm" />
+                Gallery
+              </label>
+              <input
+                id={readyGalleryInputId}
+                type="file"
+                accept="image/*"
+                multiple
+                style={{ display: 'none' }}
+                disabled={readyPhotoUploading}
+                onChange={(e) => {
+                  void handleReadyPhotos([...(e.target.files ?? [])]);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                variant="primary"
+                icon="check-circle"
+                loading={markReadyBusy}
+                disabled={readyPhotos.length === 0 || readyPhotoUploading || markReadyBusy}
+                onClick={() => void handleMarkReady()}
+              >
+                Mark ready to move
+              </Button>
+            </span>
           </span>
         ) : (
           <Button variant="primary" icon="check-circle" style={{ marginLeft: 'auto' }} disabled>
@@ -714,6 +812,10 @@ export function ContainerDetailDrawer({
           container={container}
           onGateOut={onGateOut}
         />
+      )}
+
+      {container && onRunSurvey && (
+        <RunSurveyDialog open={surveyOpen} onOpenChange={setSurveyOpen} container={container} onRunSurvey={onRunSurvey} />
       )}
 
       {container && (

@@ -1,5 +1,5 @@
 import type { ApiError } from '@pms/shared';
-import type { ContainerDraft, ContainerDraftData, MockContainer, MockWorker, SectionKind } from './mockV2';
+import type { ContainerDraft, ContainerDraftData, MockContainer, MockSurveyField, MockWorker, SectionKind } from './mockV2';
 
 const TOKEN_KEY = 'pms-token';
 
@@ -186,6 +186,12 @@ export const api = {
   v2RemoveContainer: (id: string) =>
     request<void>(`/api/v2/containers/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  v2RunSurvey: (id: string, body: { outcome: 'ready' | 'needs-work'; fields: MockSurveyField[]; sections: Array<{ kind: SectionKind; tasks: MockContainer['sections'][number]['tasks'] }> }) =>
+    request<{ container: MockContainer }>(`/api/v2/containers/${encodeURIComponent(id)}/survey`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   v2PatchTask: (containerId: string, kind: SectionKind, key: string, patch: TaskPatch) =>
     request<{ container: MockContainer }>(
       `/api/v2/containers/${encodeURIComponent(containerId)}/tasks/${encodeURIComponent(kind)}/${encodeURIComponent(key)}`,
@@ -291,7 +297,7 @@ export type HydraMovementInput = Pick<
 >;
 
 type ContainerPatch = Partial<
-  Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'readyPhotoUrl' | 'departedAt' | 'gateOut'>
+  Pick<MockContainer, 'typeCode' | 'size' | 'color' | 'priority' | 'currentSite' | 'readyAt' | 'readyPhotoUrls' | 'departedAt' | 'gateOut'>
 >;
 type TaskPatch = Partial<
   Pick<MockContainer['sections'][number]['tasks'][number], 'workerId' | 'state' | 'startedAt' | 'elapsedSec' | 'completedAt' | 'site' | 'scheduledFor'>

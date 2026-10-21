@@ -164,7 +164,7 @@ describe('container PATCH field-dependent permission', () => {
       method: 'PATCH',
       url: `/api/v2/containers/${containerId}`,
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { readyAt: new Date().toISOString(), readyPhotoUrl: 'https://drive.example/photo.jpg' },
+      payload: { readyAt: new Date().toISOString(), readyPhotoUrls: ['https://drive.example/photo.jpg'] },
     });
     expect(withPhoto.statusCode, withPhoto.body).toBe(200);
   });

@@ -50,7 +50,7 @@ export interface ContainerRow {
   registered_at: string;
   current_site: string | null;
   ready_at: string | null;
-  ready_photo_url: string | null;
+  ready_photo_urls: string[];
   departed_at: string | null;
   survey_performed_at: string | null;
   survey_outcome: string | null;
@@ -104,7 +104,7 @@ export function fromContainerRow(row: ContainerRow): Record<string, unknown> {
     registeredAt: row.registered_at,
     currentSite: row.current_site,
     readyAt: row.ready_at,
-    readyPhotoUrl: row.ready_photo_url,
+    readyPhotoUrls: row.ready_photo_urls ?? [],
     departedAt: row.departed_at,
     survey: row.survey_performed_at
       ? { performedAt: row.survey_performed_at, outcome: row.survey_outcome, fields: row.survey_fields ?? [] }

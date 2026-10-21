@@ -390,10 +390,12 @@ export interface MockContainer {
   survey: MockSurvey | null;
   sections: MockSection[];
   readyAt: string | null;
-  /** A completion photo is required before a container can be marked ready
-   * (client request) — set together with `readyAt` in the same action, so
-   * this is never non-null while `readyAt` is still null, or vice versa. */
-  readyPhotoUrl: string | null;
+  /** At least one completion photo is required before a container can be
+   * marked ready (client request) — set together with `readyAt` in the same
+   * action, so this is never empty while `readyAt` is still null, or vice
+   * versa. One or more photos, each uploaded separately (camera or
+   * gallery). */
+  readyPhotoUrls: string[];
   /** Where the container physically is right now. Null means it hasn't been
    * moved to any of the yard's work sites yet (fresh off gate-in). */
   currentSite: SailingSite | null;
@@ -474,6 +476,178 @@ export function repairTasksFor(fields: MockSurveyField[], itemNames: string[], s
       estHrs: 1,
       site,
     }));
+}
+
+/** The actual task created when a Logo choice other than "Not required" is
+ * picked, at Gate-In (GateFormDialog.tsx) or a retrofit survey
+ * (RunSurveyDialog.tsx) alike — kept as one shared lookup so a new
+ * LogoChoice value can't silently fall through into the wrong label/duration
+ * in one caller but not the other. */
+export const LOGO_TASK: Record<Exclude<LogoChoice, 'na'>, { label: string; estHrs: number }> = {
+  readymade: { label: 'Logo (ready-made)', estHrs: 0.25 },
+  physical: { label: 'Logo (painted)', estHrs: 0.75 },
+  removal: { label: 'Logo removal', estHrs: 0.5 },
+};
+
+/** SPEC.md §4.3 "Painter Helper": tape display + gasket before any spray
+ * work; paint the compressor + display as its own step after the main coats
+ * — only needed when paint is actually sprayed, not for a ready-made logo
+ * sticker with nothing else wrong. Shared by Gate-In and a retrofit survey —
+ * same inputs (whether a full repaint is needed, and what Logo work, if
+ * any), same resulting task list either way. */
+export function paintingTasksFor(paintingRequired: boolean, logoChoice: LogoChoice): MockTask[] {
+  const paintingNeedsSpray = paintingRequired || logoChoice === 'physical';
+  const lastMainPaintKey = paintingRequired ? 'coat2' : paintingNeedsSpray ? 'tape_display' : null;
+  const tasks: MockTask[] = [
+    ...(paintingNeedsSpray
+      ? [
+          {
+            key: 'tape_display',
+            label: 'Tape display + gasket',
+            workerId: null,
+            state: 'pending' as const,
+            startedAt: null,
+            elapsedSec: 0,
+            estHrs: 0,
+            site: 'Painting site' as const,
+            ownerType: 'painter_helper' as const,
+            dependsOn: [],
+          },
+        ]
+      : []),
+    ...(paintingRequired
+      ? [
+          { key: 'primer', label: 'Primer', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['tape_display'] },
+          { key: 'coat1', label: '1st coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['primer'] },
+          { key: 'coat2', label: '2nd coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, optional: true, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['coat1'] },
+        ]
+      : []),
+    ...(logoChoice !== 'na'
+      ? [
+          {
+            key: 'logo',
+            label: LOGO_TASK[logoChoice].label,
+            workerId: null,
+            state: 'pending' as const,
+            startedAt: null,
+            elapsedSec: 0,
+            estHrs: LOGO_TASK[logoChoice].estHrs,
+            site: 'Painting site' as const,
+            dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
+          },
+        ]
+      : []),
+    ...(paintingNeedsSpray
+      ? [
+          {
+            key: 'paint_compressor',
+            label: 'Paint compressor + display',
+            workerId: null,
+            state: 'pending' as const,
+            startedAt: null,
+            elapsedSec: 0,
+            estHrs: 0,
+            site: 'Painting site' as const,
+            ownerType: 'painter_helper' as const,
+            dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
+          },
+        ]
+      : []),
+  ];
+  if (tasks.length === 0) {
+    tasks.push({ key: 'other', label: 'Painting (reason not specified)', workerId: null, state: 'pending', startedAt: null, elapsedSec: 0, estHrs: 0, site: 'Painting site' });
+  }
+  return tasks;
+}
+
+/** Everything a survey's "Assessment" step asks, independent of whether it's
+ * answered at Gate-In (the full form) or afterward on a container that
+ * skipped inspection the first time (RunSurveyDialog's retrofit survey) —
+ * one shared shape so `buildSurveyFields`/`recommendedSurveySections`/
+ * `surveySectionTasks` below read the same regardless of caller. */
+export interface SurveyAssessment {
+  isReefer: boolean;
+  /** Only consulted for whether it contains "Anteroom" (ptiTasks' own
+   * mantrap flag) — never displayed here. */
+  typeCode: string;
+  paintingRequired: boolean;
+  logoChoice: LogoChoice;
+  /** Whether the yard's own PTI check (Lights, Strip & Curtain) is still
+   * needed — false when a Pre-Trip Inspection already happened (video on
+   * file at Gate-In) or the admin is confirming a retrofit survey found
+   * nothing wrong. */
+  needsPti: boolean;
+  repairRequired: boolean;
+  /** The draft checklist as answered — every REPAIR_ITEMS entry, 'good'
+   * unless flagged, not pre-filtered. */
+  repairFields: MockSurveyField[];
+  machineIssueFound: boolean;
+  /** The draft checklist as answered — every MACHINE_CHECK_FIELDS entry. */
+  machineFields: MockSurveyField[];
+  cleaningRequired: boolean;
+  remarks: string;
+}
+
+/** The full fixed-order checklist `container.survey.fields` expects — built
+ * from whichever conditional checklists were actually touched, so
+ * `ContainerReportContent`'s positional slicing (inspection vs. machine
+ * fields) keeps working unchanged regardless of which flow produced it. */
+export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
+  const repairByLabel = new Map(a.repairFields.map((f) => [f.label, f]));
+  const machineByLabel = new Map(a.machineFields.map((f) => [f.label, f]));
+  return surveyFieldNames(a.isReefer).map((label) => {
+    if (label === 'Contamination') {
+      return a.cleaningRequired
+        ? { label, severity: 'minor' as FieldSeverity, note: a.remarks.trim() || 'Flagged for cleaning.' }
+        : { label, severity: 'good' as FieldSeverity, note: '' };
+    }
+    if (a.repairRequired && repairByLabel.has(label)) {
+      const f = repairByLabel.get(label)!;
+      return { label, severity: f.severity, note: f.note };
+    }
+    if (a.machineIssueFound && machineByLabel.has(label)) {
+      const f = machineByLabel.get(label)!;
+      return { label, severity: f.severity, note: f.note };
+    }
+    return { label, severity: 'good' as FieldSeverity, note: '' };
+  });
+}
+
+/** Which sections the Assessment answers suggest — a starting point the
+ * admin can still adjust (check/uncheck) before confirming, same as the
+ * "Survey result" step of Gate-In. */
+export function recommendedSurveySections(a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'needsPti' | 'cleaningRequired' | 'repairRequired' | 'repairFields'>): Record<SectionKind, boolean> {
+  const needsRepair = a.repairRequired && a.repairFields.some(fieldNeedsAttention);
+  return {
+    painting: a.paintingRequired || a.logoChoice !== 'na',
+    pti: a.needsPti,
+    cleaning: a.cleaningRequired,
+    all_rounder: needsRepair,
+    sailing: false,
+  };
+}
+
+/** The actual task list for one confirmed section — `fields` is this
+ * assessment's already-built `buildSurveyFields` result, since Repairment's
+ * and PTI's Machine Check tasks are generated from flagged checklist items,
+ * not the raw toggles. */
+export function surveySectionTasks(kind: SectionKind, a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'typeCode'>, fields: MockSurveyField[]): MockTask[] {
+  switch (kind) {
+    case 'painting':
+      return paintingTasksFor(a.paintingRequired, a.logoChoice);
+    case 'pti':
+      return [...ptiTasks(null, a.typeCode.includes('Anteroom')), ...repairTasksFor(fields, MACHINE_CHECK_FIELDS, 'Light site')];
+    case 'cleaning':
+      return cleaningTasks(null);
+    case 'all_rounder': {
+      const tasks = repairTasksFor(fields, REPAIR_ITEMS, 'Painting site');
+      return tasks.length > 0
+        ? tasks
+        : [{ key: 'other', label: 'Repairment (reason not specified)', workerId: null, state: 'pending', startedAt: null, elapsedSec: 0, estHrs: 2, site: null }];
+    }
+    case 'sailing':
+      return [];
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -744,14 +918,18 @@ export interface TntRecord {
   elapsedMs: number;
 }
 
-/** A settled fact, not a ticking clock — `check-circle` rather than
- * `clock`/`alert`, and past tense, so a finished badge never reads like
- * it's still running. */
+/** A settled fact, not a ticking clock — past tense either way, so a
+ * finished badge never reads like it's still running. A late finish needs
+ * to read as late at a glance, not just in a different color (the same
+ * "over target" clarity the still-running `tntStatus` above already gives
+ * a live clock that's running past target) — the word itself, plus the
+ * same `alert` icon used everywhere else in the app something needs
+ * attention, not just the pill's red tone doing all the work. */
 function recordedTntStatus(label: string, record: TntRecord): Status {
   const hrs = Math.floor(record.elapsedMs / (3600 * 1000));
   const over = record.elapsedMs > record.targetHrs * 3600 * 1000;
   return over
-    ? { tone: 'bad', icon: 'check-circle', label: `${label} ${hrs}h/${record.targetHrs}h`, detail: `${label} finished in ${hrs}h, past its ${record.targetHrs}h target.` }
+    ? { tone: 'bad', icon: 'alert', label: `${label} late — ${hrs}h/${record.targetHrs}h`, detail: `${label} finished late: took ${hrs}h against its ${record.targetHrs}h target.` }
     : { tone: 'ok', icon: 'check-circle', label: `${label} ${hrs}h/${record.targetHrs}h`, detail: `${label} finished in ${hrs}h, within its ${record.targetHrs}h target.` };
 }
 
