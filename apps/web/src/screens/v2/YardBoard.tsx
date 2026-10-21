@@ -1,8 +1,9 @@
 import { createColumnHelper } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../lib/auth';
 import { ContainerDetailDrawer } from '../../components/v2/ContainerDetailDrawer';
 import { ImsQuickAddDialog } from '../../components/v2/ImsQuickAddDialog';
+import type { SurveyDraftData } from '../../components/v2/RunSurveyDialog';
 import {
   agingStatus,
   isReadyToMove,
@@ -88,9 +89,11 @@ export function YardBoard(): React.ReactElement {
     markReady,
     pendingOpenId,
     clearPendingOpen,
-    updateContainer,
     removeContainer,
     runSurvey,
+    drafts,
+    saveSurveyDraft,
+    discardDraft,
     setPriority,
     gateOut,
   } = useV2Data();
@@ -116,6 +119,18 @@ export function YardBoard(): React.ReactElement {
   };
 
   const open = containers.find((c) => c.id === openId) ?? null;
+  // Same condition ContainerDetailDrawer itself uses to decide whether to
+  // offer "Run survey" at all — a draft only means anything on a container
+  // that could actually resume into that same button.
+  const canRunSurvey = (c: MockContainer): boolean => c.sections.length === 0 && !c.readyAt && !c.departedAt;
+  const hasSurveyDraft = useCallback((c: MockContainer): boolean => canRunSurvey(c) && drafts.some((d) => d.id === c.id), [drafts]);
+  // `drafts` is typed for Gate-In's own ContainerDraftData shape (the only
+  // kind that existed when that type was written) -- a survey draft's `data`
+  // really does hold SurveyDraftData at runtime, distinguished from a
+  // Gate-In draft purely by id shape (the container's own real id here,
+  // never a generated `draft-<timestamp>`), so this is a real, deliberate
+  // cast, not a type hole.
+  const openSurveyDraft = open ? ((drafts.find((d) => d.id === open.id) as unknown as { id: string; data: SurveyDraftData } | undefined) ?? null) : null;
 
   // The "New container" action lives in the top bar (shared across every v2
   // screen, not just this one) — when it gates a container in, open that
@@ -216,7 +231,14 @@ export function YardBoard(): React.ReactElement {
         id: 'status',
         header: 'Status',
         meta: { label: 'Status' },
-        cell: (ctx) => <StatusPill status={overallStatus(ctx.row.original)} />,
+        cell: (ctx) => (
+          <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+            <StatusPill status={overallStatus(ctx.row.original)} />
+            {hasSurveyDraft(ctx.row.original) && (
+              <StatusPill status={{ tone: 'neutral', icon: 'doc', label: 'Survey drafted', detail: 'A survey was started on this container but not confirmed yet.' }} />
+            )}
+          </span>
+        ),
       }),
       columnHelper.display({
         id: 'sections',
@@ -252,7 +274,7 @@ export function YardBoard(): React.ReactElement {
         },
       }),
     ],
-    []
+    [hasSurveyDraft]
   );
 
   return (
@@ -408,7 +430,12 @@ export function YardBoard(): React.ReactElement {
                   </span>
                   {c.priority && <StatusPill status={{ tone: 'bad', icon: 'alert', label: 'Fast-track', detail: 'Flagged to handle ahead of normal work.' }} />}
                 </span>
-                <StatusPill status={overallStatus(c)} />
+                <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+                  {hasSurveyDraft(c) && (
+                    <StatusPill status={{ tone: 'neutral', icon: 'doc', label: 'Survey drafted', detail: 'A survey was started on this container but not confirmed yet.' }} />
+                  )}
+                  <StatusPill status={overallStatus(c)} />
+                </span>
               </div>
               <div className="cluster" style={{ gap: 'var(--s-2)', margin: 'var(--s-2) 0 var(--s-3)' }}>
                 <CategoryBadge>{c.typeCode}</CategoryBadge>
@@ -455,9 +482,11 @@ export function YardBoard(): React.ReactElement {
         onScheduleTask={scheduleTask}
         onSetTaskSite={setTaskSite}
         onMarkReady={handleMarkReady}
-        onUpdateContainer={updateContainer}
         onRemoveContainer={removeContainer}
         onRunSurvey={runSurvey}
+        surveyDraft={openSurveyDraft}
+        onSaveSurveyDraft={(containerId, data) => saveSurveyDraft(containerId, data as unknown as Record<string, unknown>)}
+        onDiscardSurveyDraft={discardDraft}
         onSetPriority={setPriority}
         onGateOut={gateOut}
       />

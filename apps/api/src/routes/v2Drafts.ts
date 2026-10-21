@@ -35,9 +35,15 @@ export async function v2DraftRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/v2/drafts', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const body = await parseOr422(saveDraftSchema, request.body, reply);
     if (!body) return;
+    // Upsert, not insert: a Gate-In draft always gets a fresh generated id
+    // (GateFormDialog's own handleSaveDraft), so this never collided before
+    // -- but a retrofit-survey draft (RunSurveyDialog) is deliberately keyed
+    // by the container's own real id, saved again every time the admin
+    // leaves it mid-survey, and must replace its own last save rather than
+    // fail on the primary key the second time.
     const { data, error } = await supabase()
       .from('drafts')
-      .insert({ id: body.id, saved_at: body.savedAt, data: body.data })
+      .upsert({ id: body.id, saved_at: body.savedAt, data: body.data }, { onConflict: 'id' })
       .select()
       .single();
     if (error) throw app.httpErrors.internalServerError(error.message);

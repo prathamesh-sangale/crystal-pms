@@ -214,6 +214,19 @@ export const api = {
 
   v2DiscardDraft: (id: string) => request<void>(`/api/v2/drafts/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
+  // Same /api/v2/drafts endpoint as v2SaveDraft above, deliberately typed
+  // generically here rather than importing RunSurveyDialog's own
+  // SurveyDraftData shape into this file -- this module only ever imports
+  // from mockV2.ts, never a component, and the backend itself treats `data`
+  // as opaque jsonb either way. Keyed by the container's own real id
+  // (upserted server-side), not a generated one like v2SaveDraft's callers
+  // use -- saving again for the same container replaces its last save.
+  v2SaveSurveyDraft: (containerId: string, data: Record<string, unknown>) =>
+    request<{ draft: ContainerDraft }>('/api/v2/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ id: containerId, savedAt: new Date().toISOString(), data }),
+    }),
+
   v2Upload: (file: File) => {
     const form = new FormData();
     form.append('file', file, file.name);

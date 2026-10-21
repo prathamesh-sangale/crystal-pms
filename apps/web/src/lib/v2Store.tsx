@@ -12,8 +12,6 @@ import {
   type WorkerType,
 } from './mockV2';
 
-type ContainerEdit = Pick<MockContainer, 'typeCode' | 'size' | 'color'>;
-
 /**
  * Shared, Supabase-backed state for every v2 screen (SPEC.md).
  *
@@ -80,7 +78,6 @@ interface V2Data {
    * Live Board while staying fully visible in its own report and in Yard
    * Report's Departed panel. */
   gateOut: (containerId: string, entry: GateLogEntry) => Promise<void>;
-  updateContainer: (containerId: string, updates: ContainerEdit) => void;
   /** Removes the container record entirely — a mistaken or duplicate entry,
    * not a real-world event like load/offload. No confirmation lives here;
    * the caller (Container Detail) owns that. */
@@ -98,6 +95,11 @@ interface V2Data {
   setPriority: (containerId: string, priority: boolean) => void;
   drafts: ContainerDraft[];
   saveDraft: (data: ContainerDraftData) => Promise<void>;
+  /** A retrofit-survey draft, keyed by the container's own id rather than a
+   * generated one — lives in the same `drafts` list above, so a caller
+   * looking for "does this container have a draft" just searches it by id;
+   * no separate state or endpoint. */
+  saveSurveyDraft: (containerId: string, data: Record<string, unknown>) => Promise<void>;
   discardDraft: (draftId: string) => Promise<void>;
   addWorker: (name: string, type: WorkerType, notes: string) => Promise<MockWorker>;
   updateWorker: (workerId: string, updates: { name: string; type: WorkerType; notes: string }) => Promise<void>;
@@ -343,11 +345,6 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },
 
-      updateContainer: (containerId, updates) => {
-        setContainers((cur) => mapContainer(cur, containerId, (c) => ({ ...c, ...updates })));
-        patchContainer(containerId, updates);
-      },
-
       removeContainer: async (containerId) => {
         await api.v2RemoveContainer(containerId);
         setContainers((cur) => cur.filter((c) => c.id !== containerId));
@@ -369,6 +366,10 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         const savedAt = new Date().toISOString();
         const { draft } = await api.v2SaveDraft(id, savedAt, data);
         setDrafts((cur) => [draft, ...cur]);
+      },
+      saveSurveyDraft: async (containerId, data) => {
+        const { draft } = await api.v2SaveSurveyDraft(containerId, data);
+        setDrafts((cur) => [draft, ...cur.filter((d) => d.id !== containerId)]);
       },
       discardDraft: async (draftId) => {
         await api.v2DiscardDraft(draftId);

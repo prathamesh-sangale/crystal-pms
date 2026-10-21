@@ -1253,7 +1253,7 @@ export function GateFormDialog({
                       )}
                     </Field>
                   )}
-                  <Field label="Cleaning required?">
+                  <Field label="Cleaning required?" required>
                     {(props) => (
                       <select {...props} value={cleaningRequired ? 'Yes' : 'No'} onChange={(e) => setCleaningRequired(e.target.value === 'Yes')}>
                         <option value="No">No</option>

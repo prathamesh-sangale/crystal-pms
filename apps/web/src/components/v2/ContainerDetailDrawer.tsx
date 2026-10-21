@@ -15,13 +15,10 @@ import {
   SECTION_LABELS,
   SECTION_OWNER_TYPE,
   sectionStatus,
-  SIZE_OPTIONS,
-  STANDARD_COLORS,
   taskElapsedSec,
   tasksForWorker,
   taskSettled,
   tntStatusForTask,
-  TYPE_CODES,
   WORKER_TYPE_LABELS,
   type GateLogEntry,
   type MockContainer,
@@ -39,15 +36,13 @@ import { Button } from '../crystal/Button';
 import { StatusPill, Person } from '../crystal/Data';
 import { DataTable } from '../crystal/DataTable';
 import { EmptyState, useToast } from '../crystal/Feedback';
-import { Field } from '../crystal/Form';
 import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, Modal } from '../crystal/Overlay';
 import { GateFormDialog } from './GateFormDialog';
 import { MiniStageStrip } from './MiniStageStrip';
-import { RunSurveyDialog } from './RunSurveyDialog';
+import { RunSurveyDialog, type SurveyDraftData } from './RunSurveyDialog';
 import { useStartGuard } from './useStartGuard';
 
-const CUSTOM_COLOR = 'Custom…';
 const taskColumnHelper = createColumnHelper<MockTask>();
 
 /** The task table's "Scheduled" cell (the Reschedule menu) — a stable
@@ -247,9 +242,11 @@ export function ContainerDetailDrawer({
   onScheduleTask,
   onSetTaskSite,
   onMarkReady,
-  onUpdateContainer,
   onRemoveContainer,
   onRunSurvey,
+  surveyDraft,
+  onSaveSurveyDraft,
+  onDiscardSurveyDraft,
   onSetPriority,
   onGateOut,
 }: {
@@ -268,17 +265,21 @@ export function ContainerDetailDrawer({
   onSetTaskSite: (containerId: string, sectionKind: SectionKind, taskKey: string, site: SailingSite) => void;
   onMarkReady: (containerId: string, photoUrls: string[]) => Promise<void>;
   /** Absent on Live Board's own instance of this drawer, by direct design
-   * decision — editing a container's type/size/color, and removing it
-   * outright, are Yard Board's alone now, not something available from
-   * wherever a container happens to be opened from. The server enforces
-   * the same split (apps/api/src/routes/v2Containers.ts), so this isn't
-   * just cosmetic. */
-  onUpdateContainer?: (containerId: string, updates: { typeCode: string; size: string; color: string | null }) => void;
+   * decision — removing a container outright is Yard Board's alone now, not
+   * something available from wherever a container happens to be opened
+   * from. The server enforces the same split
+   * (apps/api/src/routes/v2Containers.ts), so this isn't just cosmetic. */
   onRemoveContainer?: (containerId: string) => Promise<void>;
-  /** Same Yard-only split as onUpdateContainer/onRemoveContainer above —
-   * retrofitting a survey onto a container that skipped one is a Yard Board
-   * action, not something Live Board's drawer offers. */
+  /** Same Yard-only split as onRemoveContainer above — retrofitting a
+   * survey onto a container that skipped one is a Yard Board action, not
+   * something Live Board's drawer offers. */
   onRunSurvey?: (containerId: string, result: { outcome: 'ready' | 'needs-work'; fields: MockSurveyField[]; sections: Array<{ kind: SectionKind; tasks: MockTask[] }> }) => Promise<void>;
+  /** This container's own in-progress survey draft, if any — found by the
+   * caller against the shared drafts list, same Yard-only availability as
+   * onRunSurvey itself. */
+  surveyDraft?: { id: string; data: SurveyDraftData } | null;
+  onSaveSurveyDraft?: (containerId: string, data: SurveyDraftData) => Promise<void>;
+  onDiscardSurveyDraft?: (draftId: string) => Promise<void>;
   onSetPriority: (containerId: string, priority: boolean) => void;
   onGateOut: (containerId: string, entry: GateLogEntry) => Promise<void>;
 }): React.ReactElement {
@@ -287,18 +288,11 @@ export function ContainerDetailDrawer({
   // scoped to just the one running task, so the whole table (and any open
   // Assign/Site/Reschedule menu in it) doesn't re-render every second.
   const anyRunning = Boolean(container?.sections.some((s) => s.tasks.some((t) => t.state === 'running')));
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [gateOutOpen, setGateOutOpen] = useState(false);
   const [surveyOpen, setSurveyOpen] = useState(false);
   const toast = useToast();
-  const [editDraft, setEditDraft] = useState({ typeCode: TYPE_CODES[0]!, size: SIZE_OPTIONS[0]!, color: STANDARD_COLORS[0]! });
-  // Separate from editDraft.color, same split GateFormDialog uses — the
-  // select holds either a real STANDARD_COLORS value or the CUSTOM_COLOR
-  // sentinel, and the actual free-text value (when the sentinel is picked)
-  // lives here, so saving never persists the literal "Custom…" label.
-  const [editCustomColor, setEditCustomColor] = useState('');
   // Only one section's tasks are ever on screen at a time — reset to the
   // first section whenever a different container opens, so the tab doesn't
   // carry over a stale selection (e.g. still on "Cleaning" for a Dry unit
@@ -350,18 +344,6 @@ export function ContainerDetailDrawer({
   );
 
   useEffect(() => {
-    if (editOpen && container) {
-      const knownColor = container.color && (STANDARD_COLORS as readonly string[]).includes(container.color);
-      setEditDraft({
-        typeCode: container.typeCode,
-        size: container.size,
-        color: !container.color ? STANDARD_COLORS[0]! : knownColor ? container.color : CUSTOM_COLOR,
-      });
-      setEditCustomColor(knownColor || !container.color ? '' : container.color!);
-    }
-  }, [editOpen, container]);
-
-  useEffect(() => {
     setActiveSectionKind(container?.sections[0]?.kind ?? null);
     setReadyPhotos([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a different container opening, not every section/task update.
@@ -369,7 +351,6 @@ export function ContainerDetailDrawer({
 
   const ready = container ? isReadyToMove(container) : false;
   const status = container ? overallStatus(container) : null;
-  const editIsReefer = editDraft.typeCode.startsWith('Reefer');
 
   // At least one completion photo is required before "Mark ready to move"
   // actually does anything (client request) -- photos are uploaded (one
@@ -416,16 +397,6 @@ export function ContainerDetailDrawer({
     } finally {
       setMarkReadyBusy(false);
     }
-  };
-
-  const handleSaveEdit = (): void => {
-    if (!container) return;
-    onUpdateContainer?.(container.id, {
-      typeCode: editDraft.typeCode,
-      size: editDraft.size,
-      color: editIsReefer ? 'White' : editDraft.color === CUSTOM_COLOR ? editCustomColor.trim() || 'Unspecified' : editDraft.color,
-    });
-    setEditOpen(false);
   };
 
   const handleDelete = async (): Promise<void> => {
@@ -479,16 +450,15 @@ export function ContainerDetailDrawer({
                 {container.priority ? 'Remove from fast-track' : 'Fast-track'}
               </Button>
             )}
-            {onUpdateContainer && (
-              <Button variant="ghost" size="sm" icon="edit" onClick={() => setEditOpen(true)} disabled={Boolean(container.departedAt)}>
-                Edit
-              </Button>
-            )}
-            {/* Only offered on a container with no sections yet and not
-               already finalized — exactly what the server itself requires
-               (apps/api/src/routes/v2Containers.ts), so this never shows up
-               only to fail once clicked. */}
-            {onRunSurvey && container.sections.length === 0 && !container.readyAt && !container.departedAt && (
+            {/* Mirrors the server's own real guard (survey_performed_at is
+               null, apps/api/src/routes/v2Containers.ts) exactly, not just
+               "no sections yet" -- a "no issues found" survey leaves a
+               container with zero sections too, so sections.length alone
+               would leave this clickable on an already-surveyed container
+               and fail once clicked (confirmed live: it does, with a real
+               409, after this exact gap let a second submit through to the
+               server). */}
+            {onRunSurvey && !container.survey && !container.readyAt && !container.departedAt && (
               <Button variant="ghost" size="sm" icon="doc" onClick={() => setSurveyOpen(true)}>
                 Run survey
               </Button>
@@ -747,63 +717,6 @@ export function ContainerDetailDrawer({
       </div>
       )}
 
-      <Modal
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        title="Edit container"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" icon="check" onClick={handleSaveEdit}>
-              Save
-            </Button>
-          </>
-        }
-      >
-        <div className="stack">
-          <Field label="Type / product code">
-            {(props) => (
-              <select
-                {...props}
-                value={editDraft.typeCode}
-                onChange={(e) => setEditDraft((d) => ({ ...d, typeCode: e.target.value }))}
-              >
-                {TYPE_CODES.map((t) => <option key={t}>{t}</option>)}
-              </select>
-            )}
-          </Field>
-          <Field label="Size">
-            {(props) => (
-              <select {...props} value={editDraft.size} onChange={(e) => setEditDraft((d) => ({ ...d, size: e.target.value }))}>
-                {SIZE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
-              </select>
-            )}
-          </Field>
-          {editIsReefer ? (
-            <Field label="Paint colour" hint="Reefers default to white">
-              {(props) => <input {...props} value="White" disabled />}
-            </Field>
-          ) : (
-            <>
-              <Field label="Paint colour">
-                {(props) => (
-                  <select {...props} value={editDraft.color} onChange={(e) => setEditDraft((d) => ({ ...d, color: e.target.value }))}>
-                    {[...STANDARD_COLORS, CUSTOM_COLOR].map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                )}
-              </Field>
-              {editDraft.color === CUSTOM_COLOR && (
-                <Field label="Custom colour">
-                  {(props) => <input {...props} value={editCustomColor} onChange={(e) => setEditCustomColor(e.target.value)} placeholder="e.g. Traffic Red" />}
-                </Field>
-              )}
-            </>
-          )}
-        </div>
-      </Modal>
-
       {container && (
         <GateFormDialog
           mode="out"
@@ -815,7 +728,15 @@ export function ContainerDetailDrawer({
       )}
 
       {container && onRunSurvey && (
-        <RunSurveyDialog open={surveyOpen} onOpenChange={setSurveyOpen} container={container} onRunSurvey={onRunSurvey} />
+        <RunSurveyDialog
+          open={surveyOpen}
+          onOpenChange={setSurveyOpen}
+          container={container}
+          draft={surveyDraft}
+          onRunSurvey={onRunSurvey}
+          onSaveDraft={async (containerId, data) => onSaveSurveyDraft?.(containerId, data)}
+          onDiscardDraft={async (draftId) => onDiscardSurveyDraft?.(draftId)}
+        />
       )}
 
       {container && (

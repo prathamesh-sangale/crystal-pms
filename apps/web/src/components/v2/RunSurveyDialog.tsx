@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   buildSurveyFields,
   MACHINE_CHECK_FIELDS,
@@ -16,6 +16,44 @@ import { useToast } from '../crystal/Feedback';
 import { CheckboxField, Field } from '../crystal/Form';
 import { Modal } from '../crystal/Overlay';
 import { blankFields, FieldRow, RepairFieldRow, type DraftField } from './GateFormDialog';
+
+/** Everything a mid-survey draft needs to resume exactly where it left off
+ * — the dialog's own full assessment state, nothing from the container
+ * itself (that's re-read fresh from `container` on resume, same as a first
+ * open). Saved under the container's own real id in the shared `drafts`
+ * table (apps/api/src/routes/v2Drafts.ts) — a plain id a Gate-In draft's
+ * generated `draft-<timestamp>` id can never collide with. */
+export interface SurveyDraftData {
+  step: 'assessment' | 'result';
+  paintingRequired: boolean;
+  logoChoice: LogoChoice;
+  needsPti: boolean;
+  repairRequired: boolean;
+  repairFields: DraftField[];
+  machineIssueFound: boolean;
+  machineFields: DraftField[];
+  cleaningRequired: boolean;
+  remarks: string;
+  sections: Record<SectionKind, boolean>;
+}
+
+const BLANK_SECTIONS: Record<SectionKind, boolean> = { painting: false, pti: false, cleaning: false, all_rounder: false, sailing: false };
+
+/** Whether this is worth keeping as a draft at all — a dialog opened and
+ * closed without anything actually entered shouldn't leave a row behind
+ * for the "Survey drafted" hint to point at. */
+function isDirty(d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoChoice' | 'needsPti' | 'repairRequired' | 'machineIssueFound' | 'cleaningRequired' | 'remarks'>): boolean {
+  return (
+    d.step === 'result' ||
+    d.paintingRequired ||
+    d.logoChoice !== 'na' ||
+    d.needsPti ||
+    d.repairRequired ||
+    d.machineIssueFound ||
+    d.cleaningRequired ||
+    d.remarks.trim() !== ''
+  );
+}
 
 const LOGO_LABELS: Record<LogoChoice, string> = {
   na: 'Not required',
@@ -47,15 +85,26 @@ export function RunSurveyDialog({
   open,
   onOpenChange,
   container,
+  draft,
   onRunSurvey,
+  onSaveDraft,
+  onDiscardDraft,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   container: MockContainer | null;
+  /** This container's own in-progress draft, if the admin started one and
+   * left before confirming — found by the caller (`id === container.id`),
+   * not looked up here. */
+  draft?: { id: string; data: SurveyDraftData } | null;
   onRunSurvey: (
     containerId: string,
     result: { outcome: 'ready' | 'needs-work'; fields: MockSurveyField[]; sections: Array<{ kind: SectionKind; tasks: MockTask[] }> }
   ) => Promise<void>;
+  /** Called automatically when this closes with something actually entered
+   * but not confirmed — not a button the admin has to remember to press. */
+  onSaveDraft: (containerId: string, data: SurveyDraftData) => Promise<void>;
+  onDiscardDraft: (draftId: string) => Promise<void>;
 }): React.ReactElement {
   const toast = useToast();
   const isReefer = Boolean(container?.typeCode.startsWith('Reefer'));
@@ -72,29 +121,58 @@ export function RunSurveyDialog({
   const [machineFields, setMachineFields] = useState<DraftField[]>(() => blankFields(MACHINE_CHECK_FIELDS));
   const [cleaningRequired, setCleaningRequired] = useState(false);
   const [remarks, setRemarks] = useState('');
-  const [sections, setSections] = useState<Record<SectionKind, boolean>>({
-    painting: false,
-    pti: false,
-    cleaning: false,
-    all_rounder: false,
-    sailing: false,
-  });
+  const [sections, setSections] = useState<Record<SectionKind, boolean>>(BLANK_SECTIONS);
 
-  // Fresh form every time this opens -- an abandoned assessment for one
-  // container should never bleed into the next.
+  // Every open resumes this container's own draft if one exists, otherwise
+  // starts fresh — an abandoned assessment for one container should never
+  // bleed into a different one, but shouldn't be thrown away either.
   useEffect(() => {
     if (!open) return;
-    setStep('assessment');
+    const d = draft?.data;
+    setStep(d?.step ?? 'assessment');
     setSubmitting(false);
-    setPaintingRequired(false);
-    setLogoChoice('na');
-    setNeedsPti(false);
-    setRepairRequired(false);
-    setRepairFields(blankFields(REPAIR_ITEMS, 'good'));
-    setMachineIssueFound(false);
-    setMachineFields(blankFields(MACHINE_CHECK_FIELDS));
-    setCleaningRequired(false);
-    setRemarks('');
+    setPaintingRequired(d?.paintingRequired ?? false);
+    setLogoChoice(d?.logoChoice ?? 'na');
+    setNeedsPti(d?.needsPti ?? false);
+    setRepairRequired(d?.repairRequired ?? false);
+    setRepairFields(d?.repairFields ?? blankFields(REPAIR_ITEMS, 'good'));
+    setMachineIssueFound(d?.machineIssueFound ?? false);
+    setMachineFields(d?.machineFields ?? blankFields(MACHINE_CHECK_FIELDS));
+    setCleaningRequired(d?.cleaningRequired ?? false);
+    setRemarks(d?.remarks ?? '');
+    setSections(d?.sections ?? BLANK_SECTIONS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a fresh open for a (possibly different) container, not every keystroke; draft is read once here by design, not treated as a live prop afterward.
+  }, [open, container?.id]);
+
+  // Kept current every render so the close/unmount handler below always
+  // saves the latest values rather than whatever `open` happened to close
+  // over -- a plain dependency array on every field would re-run this
+  // effect (and its cleanup) on every keystroke, which is exactly what a
+  // ref avoids.
+  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], machineIssueFound: false, machineFields: [], cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
+  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, machineIssueFound, machineFields, cleaningRequired, remarks, sections };
+  // Set right before a successful confirm() closes the dialog, so the
+  // effect below knows not to turn a just-submitted survey back into a
+  // leftover draft of itself.
+  const justSubmittedRef = useRef(false);
+
+  // The actual auto-save: runs whenever this stops being open for the
+  // container it was open for -- a real close (Cancel, the X, clicking
+  // outside) or the container changing out from under it, not on every
+  // render. Cleanup functions (not the effect body) are what React runs
+  // exactly once per close, with access to everything latestRef was
+  // carrying at that moment.
+  useEffect(() => {
+    if (!open || !container) return;
+    const containerId = container.id;
+    return () => {
+      if (justSubmittedRef.current) {
+        justSubmittedRef.current = false;
+        return;
+      }
+      if (isDirty(latestRef.current)) void onSaveDraft(containerId, latestRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onSaveDraft is a stable callback from the parent; latestRef/justSubmittedRef are refs, read at cleanup time by design, not reactive inputs.
   }, [open, container?.id]);
 
   const setRepairSeverity = (key: string, severity: DraftField['severity']): void => {
@@ -138,10 +216,12 @@ export function RunSurveyDialog({
       const outcome: 'ready' | 'needs-work' = required.length === 0 ? 'ready' : 'needs-work';
       const payloadSections = required.map((kind) => ({ kind, tasks: surveySectionTasks(kind, assessment, fields) }));
       await onRunSurvey(container.id, { outcome, fields, sections: payloadSections });
+      if (draft) await onDiscardDraft(draft.id).catch(() => {});
       toast.ok(
         'Survey recorded',
         outcome === 'ready' ? `${container.id} has no issues — still Ready to move.` : `${container.id} now has ${payloadSections.length} section(s) open.`
       );
+      justSubmittedRef.current = true;
       onOpenChange(false);
     } catch (err) {
       toast.error('Could not save this survey', err instanceof Error ? err.message : 'Try again.');
@@ -229,7 +309,7 @@ export function RunSurveyDialog({
                   )}
                 </Field>
               )}
-              <Field label="Cleaning required?">
+              <Field label="Cleaning required?" required>
                 {(props) => (
                   <select {...props} value={cleaningRequired ? 'Yes' : 'No'} onChange={(e) => setCleaningRequired(e.target.value === 'Yes')}>
                     <option value="No">No</option>
