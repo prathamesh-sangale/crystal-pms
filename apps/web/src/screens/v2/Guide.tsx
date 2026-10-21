@@ -63,7 +63,8 @@ const FAQ: FaqGroup[] = [
       { q: 'What is each part of the sidebar for?', a: 'Live Board and Yard Board are the daily work screens. Worker Roster is your crew list. Dashboards is the day\'s numbers and your PMS Sheet sync. Hydra is a separate loading/unloading/shifting log. IMS Stock shows what\'s available at your yard right now, straight from IMS.' },
       { q: 'Is there a fast way to jump to any screen?', a: 'Press Ctrl+K (Cmd+K on Mac) anywhere — it opens a search box that jumps to any screen or any container by number.' },
       { q: 'Can I switch between light and dark mode?', a: 'Yes — the sun/moon icon in the top bar swaps the whole app\'s theme instantly.' },
-      { q: 'Who can sign in?', a: 'Right now, one Admin account runs the app day to day (SPEC.md\'s direction). A few other seeded roles exist in the system but aren\'t part of daily use yet.' },
+      { q: 'Who can sign in?', a: 'The Admin account runs the app day to day. Admin can give anyone else a login from Access Management — either tied to a Worker Roster entry, or a standalone login (for someone who assigns/oversees work rather than doing it themselves) — and choose exactly which screens they can reach.' },
+      { q: 'How do I give someone access, or change their password?', a: 'Access Management (Admin only) — "New worker with access" ties a login to a crew member, "New login" makes a standalone one. "Edit access" on any login lets Admin change its screens, role, or password at any time.' },
     ],
   },
   {
@@ -75,6 +76,9 @@ const FAQ: FaqGroup[] = [
       { q: 'What does auto-fill from IMS mean?', a: 'If the container number already exists in IMS for your yard, its type/size/grade and other details fill in automatically. You can still change any of it.' },
       { q: 'I got interrupted mid gate-in — is my work lost?', a: 'No. Unfinished gate-in forms save as drafts automatically. Open "Drafts" in the top bar to resume exactly where you left off.' },
       { q: 'Does this app write anything back into IMS?', a: 'No, never. IMS is only ever read from — nothing in this app writes to it, by design.' },
+      { q: 'Is there a faster way to add a container that\'s already in IMS?', a: 'Yes — Yard Board\'s "Add from IMS" button. "Add to yard" registers it in one click with no survey, straight to Ready to move. "Add & survey" opens the same trimmed form with the full inspection, for a container that needs one right away.' },
+      { q: 'I used the one-click "Add to yard" — can it still be surveyed?', a: 'Yes, any time — open the container and use "Run survey" in its header. It\'s only offered on a container that hasn\'t been surveyed yet, so it can\'t be run twice.' },
+      { q: 'I started a survey and got interrupted — is it lost?', a: 'No. Leaving "Run survey" before confirming it saves automatically as a draft — a "Survey drafted" badge shows on that container until it\'s finished, and reopening "Run survey" resumes exactly where it left off.' },
     ],
   },
   {
@@ -93,8 +97,9 @@ const FAQ: FaqGroup[] = [
     heading: 'Marking ready & Gate-Out',
     icon: 'door',
     items: [
-      { q: 'Why can\'t I mark a container ready to move?', a: 'Every task in every section has to be done (or N/A) first. Once nothing is open, the ready-to-move photo upload appears in its place.' },
-      { q: 'Why does it ask for a photo before Gate Out?', a: 'The ready-to-move photo is a required proof step, not optional — the final check before a container can leave.' },
+      { q: 'Why can\'t I mark a container ready to move?', a: 'Every task in every section has to be done (or N/A) first. Once nothing is open, the completion-photo upload appears in its place.' },
+      { q: 'Why does it ask for a photo before Gate Out?', a: 'At least one completion photo is a required proof step, not optional — the final check before a container can leave. More than one can be added — each uploads as it\'s taken, shown as a strip of thumbnails, with "Mark ready to move" confirming the whole set at once.' },
+      { q: 'Camera or gallery — which does the photo button use?', a: 'Either, your choice — every photo upload in the app (gate-in\'s inspection photos, the ready-to-move photo) offers an explicit Camera button and a Gallery button side by side, not one button guessing which you want.' },
       { q: 'Where can I see a container\'s history after it leaves?', a: 'Its printable report — survey, every task, both gate-in and gate-out details — stays available even after it has departed.' },
     ],
   },
