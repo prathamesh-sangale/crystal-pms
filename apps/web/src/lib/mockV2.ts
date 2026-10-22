@@ -106,13 +106,6 @@ export interface MockTask {
    * this one task — e.g. Painting's tape/compressor tasks go to a Painter
    * Helper, not the Painter who does Primer/coats/Logo (SPEC.md §4.3). */
   ownerType?: WorkerType;
-  /** Explicit task keys (within the same section) this one waits on. When
-   * set, this replaces plain array-order for sequencing — lets two tasks
-   * that both only depend on an earlier step (e.g. Logo and painting the
-   * compressor/display, both only gated on the main coats being done) run
-   * in parallel instead of blocking each other. Tasks without this still
-   * fall back to strict array order (paintingTaskBlockedBy below). */
-  dependsOn?: string[];
   /** A plain 'YYYY-MM-DD' date — which day this task is actually planned
    * for, separate from whether it's been worked yet. Absent/undefined means
    * unscheduled: assigning a worker (v2Store's assignWorker) fills this in
@@ -487,10 +480,14 @@ export const LOGO_TASK: Record<Exclude<LogoChoice, 'na'>, { label: string; estHr
  * — only needed when paint is actually sprayed, not for a ready-made logo
  * sticker with nothing else wrong. Shared by Gate-In and a retrofit survey —
  * same inputs (whether a full repaint is needed, and what Logo work, if
- * any), same resulting task list either way. */
+ * any), same resulting task list either way.
+ *
+ * No sequencing between any of these any more, direct request — Tape
+ * display, Primer, 1st/2nd coat, Logo, and the compressor/display are all
+ * independently assignable and startable in any order, any time, same as
+ * every other section. */
 export function paintingTasksFor(paintingRequired: boolean, logoChoice: LogoChoice): MockTask[] {
   const paintingNeedsSpray = paintingRequired || logoChoice === 'physical';
-  const lastMainPaintKey = paintingRequired ? 'coat2' : paintingNeedsSpray ? 'tape_display' : null;
   const tasks: MockTask[] = [
     ...(paintingNeedsSpray
       ? [
@@ -504,15 +501,14 @@ export function paintingTasksFor(paintingRequired: boolean, logoChoice: LogoChoi
             estHrs: 0,
             site: 'Painting site' as const,
             ownerType: 'painter_helper' as const,
-            dependsOn: [],
           },
         ]
       : []),
     ...(paintingRequired
       ? [
-          { key: 'primer', label: 'Primer', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['tape_display'] },
-          { key: 'coat1', label: '1st coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['primer'] },
-          { key: 'coat2', label: '2nd coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, optional: true, estHrs: 1.5, site: 'Painting site' as const, dependsOn: ['coat1'] },
+          { key: 'primer', label: 'Primer', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const },
+          { key: 'coat1', label: '1st coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, estHrs: 1.5, site: 'Painting site' as const },
+          { key: 'coat2', label: '2nd coat', workerId: null, state: 'pending' as const, startedAt: null, elapsedSec: 0, optional: true, estHrs: 1.5, site: 'Painting site' as const },
         ]
       : []),
     ...(logoChoice !== 'na'
@@ -526,7 +522,6 @@ export function paintingTasksFor(paintingRequired: boolean, logoChoice: LogoChoi
             elapsedSec: 0,
             estHrs: LOGO_TASK[logoChoice].estHrs,
             site: 'Painting site' as const,
-            dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
           },
         ]
       : []),
@@ -542,7 +537,6 @@ export function paintingTasksFor(paintingRequired: boolean, logoChoice: LogoChoi
             estHrs: 0,
             site: 'Painting site' as const,
             ownerType: 'painter_helper' as const,
-            dependsOn: lastMainPaintKey ? [lastMainPaintKey] : [],
           },
         ]
       : []),
@@ -723,53 +717,6 @@ export function scheduleLabel(date: string | null | undefined): string {
   if (date === offsetDate(0)) return 'Today';
   if (date === offsetDate(1)) return 'Tomorrow';
   return date;
-}
-
-/** Painting only (SPEC.md §4.3): Primer → 1st coat → 2nd coat → Logo run in a
- * fixed order, unlike every other section's tasks — the only two sequencing
- * rules left in the app, direct request ("remove the work hierarchy... let
- * admin assign any task any time, but..."): every other section
- * (PTI/Cleaning/Repairment/Sailing) has no ordering at all, tasks assignable
- * and startable in any order, any time.
- *
- * Gates *starting* only, not assigning — a worker can be put on 1st/2nd
- * coat (or Logo) any time, even while Tape + gasket is still open, direct
- * request; only an actual Start attempt checks this (and toasts, rather
- * than silently disabling, when it's too early). Returns the earliest task
- * still holding this one up, or null if it's clear to start.
- *
- * Also gates Painting on Repairment as a whole, cross-section: paint goes
- * over a physically repaired surface, not the other way round, so no
- * Painting task can *start* while the container's own Repairment
- * (all_rounder) section still has open work. Only applies when that section
- * actually has tasks — a container with no repair flagged has nothing to
- * wait on.
- *
- * Walks the *whole* ancestor chain, not just the immediate dependency —
- * a dependency counting as "settled" (done, or marked N/A as skipped) says
- * nothing about whether its own dependency was ever actually satisfied. An
- * optional step can be marked N/A the moment it's reachable, independent of
- * whether the step before *it* has finished; checking only one level would
- * report Logo as clear to start the instant 2nd coat is marked N/A, even
- * while 1st coat is still running underneath it. */
-export function paintingTaskBlockedBy(container: MockContainer, section: MockSection, task: MockTask): MockTask | null {
-  if (section.kind !== 'painting') return null;
-
-  const repair = container.sections.find((s) => s.kind === 'all_rounder');
-  if (repair && repair.tasks.length > 0) {
-    const openRepair = repair.tasks.find((t) => !taskSettled(t));
-    if (openRepair) return openRepair;
-  }
-
-  const deps: MockTask[] = task.dependsOn
-    ? task.dependsOn.map((key) => section.tasks.find((t) => t.key === key)).filter((t): t is MockTask => Boolean(t))
-    : section.tasks.slice(0, section.tasks.findIndex((t) => t.key === task.key));
-  for (const dep of deps) {
-    if (!taskSettled(dep)) return dep;
-    const upstream = paintingTaskBlockedBy(container, section, dep);
-    if (upstream) return upstream;
-  }
-  return null;
 }
 
 export function sectionStatus(section: MockSection): Status {

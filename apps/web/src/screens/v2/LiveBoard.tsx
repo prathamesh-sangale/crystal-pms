@@ -3,7 +3,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   formatElapsed,
   isScheduledFor,
-  paintingTaskBlockedBy,
   SECTION_LABELS,
   taskElapsedSec,
   tasksBySection,
@@ -29,7 +28,7 @@ import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { Person, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
-import { EmptyState, useToast } from '../../components/crystal/Feedback';
+import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
 
@@ -110,11 +109,8 @@ function FilterRow<T extends string>({
  * on the live row, so acting on it doesn't require opening the container's
  * full detail first.
  *
- * The painting-sequence guard (`paintingTaskBlockedBy`) has to be checked
- * here too, not just in Container Detail's own task table — otherwise this
- * quick action is a second, looser path to the exact bug item 9 fixed
- * earlier this engagement: starting a later painting step (e.g. Logo)
- * while an earlier one (e.g. 1st coat) is still running underneath it.
+ * No sequencing gate here, or anywhere else any more, direct request — any
+ * task is startable any time, no sequence or blockage, same as assigning.
  *
  * No site-move gate here (confirming the container physically reached the
  * right site before Start unlocks) — that whole mechanism (`taskNeedsMove`,
@@ -124,13 +120,11 @@ function FilterRow<T extends string>({
  * provide. Revisit as a real feature, with a real Move action, once it's
  * needed again — not by re-adding a silent gate with no way to clear it. */
 function TaskQuickAction({
-  containers,
   row,
   onStart,
   onStop,
   onCancel,
 }: {
-  containers: MockContainer[];
   row: LiveTask;
   onStart: (containerId: string, kind: SectionKind, key: string, task: MockTask) => void;
   onStop: (containerId: string, kind: SectionKind, key: string) => void;
@@ -138,7 +132,6 @@ function TaskQuickAction({
   onCancel: (containerId: string, kind: SectionKind, key: string) => void;
 }): React.ReactElement | null {
   const { task, containerId, section } = row;
-  const toast = useToast();
   // Stops the click from also bubbling up to a card's own "open detail"
   // onClick where this is used in the cards grid below — harmless where
   // it's used today, inside a table cell with no row-level click handler.
@@ -171,11 +164,6 @@ function TaskQuickAction({
     );
   }
   if (task.state === 'pending' && task.workerId) {
-    const containerData = containers.find((c) => c.id === containerId) ?? null;
-    const sectionData = containerData?.sections.find((s) => s.kind === section) ?? null;
-    const blockedBy = containerData && sectionData ? paintingTaskBlockedBy(containerData, sectionData, task) : null;
-    // Starting out of sequence doesn't disable the button — it toasts why
-    // and stays put, same pattern as Container Detail's own Start button.
     return (
       <Button
         variant="secondary"
@@ -183,10 +171,6 @@ function TaskQuickAction({
         icon="clock"
         onClick={(e) => {
           e.stopPropagation();
-          if (blockedBy) {
-            toast.toast('info', 'Out of sequence', `${blockedBy.label} needs to finish first — ${task.label} can't start yet.`);
-            return;
-          }
           onStart(containerId, section, task.key, task);
         }}
       >
@@ -266,7 +250,7 @@ function StageTaskCard({
         </span>
       </div>
       <div className="cluster" style={{ marginTop: 'var(--s-3)' }}>
-        <TaskQuickAction containers={container ? [container] : []} row={row} onStart={onStart} onStop={onStop} onCancel={onCancel} />
+        <TaskQuickAction row={row} onStart={onStart} onStop={onStop} onCancel={onCancel} />
       </div>
     </div>
   );
@@ -536,9 +520,9 @@ export function LiveBoard(): React.ReactElement {
   // column still needs to rebuild every second, just not this one.
   const renderStageAction = useCallback(
     (ctx: { row: { original: LiveTask } }) => (
-      <TaskQuickAction containers={activeContainers} row={ctx.row.original} onStart={attemptStart} onStop={stopTask} onCancel={cancelTask} />
+      <TaskQuickAction row={ctx.row.original} onStart={attemptStart} onStop={stopTask} onCancel={cancelTask} />
     ),
-    [activeContainers, attemptStart, stopTask, cancelTask]
+    [attemptStart, stopTask, cancelTask]
   );
 
   const stageColumns = [

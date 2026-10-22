@@ -8,7 +8,6 @@ import {
   isReadyToMove,
   offsetDate,
   overallStatus,
-  paintingTaskBlockedBy,
   RESCHEDULE_OFFSETS,
   SAILING_SITES,
   scheduleLabel,
@@ -126,7 +125,6 @@ function TaskActionCell({
   attemptStart: (containerId: string, sectionKind: SectionKind, taskKey: string, task: { label: string; workerId: string | null; scheduledFor?: string | null }) => void;
 }): React.ReactElement | null {
   const now = useLiveTick(task.state === 'running');
-  const toast = useToast();
   if (task.state === 'running') {
     return (
       <span className="cluster" style={{ gap: 'var(--s-2)' }}>
@@ -153,25 +151,12 @@ function TaskActionCell({
   if (task.state !== 'pending') return null;
   const hasWorker = Boolean(task.workerId);
   const hasSite = section.kind !== 'all_rounder' || task.site !== null;
-  const blockedBy = paintingTaskBlockedBy(container, section, task);
   // Any active worker can be assigned to any task now, regardless of
   // designation — ownerType is kept only as a label for the Assign menu's
   // title (what this task was originally meant for), not an eligibility
   // filter.
   const ownerType = task.ownerType ?? SECTION_OWNER_TYPE[section.kind];
   const eligible = workers.filter((w) => w.active);
-  // Assigning (and marking N/A) is allowed any time now, regardless of
-  // sequence — direct request: a worker can be put on 1st/2nd coat while
-  // Tape + gasket is still open. Only *starting* actually waits on the
-  // sequence; attempting it early doesn't disable the button, it just
-  // toasts why, same pattern as useStartGuard's own busy-worker notice.
-  const handleStart = (): void => {
-    if (blockedBy) {
-      toast.toast('info', 'Out of sequence', `${blockedBy.label} needs to finish first — ${task.label} can't start yet.`);
-      return;
-    }
-    attemptStart(container.id, section.kind, task.key, task);
-  };
   return (
     <span className="cluster" style={{ gap: 'var(--s-2)' }}>
       {task.optional && (
@@ -219,7 +204,7 @@ function TaskActionCell({
           size="sm"
           icon="clock"
           disabled={!hasWorker || !hasSite}
-          onClick={handleStart}
+          onClick={() => attemptStart(container.id, section.kind, task.key, task)}
         >
           Start
         </Button>
