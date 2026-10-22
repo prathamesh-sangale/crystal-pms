@@ -432,7 +432,7 @@ export function ContainerDetailDrawer({
     <Modal
       open={Boolean(container)}
       onOpenChange={onOpenChange}
-      size="lg"
+      size="xl"
       title={<span className="mono">{container?.id}</span>}
       subtitle={
         container && (

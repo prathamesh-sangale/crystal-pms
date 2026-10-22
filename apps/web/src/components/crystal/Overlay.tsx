@@ -32,7 +32,7 @@ export function Modal({
   /** Rendered under the title, left-aligned — a designation, a status, anything identifying. */
   subtitle?: React.ReactNode;
   description?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   /** Rendered top-right, next to the close button — Edit/Delete, never Save (that's the footer's). */
   headerActions?: React.ReactNode;
   footer?: React.ReactNode;
@@ -42,7 +42,7 @@ export function Modal({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="scrim">
-          <Dialog.Content className={cx('modal', size === 'sm' && 'sm', size === 'lg' && 'lg')} aria-describedby={description ? undefined : undefined}>
+          <Dialog.Content className={cx('modal', size === 'sm' && 'sm', size === 'lg' && 'lg', size === 'xl' && 'xl')} aria-describedby={description ? undefined : undefined}>
             <div className="modal-head">
               <div style={{ minWidth: 0 }}>
                 <Dialog.Title asChild>
