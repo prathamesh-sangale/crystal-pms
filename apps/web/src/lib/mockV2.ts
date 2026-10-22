@@ -709,12 +709,12 @@ export function offsetDate(days: number): string {
 
 /** The near-term planning horizon every date quick-pick offers — "daily
  * basis" assignment, not a full calendar. */
-export const RESCHEDULE_OFFSETS: Array<{ days: number; label: string }> = [
-  { days: 0, label: 'Today' },
-  { days: 1, label: 'Tomorrow' },
-  { days: 2, label: 'In 2 days' },
-  { days: 3, label: 'In 3 days' },
-];
+/** Scheduling a task for a future day was removed by direct request — work
+ * is either for today or unassigned, nothing to plan ahead to. Kept as a
+ * one-item array, not a bare constant, so `AssignWorkDialog`/
+ * `ContainerDetailDrawer` need no structural change, only ever offering
+ * 'Today' now. */
+export const RESCHEDULE_OFFSETS: Array<{ days: number; label: string }> = [{ days: 0, label: 'Today' }];
 
 /** "Today"/"Tomorrow" read faster than a raw date for the only two days most
  * planning actually happens on; anything further out just shows the date. */
