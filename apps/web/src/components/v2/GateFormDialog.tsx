@@ -432,18 +432,21 @@ export function GateFormDialog({
    * — or '' for an empty slot, same as the old blob-URL version did, so
    * every caller that checks "is this photo filled in" by truthiness still
    * works unchanged. */
-  const uploadIfPresent = async (file: File | null): Promise<string> => {
+  const uploadIfPresent = async (file: File | null, containerId: string): Promise<string> => {
     if (!file) return '';
-    const { url } = await api.v2Upload(file, isOut ? 'gate-out' : 'gate-in');
+    const { url } = await api.v2Upload(file, isOut ? 'gate-out' : 'gate-in', containerId);
     return url;
   };
 
   /** Uploads every picked photo to Drive in parallel and returns real,
    * permanent links — replacing `URL.createObjectURL()`, which only ever
-   * worked inside the current browser tab and never survived a reload. */
-  const buildPhotos = async (): Promise<GatePhotos> => {
-    const entries = await Promise.all(GATE_PHOTO_SLOTS.map(async (s) => [s.key, await uploadIfPresent(photos[s.key])] as const));
-    const additional = await Promise.all(additionalFiles.map((f) => uploadIfPresent(f)));
+   * worked inside the current browser tab and never survived a reload.
+   * `containerId` must already be the final one — Gate-In resolves its
+   * placeholder id before calling this, specifically so every one of this
+   * container's photos lands in the same Drive subfolder together. */
+  const buildPhotos = async (containerId: string): Promise<GatePhotos> => {
+    const entries = await Promise.all(GATE_PHOTO_SLOTS.map(async (s) => [s.key, await uploadIfPresent(photos[s.key], containerId)] as const));
+    const additional = await Promise.all(additionalFiles.map((f) => uploadIfPresent(f, containerId)));
     return { ...(Object.fromEntries(entries) as Record<GatePhotoKey, string>), additional };
   };
 
@@ -456,7 +459,8 @@ export function GateFormDialog({
     setIdError(null);
     setSubmitting(true);
     try {
-      const photosResult = await buildPhotos();
+      const finalId = trimmedId || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`;
+      const photosResult = await buildPhotos(finalId);
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'in',
@@ -485,7 +489,7 @@ export function GateFormDialog({
       };
 
       const container: MockContainer = {
-        id: trimmedId || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`,
+        id: finalId,
         typeCode,
         size,
         color: isReefer ? 'White' : color === CUSTOM_COLOR ? customColor.trim() || 'Unspecified' : color,
@@ -521,7 +525,7 @@ export function GateFormDialog({
     if (!container) return;
     setSubmitting(true);
     try {
-      const photosResult = await buildPhotos();
+      const photosResult = await buildPhotos(container.id);
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'out',

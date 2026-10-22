@@ -229,11 +229,15 @@ export const api = {
 
   /** `category` picks which of the three Drive folders (Gate In / Gate Out /
    * Survey) this file lands in — 'other' (the default) for anything outside
-   * those three real moments, e.g. Hydra's own file. */
-  v2Upload: (file: File, category: 'gate-in' | 'gate-out' | 'survey' | 'other' = 'other') => {
+   * those three real moments, e.g. Hydra's own file. `containerId`, when
+   * given, nests it one level deeper inside that container's own subfolder
+   * within its category. */
+  v2Upload: (file: File, category: 'gate-in' | 'gate-out' | 'survey' | 'other' = 'other', containerId?: string) => {
     const form = new FormData();
     form.append('file', file, file.name);
-    return request<{ id: string; url: string }>(`/api/v2/uploads?category=${category}`, { method: 'POST', body: form });
+    const params = new URLSearchParams({ category });
+    if (containerId) params.set('containerId', containerId);
+    return request<{ id: string; url: string }>(`/api/v2/uploads?${params}`, { method: 'POST', body: form });
   },
 
   v2ExportToSheet: () =>

@@ -21,7 +21,13 @@ function isAllowedMimeType(mimetype: string): boolean {
 // query string has no such ordering gotcha. Defaults to 'other' for a
 // caller that genuinely doesn't have one of the three real moments (Hydra's
 // own upload today) rather than failing the upload outright.
-const uploadQuerySchema = z.object({ category: z.enum(['gate-in', 'gate-out', 'survey', 'other']).default('other') });
+const uploadQuerySchema = z.object({
+  category: z.enum(['gate-in', 'gate-out', 'survey', 'other']).default('other'),
+  // Optional: nests the file one level deeper, inside a subfolder named for
+  // this container within its category's folder. Omitted for uploads with
+  // no single container behind them (Hydra's own file).
+  containerId: z.string().trim().min(1).optional(),
+});
 
 /** Keeps the original name recognisable (so "IMG_0231.jpg" still reads as
  * that in Drive) while dropping path separators and anything that isn't
@@ -56,7 +62,7 @@ export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
     }
     const buffer = await file.toBuffer();
     try {
-      const uploaded = await uploadToDrive(buffer, sanitizeFilename(file.filename), file.mimetype, query.category);
+      const uploaded = await uploadToDrive(buffer, sanitizeFilename(file.filename), file.mimetype, query.category, query.containerId);
       return reply.code(201).send(uploaded);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not upload this file.';

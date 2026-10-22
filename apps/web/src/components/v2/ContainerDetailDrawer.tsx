@@ -370,7 +370,7 @@ export function ContainerDetailDrawer({
     try {
       const uploaded: string[] = [];
       for (const file of files) {
-        const { url } = await api.v2Upload(file, 'survey');
+        const { url } = await api.v2Upload(file, 'survey', container.id);
         uploaded.push(url);
       }
       setReadyPhotos((cur) => [...cur, ...uploaded]);
