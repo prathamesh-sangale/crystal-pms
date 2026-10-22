@@ -326,9 +326,9 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /** Adds one new task to a container, after Gate-In. The fixed Gate-In
-   * builders (ptiTasks/cleaningTasks/repairTasksFor/painting's own sequence)
-   * only ever run once, at registration -- this is the one place work can
-   * be added to a container that's already in the yard. */
+   * builders (ptiTasks/cleaningTasks/repairTasksFor/paintingTasksFor) only
+   * ever run once, at registration -- this is the one place work can be
+   * added to a container that's already in the yard. */
   app.post('/api/v2/containers/:id/sections/:kind/tasks', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
     const { id, kind } = request.params as { id: string; kind: string };
     const body = await parseOr422(addTaskSchema, request.body, reply);
