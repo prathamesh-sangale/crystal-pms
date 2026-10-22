@@ -1,13 +1,16 @@
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ToastProvider } from './components/crystal/Feedback';
 import { AuthProvider } from './lib/auth';
 import { ThemeProvider } from './lib/theme';
-import { DevLogs } from './screens/dev/DevLogs';
+
+// Lazy: reached only by typing its exact URL, never an in-app link — no
+// reason every normal visitor's bundle carries this screen's code too.
+const DevLogs = lazy(() => import('./screens/dev/DevLogs').then((m) => ({ default: m.DevLogs })));
 
 // Order matters: the token blocks must load before anything that reads them,
 // and app.css last so its two body overrides win.
@@ -47,7 +50,9 @@ createRoot(root).render(
   <StrictMode>
     <ThemeProvider>
       {isDevLogs ? (
-        <DevLogs />
+        <Suspense fallback={null}>
+          <DevLogs />
+        </Suspense>
       ) : (
         <QueryClientProvider client={queryClient}>
           <AuthProvider>

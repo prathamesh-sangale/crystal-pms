@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/app/AppShell';
 import { Icon } from './components/crystal/Icon';
@@ -5,17 +6,24 @@ import { useAuth } from './lib/auth';
 import type { Screen } from './lib/api';
 import { navItemsForUser } from './lib/nav';
 import { V2DataProvider } from './lib/v2Store';
-import { AccessManagement } from './screens/v2/AccessManagement';
 import { Login } from './screens/Login';
-import { ContainerReport } from './screens/v2/ContainerReport';
-import { DashboardsV2 } from './screens/v2/DashboardsV2';
-import { Guide } from './screens/v2/Guide';
-import { Hydra } from './screens/v2/Hydra';
-import { ImsStock } from './screens/v2/ImsStock';
-import { LiveBoard } from './screens/v2/LiveBoard';
-import { WorkerRoster } from './screens/v2/WorkerRoster';
-import { YardBoard } from './screens/v2/YardBoard';
-import { YardReport } from './screens/v2/YardReport';
+
+// Lazy, not eager: every one of these used to ship in the single ~720KB
+// bundle every visitor downloaded before the app was even interactive,
+// regardless of which one screen they actually opened (flagged directly —
+// "too much loading time"; Vite's own build output already warned about a
+// chunk over 500KB). Each now becomes its own chunk, fetched only the first
+// time its route is actually visited.
+const AccessManagement = lazy(() => import('./screens/v2/AccessManagement').then((m) => ({ default: m.AccessManagement })));
+const ContainerReport = lazy(() => import('./screens/v2/ContainerReport').then((m) => ({ default: m.ContainerReport })));
+const DashboardsV2 = lazy(() => import('./screens/v2/DashboardsV2').then((m) => ({ default: m.DashboardsV2 })));
+const Guide = lazy(() => import('./screens/v2/Guide').then((m) => ({ default: m.Guide })));
+const Hydra = lazy(() => import('./screens/v2/Hydra').then((m) => ({ default: m.Hydra })));
+const ImsStock = lazy(() => import('./screens/v2/ImsStock').then((m) => ({ default: m.ImsStock })));
+const LiveBoard = lazy(() => import('./screens/v2/LiveBoard').then((m) => ({ default: m.LiveBoard })));
+const WorkerRoster = lazy(() => import('./screens/v2/WorkerRoster').then((m) => ({ default: m.WorkerRoster })));
+const YardBoard = lazy(() => import('./screens/v2/YardBoard').then((m) => ({ default: m.YardBoard })));
+const YardReport = lazy(() => import('./screens/v2/YardReport').then((m) => ({ default: m.YardReport })));
 
 function Booting(): React.ReactElement {
   return (
@@ -79,23 +87,25 @@ export function App(): React.ReactElement {
     // otherwise remount this provider (and wipe every timer) on every nav
     // between screens — the shared store needs to outlive that.
     <V2DataProvider>
-      <Routes>
-        {/* Chrome-free: no sidebar/topbar, so Print captures only the report. */}
-        <Route path="/containers/:id/report" element={<ContainerReport />} />
-        <Route path="/reports/yard" element={<YardReport />} />
-        <Route element={<AppShell />}>
-          <Route path="/" element={<Navigate to="/live" replace />} />
-          <Route path="/yard" element={<Guarded screen="yard"><YardBoard /></Guarded>} />
-          <Route path="/live" element={<Guarded screen="live"><LiveBoard /></Guarded>} />
-          <Route path="/workers" element={<Guarded screen="workers"><WorkerRoster /></Guarded>} />
-          <Route path="/dashboards" element={<Guarded screen="dashboards"><DashboardsV2 /></Guarded>} />
-          <Route path="/hydra" element={<Guarded screen="hydra"><Hydra /></Guarded>} />
-          <Route path="/ims-stock" element={<Guarded screen="ims-stock"><ImsStock /></Guarded>} />
-          <Route path="/access" element={<Guarded managerOnly><AccessManagement /></Guarded>} />
-          <Route path="/guide" element={<Guide />} />
-          <Route path="*" element={<NotFound />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<Booting />}>
+        <Routes>
+          {/* Chrome-free: no sidebar/topbar, so Print captures only the report. */}
+          <Route path="/containers/:id/report" element={<ContainerReport />} />
+          <Route path="/reports/yard" element={<YardReport />} />
+          <Route element={<AppShell />}>
+            <Route path="/" element={<Navigate to="/live" replace />} />
+            <Route path="/yard" element={<Guarded screen="yard"><YardBoard /></Guarded>} />
+            <Route path="/live" element={<Guarded screen="live"><LiveBoard /></Guarded>} />
+            <Route path="/workers" element={<Guarded screen="workers"><WorkerRoster /></Guarded>} />
+            <Route path="/dashboards" element={<Guarded screen="dashboards"><DashboardsV2 /></Guarded>} />
+            <Route path="/hydra" element={<Guarded screen="hydra"><Hydra /></Guarded>} />
+            <Route path="/ims-stock" element={<Guarded screen="ims-stock"><ImsStock /></Guarded>} />
+            <Route path="/access" element={<Guarded managerOnly><AccessManagement /></Guarded>} />
+            <Route path="/guide" element={<Guide />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </V2DataProvider>
   );
 }

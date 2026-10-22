@@ -13,5 +13,31 @@ export default defineConfig({
   },
   // The shared package is TypeScript source, not a built artefact.
   optimizeDeps: { exclude: ['@pms/shared'] },
-  build: { sourcemap: true },
+  build: {
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        // Third-party code split out from the app's own — it changes far
+        // less often than screens/components do, so a deploy that only
+        // touches app code lets a returning visitor's browser skip
+        // re-downloading this chunk entirely (same content hash, already
+        // cached), instead of invalidating one shared ~500KB bundle on
+        // every single deploy regardless of what actually changed.
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          'vendor-radix': [
+            '@radix-ui/react-accordion',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-dialog',
+            '@radix-ui/react-dropdown-menu',
+            '@radix-ui/react-popover',
+            '@radix-ui/react-switch',
+            '@radix-ui/react-toast',
+            '@radix-ui/react-tooltip',
+          ],
+          'vendor-query': ['@tanstack/react-query', '@tanstack/react-table'],
+        },
+      },
+    },
+  },
 });
