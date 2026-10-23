@@ -136,3 +136,55 @@ export async function uploadToDrive(
   if (!res.data.id || !res.data.webViewLink) throw new Error('Drive upload did not return a file id/link.');
   return { id: res.data.id, url: res.data.webViewLink };
 }
+
+/** Confirms a file id actually belongs to the PMS Shared Drive before
+ * streaming or deleting it — the one gate standing between "any signed-in
+ * user can view/remove their own uploaded photos" and "any signed-in user
+ * can view/remove any file this service account can reach," since neither
+ * the view nor the delete route take anything else identifying as proof the
+ * caller actually uploaded this exact file. Returns its mimeType when it
+ * does, null otherwise (not found, or found somewhere this service account
+ * can reach but outside our own Shared Drive). */
+async function verifyOwnedFile(fileId: string): Promise<string | null> {
+  try {
+    const res = await drive().files.get({ fileId, fields: 'driveId, mimeType', supportsAllDrives: true });
+    if (res.data.driveId !== SHARED_DRIVE_ID) return null;
+    return res.data.mimeType ?? 'application/octet-stream';
+  } catch {
+    return null;
+  }
+}
+
+/** Streams a previously-uploaded file's actual bytes back out, for display —
+ * the thing a bare Drive `webViewLink` can't do inline (it's a sign-in-walled
+ * viewer *page*, confirmed live: both of Drive's usual public-embed URL
+ * tricks redirect to accounts.google.com for this Shared Drive's files, since
+ * they're never shared further than the service account's own Content
+ * Manager access). Proxying through this app's own server, behind its own
+ * auth, is what actually makes an uploaded photo viewable by anyone using
+ * the app, regardless of anyone's personal Google sign-in state. Returns
+ * null for a file id that doesn't resolve to something in our own Shared
+ * Drive. */
+export async function streamFromDrive(fileId: string): Promise<{ mimeType: string; stream: NodeJS.ReadableStream } | null> {
+  const mimeType = await verifyOwnedFile(fileId);
+  if (!mimeType) return null;
+  const res = await drive().files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' });
+  return { mimeType, stream: res.data };
+}
+
+/** Removes a previously-uploaded file — trashes it, not a hard delete:
+ * `files.delete()` was tested directly against this Shared Drive and
+ * unreliably 404s even moments after a successful create (a real, observed
+ * quirk of this service account/Shared Drive combination, not a guess),
+ * while `files.update({ trashed: true })` worked every time. Functionally
+ * the same outcome for this app's purposes — gone from the folder, no
+ * longer viewable or counted as a live file — just not an instant permanent
+ * purge; Drive's own trash auto-empties on its usual schedule. Returns
+ * false for a file id that doesn't resolve to something in our own Shared
+ * Drive, true once actually trashed. */
+export async function removeFromDrive(fileId: string): Promise<boolean> {
+  const owned = await verifyOwnedFile(fileId);
+  if (!owned) return false;
+  await drive().files.update({ fileId, requestBody: { trashed: true }, supportsAllDrives: true });
+  return true;
+}

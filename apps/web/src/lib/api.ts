@@ -93,6 +93,33 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+/** Fetches a photo's actual bytes, authenticated the same way `request()`
+ * above does — separate from it because a photo response isn't JSON, and
+ * because an `<img src>` can never carry an Authorization header itself (the
+ * whole reason this proxy route exists over just linking straight to
+ * Drive). Callers turn the result into an object URL and revoke it on
+ * cleanup; this function doesn't manage that lifetime itself. */
+async function fetchPhotoBlob(fileId: string): Promise<Blob> {
+  const headers = new Headers();
+  const auth = token.get();
+  if (auth) headers.set('authorization', `Bearer ${auth}`);
+  let response: Response;
+  try {
+    response = await fetch(`/api/v2/photos/${encodeURIComponent(fileId)}`, { headers });
+  } catch {
+    throw new RequestError(0, { error: 'offline', message: 'Could not reach the server. Check your connection and try again.' });
+  }
+  if (!response.ok) {
+    if (response.status === 401) {
+      token.set(null);
+      onUnauthorized?.();
+    }
+    const body: unknown = await response.json().catch(() => ({}));
+    throw new RequestError(response.status, body as Partial<ApiError>);
+  }
+  return response.blob();
+}
+
 /* ------------------------------------------------------------------------ */
 /* Response shapes                                                           */
 /* ------------------------------------------------------------------------ */
@@ -239,6 +266,10 @@ export const api = {
     if (containerId) params.set('containerId', containerId);
     return request<{ id: string; url: string }>(`/api/v2/uploads?${params}`, { method: 'POST', body: form });
   },
+
+  v2PhotoBlob: (fileId: string) => fetchPhotoBlob(fileId),
+
+  v2DeletePhoto: (fileId: string) => request<void>(`/api/v2/photos/${encodeURIComponent(fileId)}`, { method: 'DELETE' }),
 
   v2ExportToSheet: () =>
     request<{ ok: true; tabs: string[]; exportedAt: string }>('/api/v2/export-sheet', { method: 'POST' }),

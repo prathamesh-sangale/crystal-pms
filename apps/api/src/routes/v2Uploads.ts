@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireScreen } from '../auth.js';
-import { parseOr422 } from '../http.js';
-import { uploadToDrive } from '../googleDrive.js';
+import { notFound, parseOr422 } from '../http.js';
+import { removeFromDrive, streamFromDrive, uploadToDrive } from '../googleDrive.js';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB — covers the PTI video, the largest file this form ever sends.
 
@@ -40,12 +40,18 @@ function sanitizeFilename(filename: string): string {
   return cleaned || 'upload';
 }
 
+const fileIdParamSchema = z.object({ fileId: z.string().trim().min(1) });
+
 /**
  * The one piece item 57's "everything now flows and stores" pass couldn't
  * close: Gate-In's photos and PTI video were still URL.createObjectURL()
- * blobs, gone on reload. This route is the missing link — uploads a single
- * file to the PMS Shared Drive and hands back a real, permanent URL for the
- * client to store in gate_in/gate_out instead.
+ * blobs, gone on reload. The upload route is the missing link — uploads a
+ * single file to the PMS Shared Drive and hands back a real, permanent URL
+ * for the client to store in gate_in/gate_out instead. The view/delete
+ * routes close the gap that left — a stored `webViewLink` can't be
+ * embedded as an image at all (it's a sign-in-walled viewer page, confirmed
+ * live), and nothing ever let an admin remove a photo once uploaded, from
+ * the app or from Drive itself.
  */
 export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', authenticate);
@@ -69,5 +75,31 @@ export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
       request.log.error({ err }, 'Drive upload failed');
       throw app.httpErrors.internalServerError(message);
     }
+  });
+
+  // Proxies a photo's real bytes back out, authenticated through this app
+  // rather than Drive's own (unusable here) sharing model — what every
+  // thumbnail in the app actually requests now instead of trying to
+  // <img src> a Drive link directly.
+  app.get('/api/v2/photos/:fileId', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
+    const params = await parseOr422(fileIdParamSchema, request.params, reply);
+    if (!params) return;
+    const found = await streamFromDrive(params.fileId);
+    if (!found) return reply.code(404).send(notFound('Photo'));
+    reply.header('content-type', found.mimeType);
+    reply.header('cache-control', 'private, max-age=86400');
+    return reply.send(found.stream);
+  });
+
+  // Trashes a photo in Drive — the double-check ("are you sure?") lives
+  // entirely client-side, same as every other destructive confirm in this
+  // app (delete container, etc.); this endpoint just does the one real
+  // action once asked.
+  app.delete('/api/v2/photos/:fileId', { preHandler: requireScreen('live', 'yard') }, async (request, reply) => {
+    const params = await parseOr422(fileIdParamSchema, request.params, reply);
+    if (!params) return;
+    const removed = await removeFromDrive(params.fileId);
+    if (!removed) return reply.code(404).send(notFound('Photo'));
+    return reply.code(204).send();
   });
 }

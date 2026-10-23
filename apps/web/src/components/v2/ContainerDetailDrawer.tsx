@@ -39,7 +39,7 @@ import { Icon } from '../crystal/Icon';
 import { ConfirmDialog, Menu, Modal } from '../crystal/Overlay';
 import { GateFormDialog } from './GateFormDialog';
 import { MiniStageStrip } from './MiniStageStrip';
-import { gateLogPhotoEntries, PhotoThumb } from './PhotoThumb';
+import { extractDriveFileId, gateLogPhotoEntries, PhotoThumb } from './PhotoThumb';
 import { RunSurveyDialog, type SurveyDraftData } from './RunSurveyDialog';
 import { useStartGuard } from './useStartGuard';
 
@@ -382,8 +382,30 @@ export function ContainerDetailDrawer({
     }
   };
 
-  const removeReadyPhoto = (url: string): void => {
-    setReadyPhotos((cur) => cur.filter((u) => u !== url));
+  // Double-checked, direct request: removing an already-uploaded photo here
+  // isn't just dropping it from this list — it's really gone from Drive too
+  // (trashed; see googleDrive.ts's removeFromDrive for why that's not an
+  // instant hard delete), so a stray tap can't quietly destroy real
+  // evidence. The confirm step is the only thing standing between "pending
+  // removal" and "gone" -- `removePhotoTarget` holds the one url waiting on
+  // it, null the rest of the time.
+  const [removePhotoTarget, setRemovePhotoTarget] = useState<string | null>(null);
+  const [removePhotoBusy, setRemovePhotoBusy] = useState(false);
+
+  const confirmRemoveReadyPhoto = async (): Promise<void> => {
+    const url = removePhotoTarget;
+    if (!url) return;
+    setRemovePhotoBusy(true);
+    try {
+      const fileId = extractDriveFileId(url);
+      if (fileId) await api.v2DeletePhoto(fileId);
+      setReadyPhotos((cur) => cur.filter((u) => u !== url));
+      setRemovePhotoTarget(null);
+    } catch (err) {
+      setReadyPhotoError(err instanceof Error ? err.message : 'Could not remove that photo. Try again.');
+    } finally {
+      setRemovePhotoBusy(false);
+    }
   };
 
   const handleMarkReady = async (): Promise<void> => {
@@ -508,17 +530,13 @@ export function ContainerDetailDrawer({
             {readyPhotos.length > 0 && (
               <span className="cluster" style={{ gap: 'var(--s-1)' }}>
                 {readyPhotos.map((url) => (
-                  <span key={url} style={{ position: 'relative' }}>
-                    <img
-                      src={url}
-                      alt=""
-                      style={{ width: '44px', height: '44px', objectFit: 'cover', borderRadius: 'var(--r-sm)', border: '1px solid var(--line)' }}
-                    />
+                  <span key={url} style={{ position: 'relative', width: '48px' }}>
+                    <PhotoThumb url={url} label="Ready to move" />
                     <button
                       type="button"
                       className="iconbtn bare"
                       aria-label="Remove this photo"
-                      onClick={() => removeReadyPhoto(url)}
+                      onClick={() => setRemovePhotoTarget(url)}
                       style={{ position: 'absolute', top: '-6px', right: '-6px', background: 'var(--scrim)', color: 'var(--text-inv)' }}
                     >
                       <Icon name="x" size="sm" />
@@ -833,6 +851,17 @@ export function ContainerDetailDrawer({
           onConfirm={() => void handleDelete()}
         />
       )}
+
+      <ConfirmDialog
+        open={removePhotoTarget !== null}
+        onOpenChange={(next) => !next && setRemovePhotoTarget(null)}
+        title="Remove this photo?"
+        body="It's deleted from Drive too, not just unlinked here — this can't be undone."
+        confirmLabel="Remove photo"
+        destructive
+        busy={removePhotoBusy}
+        onConfirm={() => void confirmRemoveReadyPhoto()}
+      />
 
       {startConfirmDialog}
     </Modal>

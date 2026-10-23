@@ -1,32 +1,89 @@
+import { useEffect, useState } from 'react';
+import { api } from '../../lib/api';
 import { GATE_PHOTO_SLOTS, type GateLogEntry } from '../../lib/mockV2';
 import { Icon } from '../crystal/Icon';
 
+/** Drive file ids are opaque, but every link this app ever stores is the
+ * same `webViewLink` shape (`.../file/d/{id}/view...`) `uploadToDrive`
+ * returns — this is the one place that shape gets parsed back apart,
+ * shared by every caller that needs the bare id (the photo proxy, the
+ * remove-photo confirm). */
+export function extractDriveFileId(url: string): string | null {
+  const m = url.match(/\/file\/d\/([^/]+)/);
+  return m ? m[1]! : null;
+}
+
 /** One photo from a Gate In/Out submission or the ready-to-move set, shown
- * as an actual thumbnail where possible. Shared by the printed Container
- * Report and the drawer's own "Photos" review dialog, so both ever only
- * render a photo one way.
+ * as an actual thumbnail. Shared by the printed Container Report and the
+ * drawer's own "Photos" review dialog, so both ever only render a photo one
+ * way.
  *
- * A real Drive link (https://drive.google.com/...) is a viewer *page*, not
- * raw image bytes — embedding it directly as an <img src> shows a broken
- * image, not the photo. Only a `blob:` URL (the old, pre-upload, in-tab-only
- * representation — shouldn't occur going forward, kept only so an
- * already-open draft from before this change doesn't render broken) can
- * actually be inlined; anything else opens in Drive instead. */
+ * A real Drive link (https://drive.google.com/...) is a sign-in-walled
+ * viewer *page*, not raw image bytes, and confirmed live that Drive's usual
+ * public-embed URL tricks don't work for this Shared Drive's files either
+ * (they redirect to accounts.google.com) — so the only way to actually show
+ * one is to fetch it, authenticated, through this app's own proxy route and
+ * turn the response into an object URL. A `blob:` URL (still used for a
+ * locally-picked, not-yet-uploaded file) is already a real image and skips
+ * the fetch entirely. */
 export function PhotoThumb({ url, label }: { url: string; label: string }): React.ReactElement {
-  if (url.startsWith('blob:')) {
-    return <img src={url} alt={label} className="photo-thumb" />;
+  const [blobUrl, setBlobUrl] = useState<string | null>(url.startsWith('blob:') ? url : null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (url.startsWith('blob:')) {
+      setBlobUrl(url);
+      return;
+    }
+    const fileId = extractDriveFileId(url);
+    if (!fileId) {
+      setFailed(true);
+      return;
+    }
+    setFailed(false);
+    setBlobUrl(null);
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    api
+      .v2PhotoBlob(fileId)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url]);
+
+  if (blobUrl) return <img src={blobUrl} alt={label} className="photo-thumb" />;
+
+  if (failed) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="photo-thumb"
+        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'var(--s-1)', color: 'var(--text-2)', textDecoration: 'none' }}
+      >
+        <Icon name="external" size="md" />
+        <span style={{ fontSize: '10.5px', fontWeight: 600 }}>View photo</span>
+      </a>
+    );
   }
+
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
+    <div
       className="photo-thumb"
-      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 'var(--s-1)', color: 'var(--text-2)', textDecoration: 'none' }}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-3)', background: 'var(--surface-2)' }}
     >
-      <Icon name="external" size="md" />
-      <span style={{ fontSize: '10.5px', fontWeight: 600 }}>View photo</span>
-    </a>
+      <Icon name="clock" size="md" />
+    </div>
   );
 }
 
