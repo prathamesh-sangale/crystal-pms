@@ -76,9 +76,11 @@ const FAQ: FaqGroup[] = [
       { q: 'What does auto-fill from IMS mean?', a: 'If the container number already exists in IMS for your yard, its type/size/grade and other details fill in automatically. You can still change any of it.' },
       { q: 'I got interrupted mid gate-in — is my work lost?', a: 'No. Unfinished gate-in forms save as drafts automatically. Open "Drafts" in the top bar to resume exactly where you left off.' },
       { q: 'Does this app write anything back into IMS?', a: 'No, never. IMS is only ever read from — nothing in this app writes to it, by design.' },
-      { q: 'Is there a faster way to add a container that\'s already in IMS?', a: 'Yes — Yard Board\'s "Add from IMS" button. "Add to yard" registers it in one click with no survey, straight to Ready to move. "Add & survey" opens the same trimmed form with the full inspection, for a container that needs one right away.' },
-      { q: 'I used the one-click "Add to yard" — can it still be surveyed?', a: 'Yes, any time — open the container and use "Run survey" in its header. It\'s only offered on a container that hasn\'t been surveyed yet, so it can\'t be run twice.' },
+      { q: 'Is there a faster way to add a container that\'s already in IMS?', a: 'Yes — Yard Board\'s "Add from IMS" button, then "Add to yard." One click, no form, no survey — straight to Ready to move. An IMS-known container never goes through the full Gate-In form at all; if it turns out to need a real look, run a survey on it afterward instead.' },
+      { q: 'I used the one-click "Add to yard" — can it still be surveyed?', a: 'Yes, any time — open the container and use "Run survey" in its header.' },
       { q: 'I started a survey and got interrupted — is it lost?', a: 'No. Leaving "Run survey" before confirming it saves automatically as a draft — a "Survey drafted" badge shows on that container until it\'s finished, and reopening "Run survey" resumes exactly where it left off.' },
+      { q: 'Can I run a survey again later, on a container that\'s already been surveyed or is already ready?', a: 'Yes, any time, for any reason — "Run survey again" is always available until a container has actually gated out. If it flags a section that already has work on it, only the genuinely new work gets added, so re-running it can\'t duplicate anything already there.' },
+      { q: 'What happens when I mark "Machine issue found? Yes" on a Reefer survey?', a: 'It asks for one plain remark describing what\'s wrong, not an itemized checklist — that single remark becomes one "Repairment" task under PTI, alongside Lights and Strip & curtain.' },
     ],
   },
   {
@@ -86,7 +88,10 @@ const FAQ: FaqGroup[] = [
     icon: 'grid',
     items: [
       { q: 'What are the five sections?', a: 'Painting, PTI, Cleaning, Repairment (general repair work), and Sailing Crew (loading/offloading/shifting tasks). A container only gets the sections its survey calls for.' },
-      { q: 'How do I assign a worker to a task?', a: 'Tap "Start" on the task, pick a worker, and its clock starts running. Tap it again once finished to mark it done.' },
+      { q: 'How do I assign a worker to a task?', a: 'Tap "Assign" on the task and pick a worker. Once someone\'s assigned, tap "Start" when work actually begins — its clock starts running — and tap it again once finished to mark it done.' },
+      { q: 'Can I assign any worker to any task, in any section?', a: 'Yes — a worker\'s role (Painter, Technician, and so on) is just a label now, not a restriction. The Assign menu offers every active worker for every task, regardless of their usual role.' },
+      { q: 'Can one worker be doing more than one task at a time?', a: 'Yes. Starting a second task for someone already running one doesn\'t stop it — it just lets you know they\'re now on two jobs at once, and starts the new one anyway.' },
+      { q: 'Do tasks have to be started in a set order — like Painting\'s coats, or waiting on Repairment first?', a: 'No — every task in every section, including Painting\'s Primer/1st coat/2nd coat/Logo, can be assigned and started in any order, any time. Nothing ever blocks on anything else.' },
       { q: 'Can I add a task that wasn\'t there from the start?', a: 'Yes — open the container and use "Add task" on the relevant section. Good for anything that comes up after gate-in.' },
       { q: 'What\'s the difference between Live Board and Yard Board?', a: 'Live Board shows every open task across every container, grouped by stage or by crew. Yard Board shows one container at a time with its full picture.' },
       { q: 'What does the priority (fast-track) flag mean?', a: 'It marks a container to be handled ahead of normal work — shown as a red outline everywhere it appears.' },
@@ -100,7 +105,9 @@ const FAQ: FaqGroup[] = [
       { q: 'Why can\'t I mark a container ready to move?', a: 'Every task in every section has to be done (or N/A) first. Once nothing is open, the completion-photo upload appears in its place.' },
       { q: 'Why does it ask for a photo before Gate Out?', a: 'At least one completion photo is a required proof step, not optional — the final check before a container can leave. More than one can be added — each uploads as it\'s taken, shown as a strip of thumbnails, with "Mark ready to move" confirming the whole set at once.' },
       { q: 'Camera or gallery — which does the photo button use?', a: 'Either, your choice — every photo upload in the app (gate-in\'s inspection photos, the ready-to-move photo) offers an explicit Camera button and a Gallery button side by side, not one button guessing which you want.' },
-      { q: 'Where can I see a container\'s history after it leaves?', a: 'Its printable report — survey, every task, both gate-in and gate-out details — stays available even after it has departed.' },
+      { q: 'Can I see the photos once they\'re uploaded?', a: 'Yes — the "Photos" button on a container\'s header opens every photo it has, clearly grouped by Gate In, Gate Out, and Ready to Move, so it\'s always obvious which is which.' },
+      { q: 'I uploaded the wrong ready-to-move photo — can I remove it?', a: 'Yes, before confirming — tap the X on it. It asks you to confirm first, and once you do, it\'s genuinely deleted, not just hidden from the list.' },
+      { q: 'Where can I see a container\'s history after it leaves?', a: 'Its printable report — survey, every task, both gate-in and gate-out details, and every photo — stays available even after it has departed.' },
     ],
   },
   {
@@ -169,14 +176,28 @@ export function Guide(): React.ReactElement {
   const screens = NAV_ITEMS.filter((item) => item.to !== '/guide');
   const [query, setQuery] = useState('');
 
+  // Every word typed has to show up *somewhere* in the item (question,
+  // answer, or its group's heading) -- not all together as one exact
+  // phrase, which is what a plain .includes(query) check required before.
+  // That meant typing "worker password" found nothing, even though the
+  // answer that actually covers it just never happens to say those two
+  // words next to each other ("...lets Admin change its screens, role, or
+  // password"). Matching word-by-word instead means the words can be
+  // anywhere, any order, across the question and the answer both -- a
+  // search that's actually forgiving of however the admin happens to
+  // phrase what they're looking for, not just a literal find-in-page.
   const filteredFaq = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return FAQ;
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return FAQ;
     return FAQ.map((group) => ({
       ...group,
-      items: group.items.filter((item) => `${item.q} ${item.a}`.toLowerCase().includes(needle)),
+      items: group.items.filter((item) => {
+        const haystack = `${group.heading} ${item.q} ${item.a}`.toLowerCase();
+        return words.every((word) => haystack.includes(word));
+      }),
     })).filter((group) => group.items.length > 0);
   }, [query]);
+  const searching = query.trim().length > 0;
 
   return (
     <div className="stack stack-loose">
@@ -294,6 +315,7 @@ export function Guide(): React.ReactElement {
                   {group.items.map((item, i) => (
                     <details
                       key={slugify(item.q)}
+                      open={searching}
                       style={{ padding: '7px 0', borderTop: i > 0 ? '1px solid var(--line)' : 'none' }}
                     >
                       <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '12.5px', color: 'var(--text)' }}>
