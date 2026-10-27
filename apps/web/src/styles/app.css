@@ -1112,12 +1112,23 @@ input[type="time"] {
 }
 
 .bootmark i {
-  width: 20px;
-  height: 20px;
-  background: var(--amber-c);
-  transform: rotate(45deg);
-  border-radius: var(--r-sm);
+  width: 36px;
+  height: 36px;
+  background: var(--on-accent);
   display: block;
+  mask-image: url('../assets/crystal-mark.png');
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  /* stylelint-disable property-no-vendor-prefix -- Safari still requires
+     the -webkit- form for CSS masking; there's no autoprefixer in this
+     build to add it automatically, so without this the icon simply
+     wouldn't render there. */
+  -webkit-mask-image: url('../assets/crystal-mark.png');
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  /* stylelint-enable property-no-vendor-prefix */
 }
 
 .bootmark-sweep {

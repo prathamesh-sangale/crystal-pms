@@ -525,7 +525,9 @@ code.tok{font-family:var(--f-mono);background:var(--surface-2);color:var(--accen
 .side{width:186px;background:var(--surface);border-right:1px solid var(--line);padding:12px 9px;display:flex;flex-direction:column;flex:none;}
 .side-brand{display:flex;align-items:center;gap:9px;padding:5px 8px 15px;font-family:var(--f-display);font-weight:800;font-size:13px;color:var(--text);}
 .side-brand .mark{width:24px;height:24px;border-radius:7px;background:var(--accent);display:grid;place-items:center;}
-.side-brand .mark i{width:8px;height:8px;background:var(--amber-c);transform:rotate(45deg);border-radius:2px;display:block;}
+.side-brand .mark i{width:15px;height:15px;background:var(--on-accent);display:block;
+  mask-image:url(../assets/crystal-mark.png);mask-size:contain;mask-repeat:no-repeat;mask-position:center;
+  -webkit-mask-image:url(../assets/crystal-mark.png);-webkit-mask-size:contain;-webkit-mask-repeat:no-repeat;-webkit-mask-position:center;}
 .side-group{font-family:var(--f-mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text-3);padding:12px 9px 5px;}
 /* A nav item is a button in this page and a link in a real app; both must look
    identical, so the underline a browser gives an <a> is removed here rather
