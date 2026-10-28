@@ -1,26 +1,13 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '../../components/crystal/Button';
 import { StatusPill } from '../../components/crystal/Data';
 import { EmptyState } from '../../components/crystal/Feedback';
-import { Field } from '../../components/crystal/Form';
+import { Chip, Field, InputWithIcon, SwitchField } from '../../components/crystal/Form';
+import { Icon } from '../../components/crystal/Icon';
+import { describeAction, type ActionLogRow } from './describeAction';
 
 const TOKEN_KEY = 'pms-dev-logs-token';
 const POLL_MS = 15_000;
-
-interface ActionLogRow {
-  id: number;
-  created_at: string;
-  method: string;
-  path: string;
-  category: string;
-  status_code: number;
-  user_id: string | null;
-  user_email: string | null;
-  user_role: string | null;
-  body: unknown;
-  query: unknown;
-  ip: string | null;
-}
 
 class DevLogsError extends Error {
   status: number;
@@ -48,12 +35,30 @@ async function devLogsFetch<T>(path: string, token: string | null, init?: Reques
   return body as T;
 }
 
+/** "Today at 2:30 PM" reads at a glance; a full date is only worth printing
+ * once it's not today or yesterday. */
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  if (d.toDateString() === now.toDateString()) return `Today at ${time}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
+  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${time}`;
+}
+
 /** The developer-only action log — reached only by knowing this exact URL
  * (never linked anywhere), gated by its own password (never the app's real
  * Sign In screen), authenticated with its own short-lived token that has
  * nothing to do with any login account. See App.tsx for how this bypasses
  * the normal session check entirely, and apps/api/src/routes/devLogs.ts /
- * actionLog.ts for the server side. */
+ * actionLog.ts for the server side.
+ *
+ * The page reads like a diary, not a database dump: every row leads with a
+ * plain-English sentence (describeAction.ts) — what happened, who did it,
+ * when — with the raw method/path/status/body available on request behind
+ * an expand toggle, for whoever actually needs to debug something. */
 export function DevLogs(): React.ReactElement {
   const [token, setToken] = useState<string | null>(() => {
     try {
@@ -69,6 +74,10 @@ export function DevLogs(): React.ReactElement {
   const [logs, setLogs] = useState<ActionLogRow[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [category, setCategory] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [search, setSearch] = useState('');
+  const [failedOnly, setFailedOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -108,15 +117,19 @@ export function DevLogs(): React.ReactElement {
     if (!token) return;
     setLoading(true);
     try {
-      const qs = category ? `?category=${encodeURIComponent(category)}` : '';
-      const { logs: fetched } = await devLogsFetch<{ logs: ActionLogRow[] }>(`/api/dev/logs${qs}`, token);
+      const params = new URLSearchParams();
+      if (category) params.set('category', category);
+      if (from) params.set('since', `${from}T00:00:00.000Z`);
+      if (to) params.set('until', `${to}T23:59:59.999Z`);
+      const qs = params.toString();
+      const { logs: fetched } = await devLogsFetch<{ logs: ActionLogRow[] }>(`/api/dev/logs${qs ? `?${qs}` : ''}`, token);
       setLogs(fetched);
     } catch (err) {
       if (err instanceof DevLogsError && err.status === 401) lock();
     } finally {
       setLoading(false);
     }
-  }, [token, category, lock]);
+  }, [token, category, from, to, lock]);
 
   useEffect(() => {
     if (!token) return;
@@ -131,6 +144,23 @@ export function DevLogs(): React.ReactElement {
       .then(({ categories: fetched }) => setCategories(fetched))
       .catch(() => {});
   }, [token]);
+
+  const described = useMemo(() => logs.map((row) => ({ row, ...describeAction(row) })), [logs]);
+
+  const visible = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return described.filter(({ row, summary, tone }) => {
+      if (failedOnly && tone !== 'bad') return false;
+      if (!needle) return true;
+      return (
+        summary.toLowerCase().includes(needle) ||
+        (row.user_email ?? '').toLowerCase().includes(needle) ||
+        row.path.toLowerCase().includes(needle)
+      );
+    });
+  }, [described, search, failedOnly]);
+
+  const hasFilters = category !== '' || from !== '' || to !== '' || search.trim() !== '' || failedOnly;
 
   // Deterrent only, not real protection -- said plainly rather than implied
   // otherwise. Anyone can still open DevTools with a keyboard shortcut; the
@@ -157,77 +187,116 @@ export function DevLogs(): React.ReactElement {
 
   return (
     <div onContextMenu={blockContextMenu} style={{ minHeight: '100dvh', background: 'var(--bg)', padding: 'var(--s-4)' }}>
-      <div className="stack stack-loose">
+      <div className="stack stack-loose" style={{ maxWidth: '920px', margin: '0 auto' }}>
         <div className="cluster" style={{ justifyContent: 'space-between' }}>
-          <h1 style={{ fontSize: '18px', margin: 0, color: 'var(--text)' }}>Action Log</h1>
+          <div>
+            <h1 style={{ fontSize: '18px', margin: 0, color: 'var(--text)' }}>Action Log</h1>
+            <p className="subtle" style={{ margin: 0, fontSize: '12px' }}>What happened in the system, who did it, and when — in plain English.</p>
+          </div>
           <Button variant="ghost" size="sm" onClick={lock}>
             Lock
           </Button>
         </div>
 
-        <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-          <button type="button" className="chip" aria-pressed={category === ''} onClick={() => setCategory('')}>
-            All
-          </button>
-          {categories.map((c) => (
-            <button key={c} type="button" className="chip" aria-pressed={category === c} onClick={() => setCategory(c)}>
-              {c}
-            </button>
-          ))}
+        <div className="stack" style={{ gap: 'var(--s-2)' }}>
+          <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
+            <Chip pressed={category === ''} onClick={() => setCategory('')}>
+              All
+            </Chip>
+            {categories.map((c) => (
+              <Chip key={c} pressed={category === c} onClick={() => setCategory(c)}>
+                {c}
+              </Chip>
+            ))}
+          </div>
+
+          <div className="cluster" style={{ gap: 'var(--s-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div style={{ minWidth: '220px', flex: '1 1 220px' }}>
+              <InputWithIcon
+                icon="search"
+                placeholder="Search who, what, or path…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <Field label="From">
+              {(props) => <input {...props} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
+            </Field>
+            <Field label="To">
+              {(props) => <input {...props} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}
+            </Field>
+            <SwitchField checked={failedOnly} onCheckedChange={setFailedOnly} label="Failed only" />
+            {hasFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCategory('');
+                  setFrom('');
+                  setTo('');
+                  setSearch('');
+                  setFailedOnly(false);
+                }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
         </div>
 
-        {logs.length === 0 ? (
-          <EmptyState icon="info" title={loading ? 'Loading…' : 'Nothing logged yet'}>
-            {loading ? 'One moment.' : 'No actions in this category yet.'}
+        {visible.length === 0 ? (
+          <EmptyState icon="info" title={loading ? 'Loading…' : hasFilters ? 'No matching actions' : 'Nothing logged yet'}>
+            {loading ? 'One moment.' : hasFilters ? 'Try widening the filters above.' : 'Actions will show up here as they happen.'}
           </EmptyState>
         ) : (
-          <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--line)' }}>
-                <th style={{ padding: '6px 8px' }}>Time</th>
-                <th style={{ padding: '6px 8px' }}>Category</th>
-                <th style={{ padding: '6px 8px' }}>Method</th>
-                <th style={{ padding: '6px 8px' }}>Path</th>
-                <th style={{ padding: '6px 8px' }}>Status</th>
-                <th style={{ padding: '6px 8px' }}>User</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map((row) => (
-                <Fragment key={row.id}>
-                  <tr
-                    style={{ borderBottom: '1px solid var(--line)', cursor: 'pointer' }}
-                    onClick={() => setExpandedId((cur) => (cur === row.id ? null : row.id))}
+          <div className="stack" style={{ gap: 'var(--s-2)' }}>
+            {visible.map(({ row, summary, tone }) => {
+              const expanded = expandedId === row.id;
+              return (
+                <div key={row.id} className="card" style={{ padding: 'var(--s-3)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(expanded ? null : row.id)}
+                    className="cluster"
+                    style={{ width: '100%', justifyContent: 'space-between', alignItems: 'flex-start', background: 'none', border: 0, padding: 0, textAlign: 'left', cursor: 'pointer' }}
                   >
-                    <td className="mono" style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>{new Date(row.created_at).toLocaleString()}</td>
-                    <td style={{ padding: '6px 8px' }}>{row.category}</td>
-                    <td className="mono" style={{ padding: '6px 8px' }}>{row.method}</td>
-                    <td className="mono" style={{ padding: '6px 8px' }}>{row.path}</td>
-                    <td style={{ padding: '6px 8px' }}>
-                      <StatusPill
-                        status={{
-                          tone: row.status_code < 400 ? 'ok' : 'bad',
-                          icon: row.status_code < 400 ? 'check' : 'alert',
-                          label: String(row.status_code),
-                          detail: `HTTP ${row.status_code}`,
-                        }}
-                      />
-                    </td>
-                    <td style={{ padding: '6px 8px' }}>{row.user_email ?? '—'}</td>
-                  </tr>
-                  {expandedId === row.id && (
-                    <tr style={{ borderBottom: '1px solid var(--line)' }}>
-                      <td colSpan={6} style={{ padding: '8px', background: 'var(--surface)' }}>
-                        <pre className="mono" style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                          {JSON.stringify({ body: row.body, query: row.query, ip: row.ip, userRole: row.user_role }, null, 2)}
-                        </pre>
-                      </td>
-                    </tr>
+                    <div className="stack" style={{ gap: '4px' }}>
+                      <span className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'nowrap' }}>
+                        <StatusPill
+                          status={{
+                            tone,
+                            icon: tone === 'ok' ? 'check' : 'alert',
+                            label: tone === 'ok' ? 'OK' : 'Failed',
+                            detail: `HTTP ${row.status_code}`,
+                          }}
+                        />
+                        <span style={{ color: 'var(--text)' }}>{summary}</span>
+                      </span>
+                      <span className="subtle" style={{ fontSize: '12px' }}>
+                        {formatWhen(row.created_at)} · {row.category}
+                      </span>
+                    </div>
+                    <Icon name={expanded ? 'chev-up' : 'chev-down'} size="sm" />
+                  </button>
+                  {expanded && (
+                    <div className="stack" style={{ marginTop: 'var(--s-2)', paddingTop: 'var(--s-2)', borderTop: '1px solid var(--line)', gap: '4px' }}>
+                      <span className="mono subtle" style={{ fontSize: '11px' }}>
+                        {row.method} {row.path}
+                      </span>
+                      {row.ip && (
+                        <span className="mono subtle" style={{ fontSize: '11px' }}>
+                          IP: {row.ip} {row.user_role ? `· Role: ${row.user_role}` : ''}
+                        </span>
+                      )}
+                      <pre className="mono" style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                        {JSON.stringify({ body: row.body, query: row.query }, null, 2)}
+                      </pre>
+                    </div>
                   )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

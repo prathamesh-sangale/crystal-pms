@@ -52,6 +52,7 @@ async function requireDevLogsAuth(request: FastifyRequest, reply: FastifyReply):
 const querySchema = z.object({
   category: z.string().optional(),
   since: z.string().optional(),
+  until: z.string().optional(),
   limit: z.coerce.number().int().positive().max(500).default(100),
   beforeId: z.coerce.number().int().positive().optional(),
 });
@@ -83,6 +84,7 @@ export async function devLogsRoutes(app: FastifyInstance): Promise<void> {
     let q = supabase().from('action_logs').select('*').order('id', { ascending: false }).limit(query.limit);
     if (query.category) q = q.eq('category', query.category);
     if (query.since) q = q.gte('created_at', query.since);
+    if (query.until) q = q.lte('created_at', query.until);
     if (query.beforeId) q = q.lt('id', query.beforeId);
 
     const { data, error } = await q;
