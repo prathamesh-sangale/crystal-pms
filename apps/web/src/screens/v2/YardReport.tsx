@@ -1,27 +1,22 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  agingDays,
-  agingStatus,
-  formatSurveyDate,
-  isReadyToMove,
-  overallStatus,
-  SECTION_LABELS,
-  sectionTurnaround,
-  taskSettled,
-  type MockContainer,
-  type SectionKind,
-} from '../../lib/mockV2';
+import { agingStatus, isReadyToMove, sectionTurnaround, SECTION_LABELS, type SectionKind } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
-import { CategoryBadge, DataPanel, StatusPill } from '../../components/crystal/Data';
-import { Icon } from '../../components/crystal/Icon';
+import { DataPanel, StatCard } from '../../components/crystal/Data';
+import { Chip, Field } from '../../components/crystal/Form';
 
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
 
-function sectionsSummary(container: MockContainer): string {
-  if (container.sections.length === 0) return '—';
-  const done = container.sections.filter((s) => s.tasks.length > 0 && s.tasks.every(taskSettled)).length;
-  return `${done}/${container.sections.length}`;
+type RangeKey = '7' | '15' | '30' | 'custom';
+
+const RANGE_DAYS: Record<Exclude<RangeKey, 'custom'>, number> = { '7': 7, '15': 15, '30': 30 };
+const RANGE_LABEL: Record<Exclude<RangeKey, 'custom'>, string> = { '7': '7 days', '15': '15 days', '30': '1 month' };
+
+function daysAgoISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
 }
 
 /**
@@ -30,47 +25,56 @@ function sectionsSummary(container: MockContainer): string {
  * clean document instead of capturing the app shell around it. Same pattern
  * as the per-container report, one level up — the whole yard instead of
  * one unit.
+ *
+ * Reports as overall numbers, not a container-by-container list — someone
+ * reading this wants "how many," not every single ID enumerated; anyone
+ * who needs the detail on one container already has Yard Board/Live Board
+ * for that. Gate-in/gate-out activity is scoped to the selected period;
+ * the rest (what's actually sitting in the yard right now) is always a
+ * live, current snapshot — labeled as such, since it isn't period-bound.
  */
 export function YardReport(): React.ReactElement {
   const { containers } = useV2Data();
   const navigate = useNavigate();
 
-  // The headline panels describe what's actually in the yard right now —
-  // departed containers would otherwise permanently inflate every count.
-  // The Full manifest table below is the exception: it's the historical
-  // record, so it stays built from every container, departed included.
+  const [range, setRange] = useState<RangeKey>('7');
+  const [customFrom, setCustomFrom] = useState(daysAgoISO(7));
+  const [customTo, setCustomTo] = useState(daysAgoISO(0));
+
+  const { from, to, periodLabel } = useMemo(() => {
+    if (range === 'custom') {
+      return { from: customFrom, to: customTo, periodLabel: `${customFrom} – ${customTo}` };
+    }
+    return { from: daysAgoISO(RANGE_DAYS[range]), to: daysAgoISO(0), periodLabel: `Last ${RANGE_LABEL[range]}` };
+  }, [range, customFrom, customTo]);
+
+  const inPeriod = (iso: string | null | undefined): boolean => {
+    if (!iso) return false;
+    const day = iso.slice(0, 10);
+    return day >= from && day <= to;
+  };
+
   const active = containers.filter((c) => !c.departedAt);
+  const gatedIn = containers.filter((c) => inPeriod(c.registeredAt)).length;
+  const gatedOut = containers.filter((c) => inPeriod(c.departedAt)).length;
 
   const total = active.length;
   const awaitingSurvey = active.filter((c) => !c.survey).length;
   const ready = active.filter((c) => c.readyAt || isReadyToMove(c)).length;
   const inProgress = total - awaitingSurvey - ready;
+  const fastTracked = active.filter((c) => c.priority).length;
+  const needsAttention = active.filter((c) => agingStatus(c) !== null).length;
+
+  const dry = active.filter((c) => !c.typeCode.startsWith('Reefer')).length;
+  const reefer = active.filter((c) => c.typeCode.startsWith('Reefer')).length;
+
   const turnaround = sectionTurnaround(active);
   const generatedAt = new Date().toISOString().slice(0, 10);
 
-  const dry = active.filter((c) => !c.typeCode.startsWith('Reefer'));
-  const reefer = active.filter((c) => c.typeCode.startsWith('Reefer'));
-  const countReady = (list: MockContainer[]): number => list.filter((c) => c.readyAt || isReadyToMove(c)).length;
-  const countInProgress = (list: MockContainer[]): number =>
-    list.filter((c) => c.survey && !c.readyAt && !isReadyToMove(c)).length;
-
-  const fastTracked = active.filter((c) => c.priority);
-
-  const aging = active
-    .map((c) => ({ container: c, status: agingStatus(c) }))
-    .filter((x): x is { container: MockContainer; status: NonNullable<ReturnType<typeof agingStatus>> } => x.status !== null)
-    .sort((a, b) => agingDays(b.container) - agingDays(a.container));
-
-  const departed = containers
-    .filter((c) => c.departedAt)
-    .sort((a, b) => new Date(b.departedAt!).getTime() - new Date(a.departedAt!).getTime());
-
-  const manifest = [...containers].sort((a, b) => Number(b.priority) - Number(a.priority) || a.id.localeCompare(b.id));
-
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
-      <div style={{ maxWidth: '820px', margin: '0 auto', padding: 'var(--s-6) var(--s-5)' }}>
-        <div className="cluster report-no-print" style={{ justifyContent: 'space-between', marginBottom: 'var(--s-5)' }}>
+      <div style={{ maxWidth: '880px', margin: '0 auto', padding: 'var(--s-6) var(--s-5)' }}>
+        <div className="cluster report-no-print" style={{ justifyContent: 'space-between', marginBottom: 'var(--s-4)' }}>
           <Button variant="ghost" icon="chev-left" onClick={() => navigate(-1)}>
             Back
           </Button>
@@ -79,51 +83,61 @@ export function YardReport(): React.ReactElement {
           </Button>
         </div>
 
+        <div className="cluster report-no-print" style={{ gap: 'var(--s-2)', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 'var(--s-5)' }}>
+          <Chip pressed={range === '7'} onClick={() => setRange('7')}>
+            7 days
+          </Chip>
+          <Chip pressed={range === '15'} onClick={() => setRange('15')}>
+            15 days
+          </Chip>
+          <Chip pressed={range === '30'} onClick={() => setRange('30')}>
+            1 month
+          </Chip>
+          <Chip pressed={range === 'custom'} onClick={() => setRange('custom')}>
+            Custom
+          </Chip>
+          {range === 'custom' && (
+            <>
+              <Field label="From">
+                {(props) => <input {...props} type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />}
+              </Field>
+              <Field label="To">
+                {(props) => <input {...props} type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />}
+              </Field>
+            </>
+          )}
+        </div>
+
         <div className="stack stack-loose">
           <div>
             <h2 style={{ fontSize: '20px', margin: '0 0 4px' }}>Yard Report</h2>
-            <p className="subtle" style={{ margin: 0, fontSize: '13px' }}>Generated {generatedAt} · {total} container(s) in the yard</p>
+            <p className="subtle" style={{ margin: 0, fontSize: '13px' }}>
+              Generated {generatedAt} · Period: {periodLabel}
+            </p>
           </div>
 
-          <DataPanel title="Containers by status">
-            <div className="infogrid">
-              <div>
-                <dt>In the yard</dt>
-                <dd>{total}</dd>
-              </div>
-              <div>
-                <dt>Awaiting survey</dt>
-                <dd>{awaitingSurvey}</dd>
-              </div>
-              <div>
-                <dt>In progress</dt>
-                <dd>{inProgress}</dd>
-              </div>
-              <div>
-                <dt>Ready to move</dt>
-                <dd>{ready}</dd>
-              </div>
+          <DataPanel title="Activity in this period">
+            <div className="cardgrid stagger statrow">
+              <StatCard label="Gated in" value={gatedIn} icon="truck" />
+              <StatCard label="Gated out" value={gatedOut} icon="door" />
             </div>
           </DataPanel>
 
-          <DataPanel title="Dry vs Reefer">
-            <div className="infogrid">
-              <div>
-                <dt>Dry — total</dt>
-                <dd>{dry.length}</dd>
-              </div>
-              <div>
-                <dt>Dry — ready / in progress</dt>
-                <dd>{countReady(dry)} / {countInProgress(dry)}</dd>
-              </div>
-              <div>
-                <dt>Reefer — total</dt>
-                <dd>{reefer.length}</dd>
-              </div>
-              <div>
-                <dt>Reefer — ready / in progress</dt>
-                <dd>{countReady(reefer)} / {countInProgress(reefer)}</dd>
-              </div>
+          <DataPanel title="Current yard snapshot" meta="As of right now, not tied to the period above">
+            <div className="cardgrid stagger statrow">
+              <StatCard label="In the yard" value={total} icon="warehouse" />
+              <StatCard label="Awaiting survey" value={awaitingSurvey} icon="clock" />
+              <StatCard label="In progress" value={inProgress} icon="pulse" />
+              <StatCard label="Ready to move" value={ready} icon="check-circle" />
+              <StatCard label="Fast-tracked" value={fastTracked} icon="star" />
+              <StatCard label="Needs attention" value={needsAttention} icon="alert" />
+            </div>
+          </DataPanel>
+
+          <DataPanel title="Dry vs Reefer" meta="Current yard">
+            <div className="cardgrid stagger statrow">
+              <StatCard label="Dry" value={dry} icon="package" />
+              <StatCard label="Reefer" value={reefer} icon="snow" />
             </div>
           </DataPanel>
 
@@ -141,107 +155,6 @@ export function YardReport(): React.ReactElement {
                 );
               })}
             </div>
-          </DataPanel>
-
-          <DataPanel title="Fast-tracked" meta={`${fastTracked.length} container(s)`}>
-            {fastTracked.length === 0 ? (
-              <p className="subtle" style={{ margin: 0, fontSize: '12.5px' }}>None right now.</p>
-            ) : (
-              <div className="stack stack-tight">
-                {fastTracked.map((c) => (
-                  <div key={c.id} className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderBottom: '1px solid var(--line)' }}>
-                    <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-                      <span className="mono" style={{ fontWeight: 700, fontSize: '12.5px' }}>{c.id}</span>
-                      <span className="subtle" style={{ fontSize: '12px' }}>{c.typeCode}</span>
-                    </span>
-                    <StatusPill status={overallStatus(c)} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </DataPanel>
-
-          <DataPanel title="Needs attention" meta={`${aging.length} container(s) past 3 days in their current stage`}>
-            {aging.length === 0 ? (
-              <p className="subtle" style={{ margin: 0, fontSize: '12.5px' }}>Nothing aging right now.</p>
-            ) : (
-              <div className="stack stack-tight">
-                {aging.map(({ container: c, status }) => (
-                  <div key={c.id} className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderBottom: '1px solid var(--line)' }}>
-                    <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-                      <span className="mono" style={{ fontWeight: 700, fontSize: '12.5px' }}>{c.id}</span>
-                      <span className="subtle" style={{ fontSize: '12px' }}>{c.typeCode}</span>
-                    </span>
-                    <StatusPill status={status} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </DataPanel>
-
-          <DataPanel title="Departed" meta={`${departed.length} container(s), most recent first`}>
-            {departed.length === 0 ? (
-              <p className="subtle" style={{ margin: 0, fontSize: '12.5px' }}>None yet.</p>
-            ) : (
-              <div className="stack stack-tight">
-                {departed.map((c) => (
-                  <div key={c.id} className="cluster" style={{ justifyContent: 'space-between', padding: 'var(--s-2) 0', borderBottom: '1px solid var(--line)' }}>
-                    <span className="cluster" style={{ gap: 'var(--s-2)' }}>
-                      <span className="mono" style={{ fontWeight: 700, fontSize: '12.5px' }}>{c.id}</span>
-                      <span className="subtle" style={{ fontSize: '12px' }}>{c.typeCode}</span>
-                    </span>
-                    <span className="subtle" style={{ fontSize: '12px' }}>{formatSurveyDate(c.departedAt!)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </DataPanel>
-
-          <DataPanel title="Full manifest" meta={`${manifest.length} container(s), fast-tracked first`}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px' }}>
-              <thead>
-                <tr>
-                  {['Container', 'Type', 'Status', 'Sections'].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        textAlign: 'left',
-                        padding: '6px 8px',
-                        borderBottom: '1.5px solid var(--line-strong)',
-                        fontFamily: 'var(--f-mono)',
-                        fontSize: '9.5px',
-                        letterSpacing: '0.6px',
-                        textTransform: 'uppercase',
-                        color: 'var(--text-3)',
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {manifest.map((c) => (
-                  <tr key={c.id} style={{ breakInside: 'avoid' }}>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--f-mono)', fontWeight: 700 }}>
-                      {c.id}
-                      {c.priority && (
-                        <Icon name="alert" size="sm" />
-                      )}
-                    </td>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--line)' }}>
-                      <CategoryBadge>{c.typeCode}</CategoryBadge>
-                    </td>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--line)' }}>
-                      <StatusPill status={overallStatus(c)} />
-                    </td>
-                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--f-mono)', color: 'var(--text-2)' }}>
-                      {sectionsSummary(c)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </DataPanel>
         </div>
       </div>
