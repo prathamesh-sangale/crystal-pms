@@ -2,7 +2,7 @@
 
 **Renamed from "ReeferReady PMS" to "Crystal PMS" on 2026-10-09** (§6 item 69) — every reference to the old name below, outside the dated Change Log entries (which describe what was true at the time), should be read as the current name.
 
-**Document date:** 2026-10-05 (narrative below); **Change Log (§6) current through 2026-10-19, item 107**
+**Document date:** 2026-10-05 (narrative below); **Change Log (§6) current through 2026-10-28, item 139**
 **Repo root:** `C:\Users\Acer\Documents\CRYSTAL Project\pms`
 **Phase:** BUILDING. The narrative sections below (Analysis Summary, §1–§5) describe the state as of 2026-10-05 and are now substantially out of date — **§6's Change Log (items 54–63) is the current source of truth**: v2 (workers, containers, sections, tasks, drafts) is wired to a live Supabase project, not mock-only; Gate-In/Gate-Out photo/video uploads go to real Google Drive; a dedicated API-key-gated endpoint serves the IMS yard summary; a read-only, yard-scoped Gate-In lookup against IMS's own data exists; a mistaken task Start can be cancelled. As of item 63, **the entire v1 product described throughout §1–§5 below no longer exists** — its Prisma/SQLite backend, its routes, its domain logic (`packages/shared`'s old `process.ts`/`readiness.ts`), and its test suites were all deleted outright, not just left orphaned; auth was rebuilt on Supabase first so v2 kept working throughout. Every reference below to the v1 Prisma backend "remaining untouched," to `packages/shared` covering pipeline/readiness logic, or to the original 25+21 test count is describing a state that has since been removed — read §6 item 63 for what replaced it. README.md has also since been rewritten to describe v2 (no longer stale); the old e2e suite was deleted along with the v1 UI it targeted, not fixed. `TYPE_CODES`/`SIZE_OPTIONS` were resolved against the real portal (§6 items 17/35/37) — not still "PENDING" as §2 below still says.
 
@@ -714,65 +714,61 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
 
 ## 7. Testing & Quality
 
-**Test strategy, as documented and as verified:**
-- `packages/shared`: pure-function unit tests, no mocks, fixed `today` input — `readiness.test.ts`, confirmed **25** test blocks (matches README).
-- `apps/api`: integration tests — `src/__tests__/api.test.ts` + `globalSetup.ts`, confirmed **21** test blocks (matches README). Covers auth, permissions, validation, checklist snapshotting, audit trail per README's table.
-- `apps/web`: Playwright e2e — `a11y.spec.ts`, `screens.spec.ts`, `interactions.spec.ts`, `responsive.spec.ts`, `screenshots.spec.ts`, plus `auth.setup.ts`/`globalSetup.ts`/`helpers.ts`. Raw `test(` call count across the five spec files is 32 (expanding to more via `for` loops over 8 screens × 2 themes for a11y); README claims 77 total after that expansion — plausible but not independently recomputed here.
+**UPDATE (2026-10-28): the paragraphs below describe the v1-era test suite and are stale — superseded by this box, which reflects what's actually in the repo today.**
 
-**Do the e2e tests still pass against current routing? No — confirmed by direct inspection, not assumption.**
-- `helpers.ts`'s `signIn()` helper asserts `getByRole('heading', { level: 1, name: 'Depot Command' })` is visible after login. `App.tsx` no longer has a `/depot` route or a "Depot Command" screen at all — the post-login redirect target is `/live` (Live Board). This helper is used by multiple specs and will fail immediately.
-- `helpers.ts`'s `openContainer()` navigates to `/fleet`, a deleted route.
-- `a11y.spec.ts` and `screens.spec.ts` hard-code `SCREENS = ['/depot', '/dashboard', '/tomorrow', '/pipeline', '/timeline', '/fleet', '/checklist', '/delayed']` — all eight are deleted routes; `App.tsx`'s `NotFound` route would render instead, meaning these specs would exercise the 404 page, not the intended screens, and their content/heading assertions would fail.
-- `interactions.spec.ts` navigates to `/pipeline` and clicks `.kcard` (v1 Kanban card class, from the deleted `KanbanBoard.tsx`) and asserts an "Advance stage" button — none of which exist in the v2 UI.
-- **Conclusion: all five e2e spec files are broken against the current build.** `npm run test:e2e` would be expected to fail nearly in full. `[UNCONFIRMED: not actually executed in this review — determined by static inspection of routes/selectors against App.tsx; running the suite would give an exact pass/fail count]`.
-- The unit test suites (`packages/shared`, `apps/api`) are unaffected by the UI cutover and should still pass, since neither touches `apps/web`.
+**Current automated test suites, confirmed by directly running them:**
+- `packages/shared`: pure-function unit tests, no mocks — **5 tests, passing.**
+- `apps/api`: integration tests across **2 test files** (`api.test.ts` + `v2Access.test.ts`) — **13 tests, passing.** Covers auth, per-screen access permissions, worker-deletion guards, access management CRUD, and the power-status screen gate, run against a real Supabase project with disposable, self-cleaning test rows.
+- `apps/web`: **no automated browser/e2e suite exists.** The old Playwright suite this section used to describe (`a11y.spec.ts`, `screens.spec.ts`, `interactions.spec.ts`, `responsive.spec.ts`, `screenshots.spec.ts`) was **deleted outright**, along with the entire v1 UI it tested (§6 item 63) — it is not "broken," it no longer exists in the repo. No replacement e2e suite has been written for the v2 UI. Verification of every v2 change throughout §6's Change Log has instead been done by direct, live checks against the running app (described per-item: real HTTP calls, real Playwright scratch scripts written and deleted per use, real dev-server traffic) — genuine, but not an automated, repeatable regression suite.
 
-**TODOs/bugs via grep.** Searched for `TODO|FIXME|XXX` across the whole repository (excluding `node_modules`): the only hit was an unrelated base64-looking substring inside `package-lock.json`'s integrity hash — **zero actual TODO/FIXME/XXX markers exist in source code.** This likely reflects that open work is tracked in `SPEC.md`'s "Still open" section rather than inline comments, not that there is no outstanding work.
+**`npm run verify`** (typecheck + eslint + stylelint + the two unit suites above, 18 tests total) is the one automated gate that exists, and it is developer-run on demand, not CI-run — see §9 for why.
 
-**Coverage gaps:**
-- No tests exist anywhere for the v2 UI/mock store (`v2Store.tsx`, `mockV2.ts`, `screens/v2/*`, `components/v2/*`) — `SPEC.md` §7 describes a *planned* testing strategy for a future v2 backend/UI ("apps/web e2e: rewritten around a single Admin login...") but this has not been implemented; the old e2e suite was not replaced, just left to rot.
-- No tests exist for `apps/api/src/supabase.ts` or the Supabase migration SQL.
-- No visual-regression baseline exists for the current v2 screens (`screenshots.spec.ts` still targets v1 routes).
+**TODOs/bugs via grep.** No `TODO`/`FIXME`/`XXX` markers exist in source code — open work is tracked in this document's Change Log (§6) and in `SPEC.md`'s "Still open" section, not inline comments.
+
+**Coverage gaps, as of today:**
+- No automated test coverage exists for any v2 screen or UI component (`v2Store.tsx`, `screens/v2/*`, `components/v2/*`), or for the Supabase migration SQL directly.
+- Every v2 feature shipped in §6 has been verified live/manually at the time it was built, not by a repeatable regression suite — real confidence at ship time, but nothing catches a later regression automatically.
 
 ---
 
 ## 8. Risks & Open Issues
 
+**UPDATE (2026-10-28): several items below were fixed later in §6's Change Log and are kept here struck through for history, not as open risks. Read the strikethrough note on each before treating it as current.**
+
 **Security:**
-- `JWT_SECRET` is validated server-side (`env.ts`: Zod `.min(16)`), and `.env.example` ships an obviously-fake placeholder (`"dev-only-secret-change-me-in-any-real-deployment"`) with a prominent comment ("Change this.") — reasonable hygiene for a dev default, but there is **no deployment pipeline or process yet that would force this rotation** (see §9), so the only safeguard against shipping the dev secret is human discipline plus the README's one-line warning ("Change `JWT_SECRET` before this is deployed anywhere").
-- Passwords are hashed with `scrypt` (Node's `node:crypto`, no native deps) and compared with `timingSafeEqual` — a sound, deliberate choice (`auth.ts` comments explain the no-native-module rationale).
-- Login responses are deliberately timing/shape-uniform whether the account exists or the password is wrong (`routes/auth.ts` comment) — a correct anti-enumeration measure.
-- Rate limiting: global default 300 req/min (`app.ts`), tightened to 10/min specifically on `/api/auth/login` (`routes/auth.ts`) — reasonable baseline, though `[UNCONFIRMED: whether 300/min global is appropriate for a production deployment — no load-testing evidence found]`.
-- CORS: origin restricted to `env.WEB_ORIGIN` (comma-split list), credentials allowed, headers allow-listed to `content-type, authorization, x-today` — scoped reasonably, but `WEB_ORIGIN` defaults to `http://localhost:5173` if unset, so a misconfigured production deploy would default to an unreachable-in-prod but not fail-closed value. `[UNCONFIRMED: no explicit production CORS config example provided anywhere]`.
-- The seeded dev accounts all share one password (`readiness`) across all four roles — acceptable for a seed fixture, dangerous if ever reused as real production credentials; nothing in the repo prevents that reuse besides the README's instruction to change `JWT_SECRET` (which does not itself invalidate seeded user rows).
-- Supabase service-role key handling is sound in design (never sent to the browser, lazy-initialized, RLS-with-no-policies as defense in depth) — but since it is wholly unused by any route today, this is a design intention, not yet an exercised security control.
+- `JWT_SECRET` is validated server-side, and the local dev env ships an obviously-fake placeholder with a "change this" comment — still true, and still only human discipline, not an automated process, stops that placeholder from reaching a real deployment. Still a real, open gap.
+- Passwords are hashed with `scrypt` and compared with `timingSafeEqual` — sound, unchanged.
+- Login responses are deliberately timing/shape-uniform regardless of whether the account exists — sound, unchanged.
+- ~~Rate limiting is per-process memory, ineffective under concurrent load across serverless instances.~~ **Fixed in §6 item 101 (2026-10-19):** rate limiting now runs on a shared Supabase-table-backed counter, verified live to persist correctly across separate processes.
+- CORS: origin restricted to `WEB_ORIGIN`, credentials allowed, headers allow-listed — unchanged, still scoped reasonably.
+- ~~The seeded dev accounts all share one password across all four roles.~~ **Moot as of §6 item 86 (2026-10-13):** the old seed/demo data (containers, workers, and the old seeded accounts) was cleared from the live database entirely; the system now runs on real accounts and real data, not seed fixtures.
+- ~~Supabase service-role key handling is sound in design but wholly unused by any route today.~~ **No longer true since §6 item 57 (2026-10-08):** the service-role key is now actively used by essentially every v2 route — containers, workers, drafts, uploads, and more are all genuinely backed by Supabase.
+- **Newer, real gap not previously listed here:** access revocation (removing/demoting a login) now takes effect immediately (§6 item 101's `token_version` check), closing what used to be a 12h lag — this was an open risk in earlier revisions of this document and is now fixed, not open.
 
 **Technical debt:**
-- Two complete, non-interoperating data models for the same domain (v1 Prisma/SQLite vs. the v2 mock shape), with a third (Supabase SQL) wedged between them unused. Reconciling these is the single largest piece of outstanding technical work.
-- `apps/web/src/lib/api.ts` is fully-featured, type-safe, and totally orphaned except for two endpoints — dead weight that could mislead a future contributor into thinking the v2 screens are backend-connected.
-- v2's gating/timer/aggregation logic lives in `apps/web/src/lib/v2Store.tsx`/`mockV2.ts` instead of `packages/shared`, violating the project's own stated "no value typed twice" principle (SPEC.md §6) — a deliberate, temporary exception per the preview-implementation note, but debt nonetheless once a real v2 backend needs the same logic.
-- Stale README and fully-broken e2e suite (§7) — both actively misleading to a new contributor or reviewer if trusted at face value.
+- ~~Two complete, non-interoperating data models for the same domain (v1 Prisma/SQLite vs. v2).~~ **Resolved by §6 item 63 (2026-10-08):** the entire v1 Prisma/SQLite backend was deleted outright, not left running alongside v2. One data model exists today: Supabase/Postgres.
+- ~~`apps/web/src/lib/api.ts` is fully-featured, type-safe, and totally orphaned except for two endpoints.~~ **No longer true:** it is now the real, actively-used client for essentially every v2 screen's backend calls.
+- v2's gating/timer/aggregation logic still lives in `apps/web/src/lib/v2Store.tsx` rather than `packages/shared` — this one is still accurate; genuine, ongoing debt.
+- No automated regression suite exists for the v2 UI (§7) — still accurate and still worth knowing, though "the README is stale" no longer is (README now describes v2).
 
-**Performance:** No evidence of performance testing, profiling, or known bottlenecks in either backend or frontend. `[UNCONFIRMED: no load-testing artifacts, no APM/metrics code found]`.
+**Performance:** No evidence of performance testing, profiling, or known bottlenecks. Still true, still unconfirmed either way.
 
-**Unresolved design questions (from `SPEC.md` "Still open," verbatim subject):**
-- **Item 9 — container/product type-code list.** Confirmed still open: the message describing the full type/product-code list was cut off mid-conversation with the client; `mockV2.ts`'s `TYPE_CODES` are explicit placeholders. This blocks building the real checklist-by-type mapping for v2 (the v2 equivalent of v1's `checklistFor(type)`).
-- **Item 24 — backend portability/platform choice for v2.** No language/platform decision recorded as final; the Supabase migration's existence suggests a direction but is not confirmed as the decision in any doc reviewed.
-- **Owner role** — designed for, not built; `[UNCONFIRMED: no target date or priority found]`.
+**Unresolved design questions (from `SPEC.md` "Still open"):**
+- ~~Item 9 — container/product type-code list.~~ **Resolved** (§6 items 17/35/37): the real type/size values are wired in; see the `SPEC.md` note on its own fix for this.
+- ~~Item 24 — backend portability/platform choice for v2.~~ **Resolved:** Supabase/Postgres was the decision, and it's been built out and live since §6 item 57.
+- **Owner role** — still designed for, not built; genuinely still open, no target date set.
 
 ---
 
 ## 9. Deployment & Infrastructure
 
-- **CI/CD: none found.** No `.github/workflows/` directory exists anywhere in the repository (confirmed: `ls .github` → "No such file or directory"; a recursive search for `.github/workflows` under the repo, excluding `node_modules`, returned nothing). There is no other CI config (`.gitlab-ci.yml`, `azure-pipelines.yml`, `Jenkinsfile`, etc.) in the repo. All verification (`npm run verify` = typecheck + eslint + stylelint + unit tests) is manual/local only, per `package.json`'s scripts.
-- **Containers:** no `Dockerfile` or `docker-compose.yml` anywhere in the repo (confirmed via `find . -iname "Dockerfile*"`, excluding `node_modules` — zero matches).
-- **Environments:** only "local dev" is evidenced. `apps/api/.env.example` defines `DATABASE_URL` (SQLite file), `JWT_SECRET`, `PORT` (4000), `WEB_ORIGIN` (`http://localhost:5173`), and optional `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`. No staging/production env files or examples exist.
-- **Infra requirements implied by current code:**
-  - A filesystem for the SQLite file (`apps/api/prisma/dev.db`) — not suitable for most production/container deployments without a volume or a swap to Postgres.
-  - Node.js ≥ 20.11 (root `package.json` `engines`).
-  - If/when the Supabase migration is completed: a Postgres instance (local via the Supabase CLI per `config.toml`, port 54321/54322, or a hosted Supabase project) plus `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` secrets.
-  - No evidence of a reverse proxy, static-asset hosting config, or process manager (e.g. no PM2/systemd unit files) for `apps/api`'s `start` script (`node dist/server.js`) or `apps/web`'s Vite build output.
-- **Secrets inventory (from `.env.example`):** `JWT_SECRET` (required, min 16 chars, dev placeholder present), `DATABASE_URL` (required), `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (optional, unused today).
+**UPDATE (2026-10-28): the app has been live in production since well before this document was last touched — the "only local dev is evidenced" line below is the single most out-of-date claim in this whole document. See `DEPLOYMENT.md` (repo root) for the accurate, current deployment picture.**
+
+- **Production: live on Vercel**, deploying both `apps/api` (as serverless functions) and `apps/web` (static build) from this one repo, via `npm run vercel-build`. Deploys are triggered manually by running `npx vercel --prod` — there is no auto-deploy-on-push configured.
+- **CI/CD: still genuinely none** — no `.github/workflows/`, no other CI config. `npm run verify` (typecheck + eslint + stylelint + unit tests) is run manually by whoever's making the change, not automatically on push or before deploy. This part of the original finding still holds.
+- **Containers: still none** — no `Dockerfile`/`docker-compose.yml`. Not needed for the current Vercel-based deployment; `DEPLOYMENT.md` documents what a future non-Vercel (e.g. VPS) move would need instead.
+- **Environments:** local dev (`apps/api/.env`, gitignored) and production (env vars set directly in the Vercel project) — both real and in use, not just local-only as this section previously claimed. Secrets: `JWT_SECRET`, `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (the live database — not optional/unused, this is the only real datastore), `GOOGLE_SERVICE_ACCOUNT_JSON` (Drive/Sheets access, read from a local gitignored file in dev, from this env var in production since there's no filesystem to read a key file from), `DEV_LOGS_PASSWORD` (the `/dev/logs` action-log page).
+- **Datastore:** Supabase/Postgres, a real hosted project — not SQLite, and not merely scaffolded. The old SQLite-based v1 backend described elsewhere in this document was deleted entirely (§6 item 63).
 
 ---
 
@@ -878,7 +874,7 @@ pms/
 ├── tools/extract-design-system.mjs  — generates tokens.css/crystal.css/generated/icons.ts (gitignored outputs)
 ├── source/crystal-design-system.html — the single visual source of truth
 ├── SPEC.md                 — v2 design-decision log (primary source for this report)
-├── README.md               — STALE, describes only v1
+├── README.md               — current (rewritten for v2; a couple of small drifted details remain, see §7/§8)
 └── ReeferReady-PMS-Codebase-Report.{html,pdf}, ReeferReady-PMS-v2-Plan.pdf  — prior engagement snapshots, not re-verified in depth here
 ```
 

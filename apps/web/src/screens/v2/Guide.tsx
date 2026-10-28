@@ -31,6 +31,7 @@ const BLURB: Record<string, string> = {
   '/dashboards': "Today's numbers, at a glance",
   '/hydra': 'Loading, unloading, shifting — logged',
   '/ims-stock': "What's ready to go, from IMS",
+  '/access': 'Logins, and who can see what',
 };
 
 const TIPS: Array<{ icon: IconName; text: string }> = [

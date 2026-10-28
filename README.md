@@ -102,7 +102,7 @@ nothing with write access to it ever reaches the browser.
 ## Tests
 
 ```bash
-npm test            # 5 shared + 5 API
+npm test            # 5 shared + 13 API
 npm run verify       # typecheck + eslint + stylelint + unit tests
 ```
 
@@ -110,6 +110,7 @@ npm run verify       # typecheck + eslint + stylelint + unit tests
 | ------------------------------ | ------------------------------------------------------------------------ |
 | `packages/shared/src/ui.test.ts` | the two small shared helpers (`toISODate`, `initials`)                  |
 | `apps/api/src/__tests__/api.test.ts` | the auth seam — health check, login success/failure, a protected route refusing an anonymous request |
+| `apps/api/src/__tests__/v2Access.test.ts` | per-screen access permissions, worker-deletion guards, access management CRUD, the power-status screen gate |
 
 That's the whole automated suite. Every v2 feature beyond login (containers,
 tasks, drafts, workers, IMS lookup, uploads) is verified live against the
@@ -127,8 +128,8 @@ product and was removed along with it rather than kept failing.
 
 `vercel.json` builds the frontend (`apps/web/dist`) and runs the API as a
 serverless function at `api/[...path].ts` — one Vercel project serves both,
-same-origin. On push, Vercel's own GitHub integration builds and deploys
-automatically; nothing to trigger by hand.
+same-origin. Deploys are triggered by hand — `npx vercel --prod` — after
+pushing; there is no auto-deploy-on-push configured on this project.
 
 Set these in the Vercel project's own dashboard (Settings → Environment
 Variables) — none of them belong in the repo:
@@ -140,11 +141,12 @@ Variables) — none of them belong in the repo:
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | the service-account key file's full JSON, one line — serverless has no local file to read it from |
 | `WEB_ORIGIN` | the deployed URL, for CORS |
 
-Two known platform constraints, not yet worked around: rate limiting resets
-on every cold start (in-memory counters, serverless has no shared state), and
-Vercel's default function body-size limit (~4.5MB) is below this app's own
-50MB upload allowance — large PTI videos will fail there even though they
-work locally.
+One known platform constraint, not yet worked around: Vercel's default
+function body-size limit (~4.5MB) is below this app's own 50MB upload
+allowance — large PTI videos will fail there even though they work locally.
+(Rate limiting now runs on a shared Supabase-table-backed counter rather
+than in-memory, so it no longer resets on cold start — see
+`DEVELOPMENT-STATUS.md` §6 item 101.)
 
 ---
 
