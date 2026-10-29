@@ -29,6 +29,17 @@ type DisplayMode = 'cards' | 'list';
 
 const columnHelper = createColumnHelper<MockContainer>();
 
+/** Toggles `value` into/out of a Set, immutably -- the multi-select
+ * building block for the Type filter row below, same pattern ImsStock.tsx
+ * already uses for the same reason (no multi-select component exists in
+ * the design system). */
+function toggled(set: Set<string>, value: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
 /** One icon per real Type code (TYPE_CODES, mockV2.ts) — same order the
  * breakdown row renders in. A plain `Record<string, IconName>` rather than
  * keying off `typeof TYPE_CODES[number]`, since TYPE_CODES itself is a
@@ -105,17 +116,22 @@ export function YardBoard(): React.ReactElement {
   const [workerFilter, setWorkerFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  // Combines with the stage chip above and everything else in the advanced
+  // box below -- a realistic filter set means layering these together
+  // (e.g. "Reefer" + "In progress" + a worker), not picking just one.
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
   // Inline, board-local search — same matching convention the command
   // palette uses (id + typeCode), without leaving this screen.
   const [searchQuery, setSearchQuery] = useState('');
   const toast = useToast();
 
-  const anyAdvancedFilter = Boolean(workerFilter || dateFrom || dateTo || searchQuery);
+  const anyAdvancedFilter = Boolean(workerFilter || dateFrom || dateTo || searchQuery || selectedTypes.size > 0);
   const clearAdvancedFilters = (): void => {
     setWorkerFilter('');
     setDateFrom('');
     setDateTo('');
     setSearchQuery('');
+    setSelectedTypes(new Set());
   };
 
   const open = containers.find((c) => c.id === openId) ?? null;
@@ -187,6 +203,7 @@ export function YardBoard(): React.ReactElement {
     const advanced = filtered.filter((c) => {
       const needle = searchQuery.trim().toLowerCase();
       if (needle && !`${c.id} ${c.typeCode}`.toLowerCase().includes(needle)) return false;
+      if (selectedTypes.size > 0 && ![...selectedTypes].some((t) => c.typeCode.startsWith(t))) return false;
       if (workerFilter && !c.sections.some((s) => s.tasks.some((t) => t.workerId === workerFilter))) return false;
       if (dateFrom || dateTo) {
         if (!c.survey) return false;
@@ -203,7 +220,7 @@ export function YardBoard(): React.ReactElement {
     // Fast-tracked containers first — a flag nobody has to scroll past the
     // rest of the yard to notice.
     return [...advanced].sort((a, b) => Number(b.priority) - Number(a.priority));
-  }, [activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery]);
+  }, [activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery, selectedTypes]);
 
   const handleMarkReady = async (id: string, photoUrls: string[]): Promise<void> => {
     await markReady(id, photoUrls);
@@ -357,6 +374,16 @@ export function YardBoard(): React.ReactElement {
             </option>
           ))}
         </select>
+        <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+          <span className="subtle" style={{ fontSize: '12px' }}>
+            Type
+          </span>
+          {TYPE_CODES.map((type) => (
+            <Chip key={type} pressed={selectedTypes.has(type)} onClick={() => setSelectedTypes(toggled(selectedTypes, type))} icon={TYPE_ICON[type]}>
+              {type}
+            </Chip>
+          ))}
+        </span>
         <span className="cluster" style={{ gap: 'var(--s-2)' }}>
           <span className="subtle" style={{ fontSize: '12px' }}>
             Surveyed

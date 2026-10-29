@@ -6,7 +6,7 @@ import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, Field, InputWithIcon, SwitchField } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
-import { describeAction, type ActionLogRow } from './describeAction';
+import { describeAction, SECTION_LABELS, workKindOf, type ActionLogRow } from './describeAction';
 
 const TOKEN_KEY = 'pms-dev-logs-token';
 const POLL_MS = 15_000;
@@ -76,6 +76,11 @@ export function DevLogs(): React.ReactElement {
   const [logs, setLogs] = useState<ActionLogRow[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [category, setCategory] = useState('');
+  // A second, orthogonal axis from category -- category is the route
+  // family ("containers"), this is which work section a task action was
+  // actually about ("just show me painting"), combined together like
+  // every other filter here rather than forcing a choice between them.
+  const [workKind, setWorkKind] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [search, setSearch] = useState('');
@@ -157,6 +162,7 @@ export function DevLogs(): React.ReactElement {
     const needle = search.trim().toLowerCase();
     return described.filter(({ row, summary, tone }) => {
       if (failedOnly && tone !== 'bad') return false;
+      if (workKind && workKindOf(row) !== workKind) return false;
       if (!needle) return true;
       return (
         summary.toLowerCase().includes(needle) ||
@@ -164,9 +170,9 @@ export function DevLogs(): React.ReactElement {
         row.path.toLowerCase().includes(needle)
       );
     });
-  }, [described, search, failedOnly]);
+  }, [described, search, failedOnly, workKind]);
 
-  const hasFilters = category !== '' || from !== '' || to !== '' || search.trim() !== '' || failedOnly;
+  const hasFilters = category !== '' || workKind !== '' || from !== '' || to !== '' || search.trim() !== '' || failedOnly;
 
   // Deterrent only, not real protection -- said plainly rather than implied
   // otherwise. Anyone can still open DevTools with a keyboard shortcut; the
@@ -216,6 +222,20 @@ export function DevLogs(): React.ReactElement {
             ))}
           </div>
 
+          <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="subtle" style={{ fontSize: '12px' }}>
+              Work
+            </span>
+            <Chip pressed={workKind === ''} onClick={() => setWorkKind('')}>
+              Any
+            </Chip>
+            {Object.entries(SECTION_LABELS).map(([kind, label]) => (
+              <Chip key={kind} pressed={workKind === kind} onClick={() => setWorkKind(kind)}>
+                {label}
+              </Chip>
+            ))}
+          </div>
+
           <div className="cluster" style={{ gap: 'var(--s-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div style={{ minWidth: '220px', flex: '1 1 220px' }}>
               <InputWithIcon
@@ -234,6 +254,7 @@ export function DevLogs(): React.ReactElement {
                 size="sm"
                 onClick={() => {
                   setCategory('');
+                  setWorkKind('');
                   setFrom('');
                   setTo('');
                   setSearch('');

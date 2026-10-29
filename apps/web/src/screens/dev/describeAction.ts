@@ -38,13 +38,28 @@ function segments(path: string): string[] {
   return pathOnly(path).split('/').filter(Boolean).map(decodeURIComponent);
 }
 
-const SECTION_LABELS: Record<string, string> = {
+export const SECTION_LABELS: Record<string, string> = {
   painting: 'Painting',
   pti: 'PTI',
   cleaning: 'Cleaning',
   all_rounder: 'Repairment',
   sailing: 'Sailing Crew',
 };
+
+/** Which work section (Painting/PTI/Cleaning/Repairment/Sailing Crew) a
+ * row is actually about, for filtering the log down to "just painting
+ * work" or similar -- null for anything that isn't a task/section action
+ * (a login, a worker edit, a photo upload) in the first place. Mirrors the
+ * exact same path-segment checks actionPhrase() below already makes for
+ * these two route shapes, just returning the raw kind instead of a
+ * sentence. */
+export function workKindOf(row: ActionLogRow): string | null {
+  const segs = segments(pathOnly(row.path));
+  if (segs[2] !== 'containers') return null;
+  if (segs[4] === 'tasks' && segs.length === 7) return segs[5] ?? null;
+  if (segs[4] === 'sections' && segs[6] === 'tasks') return segs[5] ?? null;
+  return null;
+}
 
 /** The task keys this app's own builders always use, by section — anything
  * not in here (a survey-flagged repair item, an ad-hoc "Add a new task"
