@@ -106,6 +106,16 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
     const body = await parseOr422(updateUserSchema, request.body, reply);
     if (!body) return;
 
+    // The only thing standing between "an admin edits someone else's
+    // login" and "an admin locks themselves out with no second admin to
+    // undo it" -- the frontend hides your own row from this screen's list
+    // as a UX nicety (AccessManagement.tsx), which stops nothing against a
+    // direct API call. Role is the only field that can actually lock you
+    // out; renaming yourself or resetting your own password here is fine.
+    if (id === request.user.id && body.role !== undefined && body.role !== 'manager') {
+      return reply.code(409).send(conflict("You can't remove your own admin access."));
+    }
+
     const { password, ...rest } = body;
     // Bumping this is what makes a role/screen change (or a password reset
     // -- might as well kill other sessions too) take effect immediately
@@ -130,6 +140,9 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete('/api/v2/users/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    if (id === request.user.id) {
+      return reply.code(409).send(conflict("You can't remove your own login."));
+    }
     const { error } = await supabase().from('users').delete().eq('id', id);
     if (error) throw app.httpErrors.internalServerError(error.message);
     return reply.code(204).send();

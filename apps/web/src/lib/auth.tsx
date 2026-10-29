@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api, setUnauthorizedHandler, token, type Screen, type SessionUser } from './api';
 
 /**
@@ -71,11 +71,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const [status, setStatus] = useState<AuthValue['status']>('loading');
   const queryClient = useQueryClient();
 
+  // Bumped on every sign-out/sign-in/forced-unauthorized so a slower,
+  // already-in-flight call from a *previous* session (the mount-time `me()`
+  // check below, or logout's own fire-and-forget request) can tell its
+  // result is stale and skip applying it -- otherwise either one landing
+  // late could silently resurrect a session the user just explicitly ended,
+  // or tear down an unrelated new one that started in the meantime.
+  const sessionEpoch = useRef(0);
+
   const signOut = useCallback(() => {
+    sessionEpoch.current += 1;
     // Fire-and-forget, and sent before the token is cleared -- it needs to
-    // still be attached to count as this user's own request. A failure here
-    // (already offline, token already expired) never blocks actually
-    // signing out; it only means this one sign-out doesn't get logged.
+    // still be attached to count as this user's own request. silentAuth
+    // skips the shared 401 handler: this call's own 401 (expected once the
+    // token it's using is no longer valid) must never clear whatever token
+    // a next sign-in has set by the time this resolves.
     void api.logout().catch(() => {});
     token.set(null);
     setUser(null);
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   // A token that expires mid-session lands here rather than in a failed render.
   useEffect(() => {
     setUnauthorizedHandler(() => {
+      sessionEpoch.current += 1;
       setUser(null);
       setStatus('signed-out');
     });
@@ -97,16 +108,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       setStatus('signed-out');
       return;
     }
+    const epoch = sessionEpoch.current;
     let cancelled = false;
     api
       .me()
       .then(({ user: me }) => {
-        if (cancelled) return;
+        if (cancelled || sessionEpoch.current !== epoch) return;
         setUser(me);
         setStatus('signed-in');
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || sessionEpoch.current !== epoch) return;
         token.set(null);
         setStatus('signed-out');
       });
@@ -117,6 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
 
   const signIn = useCallback(
     async (email: string, password: string) => {
+      sessionEpoch.current += 1;
       const result = await api.login(email, password);
       token.set(result.token);
       setUser(result.user);

@@ -13,10 +13,24 @@ type RangeKey = '7' | '15' | '30' | 'custom';
 const RANGE_DAYS: Record<Exclude<RangeKey, 'custom'>, number> = { '7': 7, '15': 15, '30': 30 };
 const RANGE_LABEL: Record<Exclude<RangeKey, 'custom'>, string> = { '7': '7 days', '15': '15 days', '30': '1 month' };
 
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** The *local* calendar date, not `toISOString().slice(0, 10)` -- that
+ * converts to UTC first, which quietly rolls "today" back a day in any
+ * timezone ahead of UTC (e.g. IST) during the early morning, shifting the
+ * whole "last N days" window and silently dropping same-day activity from
+ * the count. This report is meant to be a point-in-time record, so a
+ * quietly wrong window is a real data bug, not a cosmetic one. */
+function localDay(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function daysAgoISO(days: number): string {
   const d = new Date();
   d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return localDay(d);
 }
 
 /**
@@ -43,14 +57,19 @@ export function YardReport(): React.ReactElement {
 
   const { from, to, periodLabel } = useMemo(() => {
     if (range === 'custom') {
-      return { from: customFrom, to: customTo, periodLabel: `${customFrom} – ${customTo}` };
+      // Swapped rather than rejected -- a reversed range otherwise silently
+      // matches nothing (every count renders as a plausible-looking 0) with
+      // no indication anything was wrong, which is worse than just doing
+      // what was obviously meant.
+      const [lo, hi] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
+      return { from: lo, to: hi, periodLabel: `${lo} – ${hi}` };
     }
     return { from: daysAgoISO(RANGE_DAYS[range]), to: daysAgoISO(0), periodLabel: `Last ${RANGE_LABEL[range]}` };
   }, [range, customFrom, customTo]);
 
   const inPeriod = (iso: string | null | undefined): boolean => {
     if (!iso) return false;
-    const day = iso.slice(0, 10);
+    const day = localDay(new Date(iso));
     return day >= from && day <= to;
   };
 

@@ -67,9 +67,22 @@ function NotFound(): React.ReactElement {
  * sends them to the first screen they *do* have (falling back to the
  * System Guide, always open to everyone) instead of a dead page whose own
  * API calls would just come back 403 anyway. */
-function Guarded({ screen, managerOnly, children }: { screen?: Screen; managerOnly?: boolean; children: React.ReactElement }): React.ReactElement {
+function Guarded({
+  screen,
+  managerOnly,
+  children,
+}: {
+  /** A single screen, or any-of a list (e.g. the two printable reports,
+   * which should open to whoever could already see this same container
+   * data some other way -- matching GET /api/v2/containers' own
+   * requireScreen list server-side, not an arbitrary single screen). */
+  screen?: Screen | Screen[];
+  managerOnly?: boolean;
+  children: React.ReactElement;
+}): React.ReactElement {
   const { user, hasScreenAccess } = useAuth();
-  const allowed = managerOnly ? user?.role === 'manager' : screen ? hasScreenAccess(screen) : true;
+  const screens = Array.isArray(screen) ? screen : screen ? [screen] : [];
+  const allowed = managerOnly ? user?.role === 'manager' : screens.length > 0 ? screens.some(hasScreenAccess) : true;
   if (allowed) return children;
   const fallback = navItemsForUser(user)[0]?.to ?? '/guide';
   return <Navigate to={fallback} replace />;
@@ -89,9 +102,27 @@ export function App(): React.ReactElement {
     <V2DataProvider>
       <Suspense fallback={<Booting />}>
         <Routes>
-          {/* Chrome-free: no sidebar/topbar, so Print captures only the report. */}
-          <Route path="/containers/:id/report" element={<ContainerReport />} />
-          <Route path="/reports/yard" element={<YardReport />} />
+          {/* Chrome-free: no sidebar/topbar, so Print captures only the report.
+              Gated to the same screens GET /api/v2/containers itself allows
+              server-side -- previously had no guard at all, so anyone
+              signed in could reach either by typing the URL regardless of
+              their actual screen access. */}
+          <Route
+            path="/containers/:id/report"
+            element={
+              <Guarded screen={['live', 'yard', 'workers', 'dashboards', 'ims-stock']}>
+                <ContainerReport />
+              </Guarded>
+            }
+          />
+          <Route
+            path="/reports/yard"
+            element={
+              <Guarded screen={['live', 'yard', 'workers', 'dashboards', 'ims-stock']}>
+                <YardReport />
+              </Guarded>
+            }
+          />
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/live" replace />} />
             <Route path="/yard" element={<Guarded screen="yard"><YardBoard /></Guarded>} />

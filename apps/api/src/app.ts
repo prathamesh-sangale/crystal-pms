@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -49,6 +50,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(sensible);
+  // Every destructive action in this app (delete container/worker/photo,
+  // access-management changes) relies on a client-side-only confirm dialog
+  // -- with no frame-ancestors/X-Frame-Options at all, a malicious page
+  // could iframe the app over an already-signed-in session and trick a
+  // click through one of those confirms. CSP itself stays off: this app's
+  // screens are built almost entirely from inline `style={{...}}` props,
+  // which a default CSP's `style-src` would silently break app-wide --
+  // nowhere near worth it just to additionally duplicate what
+  // X-Frame-Options already covers on its own.
+  await app.register(helmet, { contentSecurityPolicy: false, frameguard: { action: 'deny' } });
   await app.register(cors, {
     origin: env.WEB_ORIGIN.split(',').map((s) => s.trim()),
     credentials: true,

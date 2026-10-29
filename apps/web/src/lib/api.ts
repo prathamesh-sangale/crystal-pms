@@ -56,7 +56,17 @@ export function setUnauthorizedHandler(fn: (() => void) | null): void {
   onUnauthorized = fn;
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+interface RequestOptions {
+  /** Skips the shared 401 side-effect (clearing the token, firing
+   * onUnauthorized) for this one call. For a fire-and-forget request sent
+   * right as the token is about to change (logout, signing back in before
+   * it resolves) -- without this, a stale 401 arriving after a new session
+   * has already started would wipe out that unrelated new session instead
+   * of the one that actually sent this request. */
+  silentAuth?: boolean;
+}
+
+async function request<T>(path: string, init: RequestInit = {}, opts: RequestOptions = {}): Promise<T> {
   const headers = new Headers(init.headers);
   // A FormData body (the upload endpoint) needs the browser to set its own
   // multipart/form-data content-type, boundary included — setting it by
@@ -84,7 +94,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body: unknown = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && !opts.silentAuth) {
       token.set(null);
       onUnauthorized?.();
     }
@@ -161,7 +171,7 @@ export const api = {
 
   me: () => request<{ user: SessionUser }>('/api/auth/me'),
 
-  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }, { silentAuth: true }),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ token: string; user: SessionUser }>('/api/auth/change-password', {
