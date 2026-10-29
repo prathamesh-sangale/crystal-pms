@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatDMY, istDay, istDayOffset, istToday } from '../../lib/istDate';
 import { Button } from '../../components/crystal/Button';
 import { StatusPill } from '../../components/crystal/Data';
+import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, Field, InputWithIcon, SwitchField } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
@@ -36,16 +38,16 @@ async function devLogsFetch<T>(path: string, token: string | null, init?: Reques
 }
 
 /** "Today at 2:30 PM" reads at a glance; a full date is only worth printing
- * once it's not today or yesterday. */
+ * once it's not today or yesterday. Always in IST -- an audit log read by
+ * whoever's checking it shouldn't change meaning depending on which
+ * timezone their own device happens to be set to. */
 function formatWhen(iso: string): string {
   const d = new Date(iso);
-  const now = new Date();
-  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-  if (d.toDateString() === now.toDateString()) return `Today at ${time}`;
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (d.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
-  return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} at ${time}`;
+  const time = d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit' });
+  const day = istDay(d);
+  if (day === istToday()) return `Today at ${time}`;
+  if (day === istDayOffset(-1)) return `Yesterday at ${time}`;
+  return `${formatDMY(day)} at ${time}`;
 }
 
 /** The developer-only action log — reached only by knowing this exact URL
@@ -119,8 +121,12 @@ export function DevLogs(): React.ReactElement {
     try {
       const params = new URLSearchParams();
       if (category) params.set('category', category);
-      if (from) params.set('since', `${from}T00:00:00.000Z`);
-      if (to) params.set('until', `${to}T23:59:59.999Z`);
+      // "+05:30" (IST), not "Z" (UTC) -- the picker means "this calendar
+      // day in IST," and stamping it as UTC midnight would shift the whole
+      // window by 5.5 hours. Postgres/PostgREST parse an explicit-offset
+      // ISO string correctly on their own; no manual conversion needed.
+      if (from) params.set('since', `${from}T00:00:00+05:30`);
+      if (to) params.set('until', `${to}T23:59:59.999+05:30`);
       const qs = params.toString();
       const { logs: fetched } = await devLogsFetch<{ logs: ActionLogRow[] }>(`/api/dev/logs${qs ? `?${qs}` : ''}`, token);
       setLogs(fetched);
@@ -219,12 +225,8 @@ export function DevLogs(): React.ReactElement {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Field label="From">
-              {(props) => <input {...props} type="date" value={from} onChange={(e) => setFrom(e.target.value)} />}
-            </Field>
-            <Field label="To">
-              {(props) => <input {...props} type="date" value={to} onChange={(e) => setTo(e.target.value)} />}
-            </Field>
+            <Field label="From">{() => <DatePicker value={from} onChange={setFrom} />}</Field>
+            <Field label="To">{() => <DatePicker value={to} onChange={setTo} />}</Field>
             <SwitchField checked={failedOnly} onCheckedChange={setFailedOnly} label="Failed only" />
             {hasFilters && (
               <Button

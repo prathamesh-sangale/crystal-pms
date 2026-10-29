@@ -2,8 +2,10 @@ import { createColumnHelper } from '@tanstack/react-table';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type HydraMovement } from '../../lib/api';
 import { isValidContainerNo } from '../../lib/containerNo';
+import { istToday } from '../../lib/istDate';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { DataTable } from '../../components/crystal/DataTable';
+import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import { Field } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
@@ -16,12 +18,8 @@ const HYDRA_TYPES = ['Dry', 'Reefer', 'ISO Tank', 'Porta Cabin', 'Machine', 'Oth
 const HYDRA_SIZES = ['10 Feet', '20 Feet', '40 Feet', 'Other'];
 const MOVEMENT_TYPES = ['Loading', 'Unloading', 'Shifting'] as const;
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
 const EMPTY_DRAFT = {
-  movementDate: today(),
+  movementDate: istToday(),
   containerNo: '',
   type: HYDRA_TYPES[0]!,
   size: HYDRA_SIZES[0]!,
@@ -84,7 +82,7 @@ export function Hydra(): React.ReactElement {
       });
       setMovements((cur) => [movement, ...cur]);
       toast.ok('Movement logged', `${movement.containerNo} — ${movement.movementType}.`);
-      setDraft({ ...EMPTY_DRAFT, movementDate: today() });
+      setDraft({ ...EMPTY_DRAFT, movementDate: istToday() });
     } catch {
       toast.error('Could not save this movement', 'Check your connection and try again.');
     } finally {
@@ -163,7 +161,7 @@ export function Hydra(): React.ReactElement {
         <div className="card" style={{ maxWidth: '560px' }}>
           <div className="stack">
             <Field label="Date" required>
-              {(props) => <input {...props} type="date" value={draft.movementDate} onChange={(e) => setDraft((d) => ({ ...d, movementDate: e.target.value }))} />}
+              {() => <DatePicker value={draft.movementDate} onChange={(v) => setDraft((d) => ({ ...d, movementDate: v }))} />}
             </Field>
             <Field label="Container No." required error={containerNoInvalid ? 'Invalid container number' : undefined}>
               {(props) => (

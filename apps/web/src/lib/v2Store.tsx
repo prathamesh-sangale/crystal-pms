@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { api, type NewTaskInput } from './api';
+import { istToday } from './istDate';
 import {
   type ContainerDraft,
   type ContainerDraftData,
@@ -22,10 +23,6 @@ import {
  */
 
 type Task = MockContainer['sections'][number]['tasks'][number];
-
-function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function mapContainer(containers: MockContainer[], id: string, fn: (c: MockContainer) => MockContainer): MockContainer[] {
   return containers.map((c) => (c.id === id ? fn(c) : c));
@@ -296,7 +293,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         setContainers((cur) =>
           mapContainer(cur, containerId, (c) =>
             mapTask(c, kind, key, (t) => {
-              const patch = { workerId, scheduledFor: t.scheduledFor ?? todayDate() };
+              const patch = { workerId, scheduledFor: t.scheduledFor ?? istToday() };
               patchTask(containerId, kind, key, patch);
               return { ...t, ...patch };
             })
@@ -328,7 +325,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
       },
 
       markReady: async (containerId, photoUrls) => {
-        const patch = { readyAt: todayDate(), readyPhotoUrls: photoUrls };
+        const patch = { readyAt: istToday(), readyPhotoUrls: photoUrls };
         const { container: saved } = await api.v2PatchContainer(containerId, patch);
         setContainers((cur) => mapContainer(cur, containerId, () => saved));
       },

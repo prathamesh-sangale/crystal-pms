@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDMY, istDay, istDayOffset, istToday } from '../../lib/istDate';
 import { agingStatus, isReadyToMove, sectionTurnaround, SECTION_LABELS, type SectionKind } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button } from '../../components/crystal/Button';
 import { DataPanel, StatCard } from '../../components/crystal/Data';
+import { DatePicker } from '../../components/crystal/DatePicker';
 import { Chip, Field } from '../../components/crystal/Form';
 
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder'];
@@ -12,26 +14,6 @@ type RangeKey = '7' | '15' | '30' | 'custom';
 
 const RANGE_DAYS: Record<Exclude<RangeKey, 'custom'>, number> = { '7': 7, '15': 15, '30': 30 };
 const RANGE_LABEL: Record<Exclude<RangeKey, 'custom'>, string> = { '7': '7 days', '15': '15 days', '30': '1 month' };
-
-function pad(n: number): string {
-  return String(n).padStart(2, '0');
-}
-
-/** The *local* calendar date, not `toISOString().slice(0, 10)` -- that
- * converts to UTC first, which quietly rolls "today" back a day in any
- * timezone ahead of UTC (e.g. IST) during the early morning, shifting the
- * whole "last N days" window and silently dropping same-day activity from
- * the count. This report is meant to be a point-in-time record, so a
- * quietly wrong window is a real data bug, not a cosmetic one. */
-function localDay(d: Date): string {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function daysAgoISO(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return localDay(d);
-}
 
 /**
  * A dedicated, chrome-free page (no sidebar/topbar — mounted outside
@@ -52,8 +34,8 @@ export function YardReport(): React.ReactElement {
   const navigate = useNavigate();
 
   const [range, setRange] = useState<RangeKey>('7');
-  const [customFrom, setCustomFrom] = useState(daysAgoISO(7));
-  const [customTo, setCustomTo] = useState(daysAgoISO(0));
+  const [customFrom, setCustomFrom] = useState(istDayOffset(-7));
+  const [customTo, setCustomTo] = useState(istToday());
 
   const { from, to, periodLabel } = useMemo(() => {
     if (range === 'custom') {
@@ -62,14 +44,14 @@ export function YardReport(): React.ReactElement {
       // no indication anything was wrong, which is worse than just doing
       // what was obviously meant.
       const [lo, hi] = customFrom <= customTo ? [customFrom, customTo] : [customTo, customFrom];
-      return { from: lo, to: hi, periodLabel: `${lo} – ${hi}` };
+      return { from: lo, to: hi, periodLabel: `${formatDMY(lo)} – ${formatDMY(hi)}` };
     }
-    return { from: daysAgoISO(RANGE_DAYS[range]), to: daysAgoISO(0), periodLabel: `Last ${RANGE_LABEL[range]}` };
+    return { from: istDayOffset(-RANGE_DAYS[range]), to: istToday(), periodLabel: `Last ${RANGE_LABEL[range]}` };
   }, [range, customFrom, customTo]);
 
   const inPeriod = (iso: string | null | undefined): boolean => {
     if (!iso) return false;
-    const day = localDay(new Date(iso));
+    const day = istDay(new Date(iso));
     return day >= from && day <= to;
   };
 
@@ -88,7 +70,7 @@ export function YardReport(): React.ReactElement {
   const reefer = active.filter((c) => c.typeCode.startsWith('Reefer')).length;
 
   const turnaround = sectionTurnaround(active);
-  const generatedAt = new Date().toISOString().slice(0, 10);
+  const generatedAt = formatDMY(istToday());
 
   return (
     <div style={{ minHeight: '100dvh', background: 'var(--bg)' }}>
@@ -117,12 +99,8 @@ export function YardReport(): React.ReactElement {
           </Chip>
           {range === 'custom' && (
             <>
-              <Field label="From">
-                {(props) => <input {...props} type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />}
-              </Field>
-              <Field label="To">
-                {(props) => <input {...props} type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />}
-              </Field>
+              <Field label="From">{() => <DatePicker value={customFrom} onChange={setCustomFrom} />}</Field>
+              <Field label="To">{() => <DatePicker value={customTo} onChange={setCustomTo} />}</Field>
             </>
           )}
         </div>

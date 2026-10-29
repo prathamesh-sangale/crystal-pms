@@ -18,6 +18,7 @@ import {
   type SectionKind,
   type WorkerType,
 } from '../../lib/mockV2';
+import { istToday } from '../../lib/istDate';
 import { useLiveTick } from '../../lib/useLiveTick';
 import { useV2Data } from '../../lib/v2Store';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
@@ -28,6 +29,7 @@ import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
 import { Person, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
+import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
 import { Icon } from '../../components/crystal/Icon';
@@ -402,7 +404,7 @@ export function LiveBoard(): React.ReactElement {
   const [searchQuery, setSearchQuery] = useState('');
   const [openContainerId, setOpenContainerId] = useState<string | null>(null);
   const [openWorkerId, setOpenWorkerId] = useState<string | null>(null);
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const todayStr = useMemo(() => istToday(), []);
   // "By crew" is the daily roster — defaults to today, same as the rest of
   // the app's "what's happening right now" screens, but a plain date field
   // so looking at tomorrow's plan or yesterday's record is one click away.
@@ -769,7 +771,7 @@ export function LiveBoard(): React.ReactElement {
         <div className="stack stack-tight">
           <div className="cluster" style={{ gap: 'var(--s-2)', alignItems: 'center' }}>
             <span className="subtle" style={{ fontSize: '12px' }}>Roster for</span>
-            <input className="input" type="date" style={{ width: 'auto', height: '36px' }} value={rosterDate} onChange={(e) => setRosterDate(e.target.value)} />
+            <DatePicker value={rosterDate} onChange={setRosterDate} />
             {rosterDate !== todayStr && (
               <Button variant="ghost" size="sm" onClick={() => setRosterDate(todayStr)}>
                 Back to today

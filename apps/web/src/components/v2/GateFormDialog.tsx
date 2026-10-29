@@ -17,6 +17,7 @@ import {
 } from '../../lib/mockV2';
 import { api, type ImsMatch } from '../../lib/api';
 import { cx } from '../../lib/cx';
+import { istDay } from '../../lib/istDate';
 import { Button } from '../crystal/Button';
 import { useToast } from '../crystal/Feedback';
 import { CheckboxField, Field } from '../crystal/Form';
@@ -466,7 +467,7 @@ export function GateFormDialog({
         kind: 'in',
         loggedAt: now.toISOString(),
         loggedBy,
-        movementDate: now.toISOString().slice(0, 10),
+        movementDate: istDay(now),
         indentRef,
         customerName,
         location,
@@ -531,7 +532,7 @@ export function GateFormDialog({
         kind: 'out',
         loggedAt: now.toISOString(),
         loggedBy,
-        movementDate: now.toISOString().slice(0, 10),
+        movementDate: istDay(now),
         indentRef,
         customerName,
         location,

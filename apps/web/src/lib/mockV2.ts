@@ -1,4 +1,5 @@
 import type { Status, StatusTone } from '@pms/shared';
+import { formatDMY, istDay, istDayOffset } from './istDate';
 
 /**
  * v2's domain types, constants, and pure derived-state helpers (SPEC.md).
@@ -666,11 +667,17 @@ export function taskElapsedSec(task: MockTask, nowMs: number): number {
  * hand-authored mock container, but a full ISO timestamp on anything gated
  * in through the intake form since — show the time too when there
  * genuinely is one, instead of printing midnight for every new survey. */
+/** dd/mm/yyyy, in IST -- not `toISOString()`'s yyyy-mm-dd in UTC, which
+ * both reads as the wrong date (printed reports should show the Indian
+ * business day something actually happened on, not whatever date UTC was
+ * showing at that instant) and the wrong format for this ask. */
 export function formatSurveyDate(performedAt: string): string {
   const d = new Date(performedAt);
   if (Number.isNaN(d.getTime())) return performedAt;
-  const iso = d.toISOString();
-  return performedAt.includes('T') ? `${iso.slice(0, 10)} ${iso.slice(11, 16)}` : iso.slice(0, 10);
+  const day = formatDMY(istDay(d));
+  if (!performedAt.includes('T')) return day;
+  const time = d.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
+  return `${day} ${time}`;
 }
 
 export function formatElapsed(sec: number): string {
@@ -696,9 +703,7 @@ export function isScheduledFor(task: MockTask, date: string): boolean {
  * is stored in, so it can be compared and written back directly. Shared by
  * every quick-pick date control (the reschedule chip, AssignWorkDialog). */
 export function offsetDate(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return istDayOffset(days);
 }
 
 /** The near-term planning horizon every date quick-pick offers — "daily

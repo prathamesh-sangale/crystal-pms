@@ -1,4 +1,5 @@
 import type { ImsMatch } from './api';
+import { istDay } from './istDate';
 import { GATE_PHOTO_SLOTS, STANDARD_COLORS, surveyFields, type GateLogEntry, type GatePhotoKey, type MockContainer } from './mockV2';
 
 /** The container a one-click "Add to yard" registers — shared by
@@ -17,7 +18,7 @@ export function buildQuickAddContainer(item: ImsMatch, loggedBy: string): MockCo
     kind: 'in',
     loggedAt: now.toISOString(),
     loggedBy,
-    movementDate: now.toISOString().slice(0, 10),
+    movementDate: istDay(now),
     indentRef: '',
     customerName: '',
     location: '',
