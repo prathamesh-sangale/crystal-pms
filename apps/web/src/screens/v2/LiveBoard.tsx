@@ -8,6 +8,7 @@ import {
   tasksBySection,
   tasksForWorker,
   tntStatusForTask,
+  TYPE_CODES,
   WORKER_TYPE_LABELS,
   WORKER_TYPES,
   type CrewLoad,
@@ -40,12 +41,14 @@ type DisplayMode = 'cards' | 'list';
  * every open task, from every stage, in one table — so seeing everything
  * is the default, not something reached by first picking a category. */
 type StageFilter = 'all' | SectionKind;
-/** The product sub-filter, scoped under whichever stage is active — same
- * Reefer/Dry split the Yard Board's own stat cards already use (a Tank unit
- * counts as "Dry" there too, so this doesn't invent a third bucket nothing
- * else in the app recognizes). */
-type ProductFilter = 'all' | 'Reefer' | 'Dry';
-const productOf = (typeCode: string): 'Reefer' | 'Dry' => (typeCode.startsWith('Reefer') ? 'Reefer' : 'Dry');
+/** The product sub-filter, scoped under whichever stage is active — all
+ * four real types (TYPE_CODES), matching Yard Board's own breakdown cards
+ * and its Type filter. Used to collapse to a Reefer/Dry binary, silently
+ * counting ISO Tank/Porta Cabin units as "Dry" -- the same miscount Yard
+ * Board's own stat cards had before SPEC.md §8 item 9 resolved the real
+ * Type list; fixed here the same way. */
+type ProductFilter = 'all' | string;
+const productOf = (typeCode: string): string => TYPE_CODES.find((t) => typeCode.startsWith(t)) ?? 'Dry';
 
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
@@ -472,8 +475,7 @@ export function LiveBoard(): React.ReactElement {
   // sub-filter happens to be selected below it.
   const productCounts: Array<{ value: ProductFilter; label: string; count: number }> = [
     { value: 'all', label: 'All', count: allOpenRows.length },
-    { value: 'Reefer', label: 'Reefer', count: allOpenRows.filter((r) => containerProduct[r.containerId] === 'Reefer').length },
-    { value: 'Dry', label: 'Dry', count: allOpenRows.filter((r) => containerProduct[r.containerId] === 'Dry').length },
+    ...TYPE_CODES.map((type) => ({ value: type, label: type, count: allOpenRows.filter((r) => containerProduct[r.containerId] === type).length })),
   ];
   const rowsForProduct = activeProduct === 'all' ? allOpenRows : allOpenRows.filter((r) => containerProduct[r.containerId] === activeProduct);
 

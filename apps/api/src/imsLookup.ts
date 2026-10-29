@@ -65,7 +65,13 @@ function normalize(id: string): string {
 function mapType(raw: string): string | null {
   const t = raw.trim().toUpperCase();
   if (t === 'REEFER') return 'Reefer';
-  if (t === 'DRY') return 'Dry';
+  // Prefix, not exact match -- confirmed live against the real sheet
+  // (2026-10-29): "Dry Dual Door" is a real, if rare, variant that an
+  // exact-equals check silently dropped (mapped to null, invisible to the
+  // Type filter and un-"Add to yard"-able) even though it's unambiguously
+  // a Dry unit. ISO Tank/Reefer stay exact -- no observed variant spelling
+  // needs the same treatment there today.
+  if (t.startsWith('DRY')) return 'Dry';
   if (t === 'ISO' || t === 'ISO TANK') return 'ISO Tank';
   return null;
 }
