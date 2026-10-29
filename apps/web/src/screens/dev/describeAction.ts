@@ -86,6 +86,7 @@ function actionPhrase(row: ActionLogRow): string {
 
   // --- auth ---
   if (path === '/api/auth/login') return 'signed in';
+  if (path === '/api/auth/logout') return 'signed out';
   if (path === '/api/auth/change-password') return 'changed their password';
 
   // --- containers ---

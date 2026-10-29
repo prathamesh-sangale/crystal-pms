@@ -72,6 +72,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const queryClient = useQueryClient();
 
   const signOut = useCallback(() => {
+    // Fire-and-forget, and sent before the token is cleared -- it needs to
+    // still be attached to count as this user's own request. A failure here
+    // (already offline, token already expired) never blocks actually
+    // signing out; it only means this one sign-out doesn't get logged.
+    void api.logout().catch(() => {});
     token.set(null);
     setUser(null);
     setStatus('signed-out');

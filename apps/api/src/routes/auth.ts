@@ -63,6 +63,12 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/auth/me', { preHandler: authenticate }, async (request) => ({ user: request.user }));
 
+  /** Does nothing to the token itself -- there's no server-side session to
+   * tear down, the client just drops it. This route exists purely so a
+   * sign-out becomes a real, logged action (who, when, from which IP),
+   * instead of a client-side-only event invisible to the action log. */
+  app.post('/api/auth/logout', { preHandler: authenticate }, async (_request, reply) => reply.send({ ok: true }));
+
   /** Self-service, by direct request, manager-only by a later, equally
    * direct request: a worker's credentials stay fully admin-controlled --
    * if theirs needs to change, a manager resets it for them in Access

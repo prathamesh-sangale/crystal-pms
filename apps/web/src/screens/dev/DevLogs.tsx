@@ -274,6 +274,7 @@ export function DevLogs(): React.ReactElement {
                       </span>
                       <span className="subtle" style={{ fontSize: '12px' }}>
                         {formatWhen(row.created_at)} · {row.category}
+                        {row.ip && <> · IP {row.ip}</>}
                       </span>
                     </div>
                     <Icon name={expanded ? 'chev-up' : 'chev-down'} size="sm" />
@@ -283,9 +284,9 @@ export function DevLogs(): React.ReactElement {
                       <span className="mono subtle" style={{ fontSize: '11px' }}>
                         {row.method} {row.path}
                       </span>
-                      {row.ip && (
+                      {row.user_role && (
                         <span className="mono subtle" style={{ fontSize: '11px' }}>
-                          IP: {row.ip} {row.user_role ? `· Role: ${row.user_role}` : ''}
+                          Role: {row.user_role}
                         </span>
                       )}
                       <pre className="mono" style={{ margin: 0, fontSize: '11px', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>

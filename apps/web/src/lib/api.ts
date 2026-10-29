@@ -161,6 +161,8 @@ export const api = {
 
   me: () => request<{ user: SessionUser }>('/api/auth/me'),
 
+  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+
   changePassword: (currentPassword: string, newPassword: string) =>
     request<{ token: string; user: SessionUser }>('/api/auth/change-password', {
       method: 'POST',
