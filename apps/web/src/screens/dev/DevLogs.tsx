@@ -245,8 +245,8 @@ export function DevLogs(): React.ReactElement {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Field label="From">{() => <DatePicker value={from} onChange={setFrom} />}</Field>
-            <Field label="To">{() => <DatePicker value={to} onChange={setTo} />}</Field>
+            <Field label="From">{() => <DatePicker value={from} onChange={setFrom} max={to || undefined} />}</Field>
+            <Field label="To">{() => <DatePicker value={to} onChange={setTo} min={from || undefined} />}</Field>
             <SwitchField checked={failedOnly} onCheckedChange={setFailedOnly} label="Failed only" />
             {hasFilters && (
               <Button

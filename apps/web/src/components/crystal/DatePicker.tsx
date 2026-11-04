@@ -49,18 +49,40 @@ export function DatePicker({
   value,
   onChange,
   placeholder = 'Pick a date',
+  min,
+  max,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /** Both are plain 'YYYY-MM-DD' strings, same format as `value` -- that
+   * format sorts lexicographically exactly like the dates it represents, so
+   * a plain string comparison is all a range check ever needs. Used by a
+   * paired From/To pair (DevLogs, YardReport) to stop the two from ever
+   * being picked in the wrong order in the first place, rather than
+   * silently producing an inverted range that matches nothing. */
+  min?: string;
+  max?: string;
 }): React.ReactElement {
   const parsed = parseValue(value);
   const today = parseValue(istToday())!;
   const [viewYear, setViewYear] = useState(parsed?.year ?? today.year);
   const [viewMonth, setViewMonth] = useState(parsed?.month ?? today.month);
 
-  const selectDay = (day: number): void => onChange(compose(viewYear, viewMonth, day));
+  const inRange = (y: number, m: number, d: number): boolean => {
+    const composed = compose(y, m, d);
+    if (min && composed < min) return false;
+    if (max && composed > max) return false;
+    return true;
+  };
+
+  const selectDay = (day: number): void => {
+    if (!inRange(viewYear, viewMonth, day)) return;
+    onChange(compose(viewYear, viewMonth, day));
+  };
+  const todayInRange = inRange(today.year, today.month, today.day);
   const goToday = (): void => {
+    if (!todayInRange) return;
     setViewYear(today.year);
     setViewMonth(today.month);
     onChange(istToday());
@@ -143,12 +165,13 @@ export function DatePicker({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 36px)', gap: '2px' }}>
             {cells.map((c, i) => {
               const selected = isSelected(c.day, c.inMonth);
+              const selectable = c.inMonth && inRange(viewYear, viewMonth, c.day);
               return (
                 <button
                   key={i}
                   type="button"
-                  onClick={() => c.inMonth && selectDay(c.day)}
-                  disabled={!c.inMonth}
+                  onClick={() => selectDay(c.day)}
+                  disabled={!selectable}
                   style={{
                     width: '36px',
                     height: '36px',
@@ -156,8 +179,9 @@ export function DatePicker({
                     border: 'none',
                     borderRadius: 'var(--r-sm)',
                     background: selected ? 'var(--accent)' : 'transparent',
-                    color: selected ? 'var(--on-accent)' : c.inMonth ? 'var(--text)' : 'var(--text-3)',
-                    cursor: c.inMonth ? 'pointer' : 'default',
+                    color: selected ? 'var(--on-accent)' : selectable ? 'var(--text)' : 'var(--text-3)',
+                    opacity: c.inMonth && !selectable ? 0.35 : 1,
+                    cursor: selectable ? 'pointer' : 'default',
                     fontWeight: selected ? 700 : 400,
                   }}
                 >
@@ -178,7 +202,16 @@ export function DatePicker({
             <button
               type="button"
               onClick={goToday}
-              style={{ fontSize: '11.5px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              disabled={!todayInRange}
+              style={{
+                fontSize: '11.5px',
+                color: 'var(--accent)',
+                background: 'none',
+                border: 'none',
+                cursor: todayInRange ? 'pointer' : 'default',
+                opacity: todayInRange ? 1 : 0.35,
+                padding: 0,
+              }}
             >
               Today
             </button>

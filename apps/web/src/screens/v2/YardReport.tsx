@@ -99,8 +99,8 @@ export function YardReport(): React.ReactElement {
           </Chip>
           {range === 'custom' && (
             <>
-              <Field label="From">{() => <DatePicker value={customFrom} onChange={setCustomFrom} />}</Field>
-              <Field label="To">{() => <DatePicker value={customTo} onChange={setCustomTo} />}</Field>
+              <Field label="From">{() => <DatePicker value={customFrom} onChange={setCustomFrom} max={customTo || undefined} />}</Field>
+              <Field label="To">{() => <DatePicker value={customTo} onChange={setCustomTo} min={customFrom || undefined} />}</Field>
             </>
           )}
         </div>
