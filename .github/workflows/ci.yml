@@ -23,6 +23,14 @@ jobs:
           node-version: '20.11'
           cache: npm
       - run: npm ci
+      # tokens.css/crystal.css/generated/icons.ts are build output
+      # (.gitignore), extracted from source/crystal-design-system.html --
+      # not checked in, so a fresh checkout genuinely doesn't have them
+      # yet. Same two steps npm run dev/build already do locally before
+      # anything else touches the code; typecheck/lint fail without them
+      # (Icon.tsx imports generated/icons directly).
+      - run: npm run tokens
+      - run: npm run build -w @pms/shared
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run lint:css
