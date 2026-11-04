@@ -109,7 +109,7 @@ async function request<T>(path: string, init: RequestInit = {}, opts: RequestOpt
  * whole reason this proxy route exists over just linking straight to
  * Drive). Callers turn the result into an object URL and revoke it on
  * cleanup; this function doesn't manage that lifetime itself. */
-async function fetchPhotoBlob(fileId: string): Promise<Blob> {
+async function fetchPhotoBlob(fileId: string): Promise<{ blob: Blob; fileName: string | null }> {
   const headers = new Headers();
   const auth = token.get();
   if (auth) headers.set('authorization', `Bearer ${auth}`);
@@ -127,7 +127,9 @@ async function fetchPhotoBlob(fileId: string): Promise<Blob> {
     const body: unknown = await response.json().catch(() => ({}));
     throw new RequestError(response.status, body as Partial<ApiError>);
   }
-  return response.blob();
+  const rawName = response.headers.get('x-file-name');
+  const fileName = rawName ? decodeURIComponent(rawName) : null;
+  return { blob: await response.blob(), fileName };
 }
 
 /* ------------------------------------------------------------------------ */

@@ -90,6 +90,11 @@ export async function buildApp(): Promise<FastifyInstance> {
     origin: env.WEB_ORIGIN.split(',').map((s) => s.trim()),
     credentials: true,
     allowedHeaders: ['content-type', 'authorization'],
+    // Without this, the browser hides x-file-name (v2Uploads.ts's photo
+    // proxy) from JS entirely on a cross-origin response -- which local
+    // dev always is (:5173 vs :4000 are different origins), not just a
+    // theoretical production concern.
+    exposedHeaders: ['x-file-name'],
   });
   await app.register(rateLimit, {
     global: false,

@@ -88,6 +88,11 @@ export async function v2UploadRoutes(app: FastifyInstance): Promise<void> {
     if (!found) return reply.code(404).send(notFound('Photo'));
     reply.header('content-type', found.mimeType);
     reply.header('cache-control', 'private, max-age=86400');
+    // The name exactly as the uploader's own device had it, so the UI can
+    // show which real photo this is instead of just an opaque file id --
+    // encoded since a header value has to stay ASCII-safe even though
+    // sanitizeFilename already keeps it close to plain text.
+    reply.header('x-file-name', encodeURIComponent(found.name));
     return reply.send(found.stream);
   });
 

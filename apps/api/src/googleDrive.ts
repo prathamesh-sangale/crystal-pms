@@ -142,14 +142,17 @@ export async function uploadToDrive(
  * user can view/remove their own uploaded photos" and "any signed-in user
  * can view/remove any file this service account can reach," since neither
  * the view nor the delete route take anything else identifying as proof the
- * caller actually uploaded this exact file. Returns its mimeType when it
- * does, null otherwise (not found, or found somewhere this service account
- * can reach but outside our own Shared Drive). */
-async function verifyOwnedFile(fileId: string): Promise<string | null> {
+ * caller actually uploaded this exact file. Returns its mimeType/name when
+ * it does, null otherwise (not found, or found somewhere this service
+ * account can reach but outside our own Shared Drive). The name is exactly
+ * what the uploader's own device called the file at upload time
+ * (`sanitizeFilename` in v2Uploads.ts) — Drive's own `name` field is set
+ * from it at upload and never changes after. */
+async function verifyOwnedFile(fileId: string): Promise<{ mimeType: string; name: string } | null> {
   try {
-    const res = await drive().files.get({ fileId, fields: 'driveId, mimeType', supportsAllDrives: true });
+    const res = await drive().files.get({ fileId, fields: 'driveId, mimeType, name', supportsAllDrives: true });
     if (res.data.driveId !== SHARED_DRIVE_ID) return null;
-    return res.data.mimeType ?? 'application/octet-stream';
+    return { mimeType: res.data.mimeType ?? 'application/octet-stream', name: res.data.name ?? 'upload' };
   } catch {
     return null;
   }
@@ -165,11 +168,11 @@ async function verifyOwnedFile(fileId: string): Promise<string | null> {
  * the app, regardless of anyone's personal Google sign-in state. Returns
  * null for a file id that doesn't resolve to something in our own Shared
  * Drive. */
-export async function streamFromDrive(fileId: string): Promise<{ mimeType: string; stream: NodeJS.ReadableStream } | null> {
-  const mimeType = await verifyOwnedFile(fileId);
-  if (!mimeType) return null;
+export async function streamFromDrive(fileId: string): Promise<{ mimeType: string; name: string; stream: NodeJS.ReadableStream } | null> {
+  const owned = await verifyOwnedFile(fileId);
+  if (!owned) return null;
   const res = await drive().files.get({ fileId, alt: 'media', supportsAllDrives: true }, { responseType: 'stream' });
-  return { mimeType, stream: res.data };
+  return { ...owned, stream: res.data };
 }
 
 /** Removes a previously-uploaded file — trashes it, not a hard delete:

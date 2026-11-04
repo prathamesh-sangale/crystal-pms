@@ -29,10 +29,16 @@ export function extractDriveFileId(url: string): string | null {
 export function PhotoThumb({ url, label }: { url: string; label: string }): React.ReactElement {
   const [blobUrl, setBlobUrl] = useState<string | null>(url.startsWith('blob:') ? url : null);
   const [failed, setFailed] = useState(false);
+  // The name as the uploader's own device had it at upload time (not
+  // available for a not-yet-uploaded blob: preview, which has no server
+  // round trip to carry a name back from) -- shown so the photo reads as
+  // an identifiable, named file, not just an opaque thumbnail.
+  const [fileName, setFileName] = useState<string | null>(null);
 
   useEffect(() => {
     if (url.startsWith('blob:')) {
       setBlobUrl(url);
+      setFileName(null);
       return;
     }
     const fileId = extractDriveFileId(url);
@@ -42,14 +48,16 @@ export function PhotoThumb({ url, label }: { url: string; label: string }): Reac
     }
     setFailed(false);
     setBlobUrl(null);
+    setFileName(null);
     let cancelled = false;
     let objectUrl: string | null = null;
     api
       .v2PhotoBlob(fileId)
-      .then((blob) => {
+      .then(({ blob, fileName: name }) => {
         if (cancelled) return;
         objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
+        setFileName(name);
       })
       .catch(() => {
         if (!cancelled) setFailed(true);
@@ -60,7 +68,12 @@ export function PhotoThumb({ url, label }: { url: string; label: string }): Reac
     };
   }, [url]);
 
-  if (blobUrl) return <img src={blobUrl} alt={label} className="photo-thumb" />;
+  // A native title tooltip, not a visible caption -- PhotoThumb is reused
+  // across several different grid/figure layouts (some already have their
+  // own figcaption showing the slot label, e.g. "Front View"), and this
+  // shouldn't disturb any of them just to also surface the filename.
+  // Falls back to the slot label while the name hasn't loaded yet/at all.
+  if (blobUrl) return <img src={blobUrl} alt={label} title={fileName ?? label} className="photo-thumb" />;
 
   if (failed) {
     return (
