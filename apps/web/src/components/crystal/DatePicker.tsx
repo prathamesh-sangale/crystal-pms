@@ -1,6 +1,6 @@
 import * as Popover from '@radix-ui/react-popover';
 import { useMemo, useState } from 'react';
-import { formatDMY, istDay, istToday } from '../../lib/istDate';
+import { formatDMY, istToday } from '../../lib/istDate';
 import { Icon } from './Icon';
 
 /**
@@ -28,9 +28,17 @@ function parseValue(value: string): { year: number; month: number; day: number }
   return { year: y, month: m - 1, day: d };
 }
 
+/** The picked year/month/day are already the intended IST calendar date --
+ * the grid itself never does any timezone math (daysInMonth/firstWeekday
+ * below are self-consistent local-to-local lookups). Building a string
+ * straight from these integers, with no Date object in between, is what
+ * fixes the real bug this used to have: round-tripping through `new
+ * Date(year, month, day)` constructs *local* midnight, which on a device
+ * set to a timezone east of IST (China, Japan, Thailand, Australia...)
+ * is still the previous day once reinterpreted in IST -- silently
+ * recording the day before whatever was actually clicked. */
 function compose(year: number, month: number, day: number): string {
-  const d = new Date(year, month, day);
-  return istDay(d);
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 function daysInMonth(year: number, month: number): number {

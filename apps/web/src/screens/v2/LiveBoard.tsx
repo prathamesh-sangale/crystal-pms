@@ -46,9 +46,14 @@ type StageFilter = 'all' | SectionKind;
  * and its Type filter. Used to collapse to a Reefer/Dry binary, silently
  * counting ISO Tank/Porta Cabin units as "Dry" -- the same miscount Yard
  * Board's own stat cards had before SPEC.md §8 item 9 resolved the real
- * Type list; fixed here the same way. */
+ * Type list; fixed here the same way. Returns null for a typeCode matching
+ * none of the four, same as Yard Board's own `counts` calculation (a
+ * container then just never matches any specific Type chip, not silently
+ * guessed into the wrong one) -- the two sibling screens previously
+ * disagreed on this, Yard Board left it uncounted while this one
+ * defaulted to "Dry". */
 type ProductFilter = 'all' | string;
-const productOf = (typeCode: string): string => TYPE_CODES.find((t) => typeCode.startsWith(t)) ?? 'Dry';
+const productOf = (typeCode: string): string | null => TYPE_CODES.find((t) => typeCode.startsWith(t)) ?? null;
 
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
