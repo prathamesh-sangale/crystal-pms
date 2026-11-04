@@ -54,12 +54,38 @@ export async function buildApp(): Promise<FastifyInstance> {
   // access-management changes) relies on a client-side-only confirm dialog
   // -- with no frame-ancestors/X-Frame-Options at all, a malicious page
   // could iframe the app over an already-signed-in session and trick a
-  // click through one of those confirms. CSP itself stays off: this app's
-  // screens are built almost entirely from inline `style={{...}}` props,
-  // which a default CSP's `style-src` would silently break app-wide --
-  // nowhere near worth it just to additionally duplicate what
-  // X-Frame-Options already covers on its own.
-  await app.register(helmet, { contentSecurityPolicy: false, frameguard: { action: 'deny' } });
+  // click through one of those confirms.
+  //
+  // CSP is real now, not off -- script-src is 'self' only (the one inline
+  // script index.html used to carry was pulled out to its own file,
+  // apps/web/public/theme-init.js, specifically so no inline-script
+  // allowance is needed anywhere), which is what actually matters for the
+  // session JWT sitting in localStorage: that token can only be read by
+  // script that runs on this page, so blocking any *injected* script from
+  // running at all is the real mitigation -- not the token's storage
+  // location itself. style-src keeps 'unsafe-inline': this app's screens
+  // are built almost entirely from inline `style={{...}}` props, which a
+  // strict style-src would break app-wide, and a style-only injection
+  // can't read localStorage the way a script injection can -- the
+  // meaningfully dangerous vector is closed, this one isn't worth the
+  // breakage to also close.
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        connectSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    frameguard: { action: 'deny' },
+  });
   await app.register(cors, {
     origin: env.WEB_ORIGIN.split(',').map((s) => s.trim()),
     credentials: true,

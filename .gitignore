@@ -42,3 +42,10 @@ Thumbs.db
 
 # client-facing deliverable, not project source
 /Crystal-PMS-Change-Requests.pdf
+
+# prior-engagement snapshots -- historical reference only, not project
+# source; kept locally, no longer tracked (repo hygiene, ~440KB combined)
+/ReeferReady-PMS-Codebase-Report.html
+/ReeferReady-PMS-Codebase-Report.pdf
+/ReeferReady-PMS-System-Flow.pdf
+/ReeferReady-PMS-v2-Plan.pdf

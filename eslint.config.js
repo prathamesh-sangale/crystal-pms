@@ -13,6 +13,9 @@ export default tseslint.config(
       '**/test-results/**',
       'apps/web/src/generated/**',
       'source/**',
+      // Static assets served as-is (Vite copies apps/web/public/* verbatim,
+      // no build step) -- not processed source, same reasoning as source/**.
+      'apps/web/public/**',
     ],
   },
 

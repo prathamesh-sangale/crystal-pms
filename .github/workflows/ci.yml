@@ -1,0 +1,28 @@
+name: CI
+
+# Deliberately typecheck/lint only, not the full test suite -- apps/api's
+# tests run against the real, live Supabase project (by design, see
+# DEVELOPMENT-STATUS.md), which would mean putting that project's
+# credentials into GitHub's own secret store. Given this workflow exists
+# specifically because a security review flagged credential exposure,
+# adding a new credential surface in the same breath would cut against the
+# point. Wiring the live-DB suite into CI is a deliberate, separate choice
+# for later, not an oversight here.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.11'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run lint:css
