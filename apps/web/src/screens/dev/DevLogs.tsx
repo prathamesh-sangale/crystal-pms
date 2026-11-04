@@ -245,8 +245,11 @@ export function DevLogs(): React.ReactElement {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <Field label="From">{() => <DatePicker value={from} onChange={setFrom} max={to || undefined} />}</Field>
-            <Field label="To">{() => <DatePicker value={to} onChange={setTo} min={from || undefined} />}</Field>
+            {/* A report range can't run into the future either way -- `to ||
+                istToday()` keeps From's ceiling at today even before To has
+                been picked, rather than leaving it unbounded. */}
+            <Field label="From">{() => <DatePicker value={from} onChange={setFrom} max={to || istToday()} />}</Field>
+            <Field label="To">{() => <DatePicker value={to} onChange={setTo} min={from || undefined} max={istToday()} />}</Field>
             <SwitchField checked={failedOnly} onCheckedChange={setFailedOnly} label="Failed only" />
             {hasFilters && (
               <Button

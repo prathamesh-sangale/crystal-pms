@@ -99,8 +99,11 @@ export function YardReport(): React.ReactElement {
           </Chip>
           {range === 'custom' && (
             <>
-              <Field label="From">{() => <DatePicker value={customFrom} onChange={setCustomFrom} max={customTo || undefined} />}</Field>
-              <Field label="To">{() => <DatePicker value={customTo} onChange={setCustomTo} min={customFrom || undefined} />}</Field>
+              {/* A report range can't run into the future either way -- `customTo ||
+                  istToday()` keeps From's ceiling at today even before To has
+                  been picked, rather than leaving it unbounded. */}
+              <Field label="From">{() => <DatePicker value={customFrom} onChange={setCustomFrom} max={customTo || istToday()} />}</Field>
+              <Field label="To">{() => <DatePicker value={customTo} onChange={setCustomTo} min={customFrom || undefined} max={istToday()} />}</Field>
             </>
           )}
         </div>
