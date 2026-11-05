@@ -533,24 +533,39 @@ export function LiveBoard(): React.ReactElement {
   // other.
   const allOpenRows = SECTION_KINDS.flatMap((kind) => tasksBySection(activeContainers, kind)).filter(openOnly);
 
+  // Chip counts are containers, not open tasks — a container with ten open
+  // tasks across Painting/PTI/Cleaning used to inflate every chip it touched
+  // by ten, which read as "far more work than is really sitting here." The
+  // table below stays task-level (it has to: each task gets its own Start
+  // button and its own worker, since a Painter and a Technician can both be
+  // on the same container at once) — opening any one of its rows already
+  // shows every task assigned to that container via the detail drawer
+  // (`onRowOpen` -> `handleOpenContainer`), so nothing about "see everything
+  // assigned to this container" needed to change here.
+  const distinctContainerCount = (rows: LiveTask[]): number => new Set(rows.map((r) => r.containerId)).size;
+
   // Product is the primary split — each count is the total for that
   // product across the whole yard, independent of whichever stage
   // sub-filter happens to be selected below it.
   const productCounts: Array<{ value: ProductFilter; label: string; count: number }> = [
-    { value: 'all', label: 'All', count: allOpenRows.length },
-    ...TYPE_CODES.map((type) => ({ value: type, label: type, count: allOpenRows.filter((r) => containerProduct[r.containerId] === type).length })),
+    { value: 'all', label: 'All', count: distinctContainerCount(allOpenRows) },
+    ...TYPE_CODES.map((type) => ({
+      value: type,
+      label: type,
+      count: distinctContainerCount(allOpenRows.filter((r) => containerProduct[r.containerId] === type)),
+    })),
   ];
   const rowsForProduct = activeProduct === 'all' ? allOpenRows : allOpenRows.filter((r) => containerProduct[r.containerId] === activeProduct);
 
   // Stage is the sub-filter, scoped under whichever product is active —
-  // "Painting (12)" here means twelve *within the selected product*, not
-  // across the whole yard.
+  // "Painting (5)" here means five containers *within the selected
+  // product*, not across the whole yard.
   const stageCounts: Array<{ kind: StageFilter; label: string; count: number }> = [
-    { kind: 'all', label: 'All', count: rowsForProduct.length },
+    { kind: 'all', label: 'All', count: distinctContainerCount(rowsForProduct) },
     ...SECTION_KINDS.map((kind) => ({
       kind: kind as StageFilter,
       label: SECTION_LABELS[kind],
-      count: rowsForProduct.filter((r) => r.section === kind).length,
+      count: distinctContainerCount(rowsForProduct.filter((r) => r.section === kind)),
     })),
   ];
 
