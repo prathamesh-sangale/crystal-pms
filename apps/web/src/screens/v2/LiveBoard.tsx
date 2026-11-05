@@ -32,7 +32,7 @@ import { MiniStageLegend, MiniStageStrip } from '../../components/v2/MiniStageSt
 import { useStartGuard } from '../../components/v2/useStartGuard';
 import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
-import { Person, StatCard, StatusPill } from '../../components/crystal/Data';
+import { Person, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
 import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
@@ -62,6 +62,22 @@ const productOf = (typeCode: string): string | null => TYPE_CODES.find((t) => ty
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
 const crewColumnHelper = createColumnHelper<CrewLoad>();
+
+/** One row per type IMS has at JNPT, plus a leading "All" row — a real
+ * grid (Category / Total / Ready / Not ready / In progress), not a row of
+ * cards, by direct request after a hand-drawn sketch of exactly this layout.
+ * `notReady` is always `total - ready`, not a count kept separately: it
+ * folds together "never gated into PMS" and "gated in but not yet ready,"
+ * same reasoning item 153's `inStockCount` already used before it was
+ * dropped as its own card. */
+interface JnptCategoryRow {
+  category: string;
+  total: number;
+  ready: number;
+  notReady: number;
+  inProgress: number;
+}
+const jnptColumnHelper = createColumnHelper<JnptCategoryRow>();
 
 /** Same four icons Yard Board's own breakdown row uses for TYPE_CODES —
  * duplicated here rather than exported from YardBoard.tsx, same reasoning as
@@ -509,6 +525,51 @@ export function LiveBoard(): React.ReactElement {
     return [...byType.entries()];
   }, [jnptTypeBreakdown, jnptTypeOf, activeContainers]);
 
+  // The grid's actual rows -- a leading "All" row (the same four totals the
+  // three old summary cards showed) followed by one row per type, each read
+  // straight off jnptCategoryBreakdown so there's only one place that math
+  // happens.
+  const jnptGridRows = useMemo((): JnptCategoryRow[] => {
+    const allRow: JnptCategoryRow = {
+      category: 'All',
+      total: totalAtJnpt,
+      ready: readyCount,
+      notReady: totalAtJnpt - readyCount,
+      inProgress: inProgressCount,
+    };
+    const typeRows: JnptCategoryRow[] = jnptCategoryBreakdown.map(([type, { total, ready, progress }]) => ({
+      category: type,
+      total,
+      ready,
+      notReady: total - ready,
+      inProgress: progress,
+    }));
+    return [allRow, ...typeRows];
+  }, [jnptCategoryBreakdown, totalAtJnpt, readyCount, inProgressCount]);
+
+  const jnptColumns = useMemo(
+    () => [
+      jnptColumnHelper.accessor('category', {
+        header: 'Category',
+        meta: { label: 'Category', lead: true },
+        cell: (ctx) => {
+          const category = ctx.getValue();
+          return (
+            <span className="cluster" style={{ gap: 'var(--s-1)' }}>
+              <Icon name={category === 'All' ? 'warehouse' : (JNPT_TYPE_ICON[category] ?? 'package')} size="sm" />
+              <b>{category}</b>
+            </span>
+          );
+        },
+      }),
+      jnptColumnHelper.accessor('total', { header: 'Total', meta: { label: 'Total', num: true } }),
+      jnptColumnHelper.accessor('ready', { header: 'Ready', meta: { label: 'Ready', num: true } }),
+      jnptColumnHelper.accessor('notReady', { header: 'Not ready', meta: { label: 'Not ready', num: true } }),
+      jnptColumnHelper.accessor('inProgress', { header: 'In progress', meta: { label: 'In progress', num: true } }),
+    ],
+    []
+  );
+
   const [view, setView] = useState<View>('stage');
   // Shared across both views, same toggle shape as Yard Board/Worker
   // Roster — switching "By stage"/"By crew" already swaps the whole table,
@@ -871,33 +932,23 @@ export function LiveBoard(): React.ReactElement {
     // 24px gaps were section-sized spacing for what's really one control
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
-      {can('container:create') && (
-        // One row of peers -- every card here is a plain StatCard now, each
-        // headlined by the real count *at JNPT* for that type (not "how many
-        // of this type have been added to the yard"), with how much of that
-        // has actually entered the PMS workflow (ready/in progress) as the
-        // smaller foot line underneath.
-        <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-          <StatCard
-            label="Present at JNPT"
-            value={imsLoading ? '—' : totalAtJnpt}
-            foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
-            icon="warehouse"
+      {can('container:create') &&
+        (imsLoading ? (
+          <EmptyState icon="warehouse" title="Loading JNPT numbers…">
+            One moment.
+          </EmptyState>
+        ) : (
+          <DataTable
+            data={jnptGridRows}
+            columns={jnptColumns}
+            getRowId={(r) => r.category}
+            onRowOpen={(r) => openImsQuickAdd(r.category === 'All' ? null : r.category)}
+            rowLabel={(r) => r.category}
+            caption="Containers at JNPT, by category"
+            empty={<EmptyState icon="warehouse" title="Nothing at JNPT right now" />}
+            pageSize={10}
           />
-          <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
-          <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
-          {jnptCategoryBreakdown.map(([type, { total, ready, progress }]) => (
-            <StatCard
-              key={type}
-              label={type}
-              value={total}
-              foot={`${ready} ready · ${progress} in progress`}
-              icon={JNPT_TYPE_ICON[type] ?? 'package'}
-              onClick={() => openImsQuickAdd(type)}
-            />
-          ))}
-        </div>
-      )}
+        ))}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
         <Segmented
           value={view}
