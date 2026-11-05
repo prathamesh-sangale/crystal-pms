@@ -9,8 +9,26 @@ import { useToast } from '../crystal/Feedback';
 import { Button } from '../crystal/Button';
 import { CategoryBadge } from '../crystal/Data';
 import { EmptyState } from '../crystal/Feedback';
-import { InputWithIcon } from '../crystal/Form';
+import { Chip, InputWithIcon } from '../crystal/Form';
+import type { IconName } from '../crystal/Icon';
 import { Modal } from '../crystal/Overlay';
+
+// Same small, screen-local pieces ImsStock.tsx keeps for its own Type/Size
+// filter row -- not worth sharing a four-line pure function and a three-entry
+// lookup table across two files for this.
+const TYPE_ICON: Record<string, IconName> = {
+  Dry: 'package',
+  Reefer: 'snow',
+  'ISO Tank': 'drop',
+};
+
+/** Toggles `value` into/out of a Set, immutably. */
+function toggled(set: Set<string>, value: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
 
 /**
  * A quick, search-first way to gate in a container IMS already knows about,
@@ -32,6 +50,8 @@ export function ImsQuickAddDialog({
   const [items, setItems] = useState<ImsMatch[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [selectedTypes, setSelectedTypes] = useState<Set<string>>(new Set());
+  const [selectedSizes, setSelectedSizes] = useState<Set<string>>(new Set());
   const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
@@ -59,11 +79,34 @@ export function ImsQuickAddDialog({
 
   const activeIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
 
+  // Options are derived from what IMS actually returned, not a hardcoded
+  // list -- same reasoning as ImsStock.tsx's own typeOptions/sizeOptions:
+  // IMS's raw Type/Size spellings only ever map onto a subset of this app's
+  // own vocabulary, so a chip IMS can never produce would just be dead.
+  const typeOptions = useMemo(
+    () => [...new Set(items.map((i) => i.suggestedTypeCode).filter((t): t is string => t !== null))].sort(),
+    [items]
+  );
+  const sizeOptions = useMemo(
+    () => [...new Set(items.map((i) => i.suggestedSize).filter((s): s is string => s !== null))].sort(),
+    [items]
+  );
+  const anyFilter = query.trim() !== '' || selectedTypes.size > 0 || selectedSizes.size > 0;
+  const clearFilters = (): void => {
+    setQuery('');
+    setSelectedTypes(new Set());
+    setSelectedSizes(new Set());
+  };
+
   const rows = useMemo(() => {
     const needle = query.trim().toUpperCase();
-    if (!needle) return items;
-    return items.filter((i) => i.containerId.toUpperCase().includes(needle));
-  }, [items, query]);
+    return items.filter((i) => {
+      if (needle && !i.containerId.toUpperCase().includes(needle)) return false;
+      if (selectedTypes.size > 0 && (!i.suggestedTypeCode || !selectedTypes.has(i.suggestedTypeCode))) return false;
+      if (selectedSizes.size > 0 && (!i.suggestedSize || !selectedSizes.has(i.suggestedSize))) return false;
+      return true;
+    });
+  }, [items, query, selectedTypes, selectedSizes]);
 
   const handleGateIn = useCallback(
     async (container: MockContainer): Promise<void> => {
@@ -100,13 +143,51 @@ export function ImsQuickAddDialog({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {(typeOptions.length > 0 || sizeOptions.length > 0) && (
+          <div className="cluster" style={{ gap: 'var(--s-3)', flexWrap: 'wrap', alignItems: 'center' }}>
+            {typeOptions.length > 0 && (
+              <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+                <span className="subtle" style={{ fontSize: '12px' }}>
+                  Type
+                </span>
+                {typeOptions.map((type) => (
+                  <Chip
+                    key={type}
+                    pressed={selectedTypes.has(type)}
+                    onClick={() => setSelectedTypes(toggled(selectedTypes, type))}
+                    icon={TYPE_ICON[type]}
+                  >
+                    {type}
+                  </Chip>
+                ))}
+              </span>
+            )}
+            {sizeOptions.length > 0 && (
+              <span className="cluster" style={{ gap: 'var(--s-2)' }}>
+                <span className="subtle" style={{ fontSize: '12px' }}>
+                  Size
+                </span>
+                {sizeOptions.map((size) => (
+                  <Chip key={size} pressed={selectedSizes.has(size)} onClick={() => setSelectedSizes(toggled(selectedSizes, size))}>
+                    {size}
+                  </Chip>
+                ))}
+              </span>
+            )}
+            {anyFilter && (
+              <Button variant="ghost" size="sm" icon="x" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            )}
+          </div>
+        )}
         {loading ? (
           <EmptyState icon="package" title="Loading IMS stock…">
             One moment.
           </EmptyState>
         ) : rows.length === 0 ? (
           <EmptyState icon="package" title="Nothing matches">
-            {items.length === 0 ? 'IMS has no containers in stock at Crystal Yard right now.' : 'Try a different search.'}
+            {items.length === 0 ? 'IMS has no containers in stock at Crystal Yard right now.' : 'Try a different search or filter.'}
           </EmptyState>
         ) : (
           <div className="stack stack-tight" style={{ maxHeight: '420px', overflowY: 'auto' }}>
