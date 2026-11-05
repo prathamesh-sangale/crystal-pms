@@ -76,35 +76,6 @@ const JNPT_TYPE_ICON: Record<string, IconName> = {
   'Porta Cabin': 'home',
 };
 
-/** Same compact card Yard Board's own Type breakdown row uses (ready/in
- * progress on one line, not a full two-block stat card) — kept local here
- * too rather than shared, same convention as `JNPT_TYPE_ICON` above. */
-function JnptTypeBreakdownCard({
-  icon,
-  label,
-  ready,
-  progress,
-}: {
-  icon: IconName;
-  label: string;
-  ready: number;
-  progress: number;
-}): React.ReactElement {
-  return (
-    <div className="card">
-      <span className="klabel">
-        <Icon name={icon} size="sm" />
-        {label}
-      </span>
-      <div style={{ marginTop: '9px', fontSize: '12.5px' }}>
-        <span style={{ fontWeight: 700, color: 'var(--success)' }}>{ready}</span>
-        <span className="subtle"> ready · </span>
-        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{progress}</span>
-        <span className="subtle"> in progress</span>
-      </div>
-    </div>
-  );
-}
 
 /** Groups `rows` by section (each group pre-sorted by `compare`), then
  * merges them one-row-per-section-per-round instead of concatenating whole
@@ -509,13 +480,17 @@ export function LiveBoard(): React.ReactElement {
     () => activeContainers.filter((c) => c.readyAt === null && !isReadyToMove(c) && c.survey !== null).length,
     [activeContainers]
   );
-  // Category-wise ready/in-progress, same shape as Yard Board's own
-  // TypeBreakdownCard row -- seeded from jnptTypeBreakdown's own types (not
-  // just TYPE_CODES) so a type IMS has real units under but this app has no
-  // container-type entry for yet (Machine, CCCS) still gets its own card
-  // instead of silently vanishing from the breakdown.
+  // Category-wise breakdown of the JNPT total itself, not of whatever's
+  // already been added to the yard -- `total` is the real count at JNPT per
+  // IMS (same number `jnptTypeBreakdown`'s own foot text uses), so a type
+  // with real quantity at JNPT but nothing gated in yet still shows its real
+  // count instead of reading as "0 · 0", empty. Ready/in-progress stay as
+  // the secondary detail: how much of that JNPT total has actually entered
+  // the PMS workflow so far.
   const jnptCategoryBreakdown = useMemo(() => {
-    const byType = new Map<string, { ready: number; progress: number }>(jnptTypeBreakdown.map(([type]) => [type, { ready: 0, progress: 0 }]));
+    const byType = new Map<string, { total: number; ready: number; progress: number }>(
+      jnptTypeBreakdown.map(([type, count]) => [type, { total: count, ready: 0, progress: 0 }])
+    );
     for (const c of activeContainers) {
       const type = jnptTypeOf.get(c.id) ?? 'Unspecified';
       const bucket = byType.get(type);
@@ -889,13 +864,11 @@ export function LiveBoard(): React.ReactElement {
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
       {can('container:create') && (
-        // One row of peers, StatCard and JnptTypeBreakdownCard alike --
-        // JnptTypeBreakdownCard was built to match StatCard's own padding
-        // for exactly this (same reasoning as Yard Board's TypeBreakdownCard,
-        // which it's copied from), so mixing the two here doesn't read as
-        // jagged. Two separate rows (stats, then categories) ate a full
-        // extra row of height for no real gain once wrapping already
-        // handles a narrow screen on its own.
+        // One row of peers -- every card here is a plain StatCard now, each
+        // headlined by the real count *at JNPT* for that type (not "how many
+        // of this type have been added to the yard"), with how much of that
+        // has actually entered the PMS workflow (ready/in progress) as the
+        // smaller foot line underneath.
         <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
           <StatCard
             label="Present at JNPT"
@@ -905,8 +878,8 @@ export function LiveBoard(): React.ReactElement {
           />
           <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
           <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
-          {jnptCategoryBreakdown.map(([type, { ready, progress }]) => (
-            <JnptTypeBreakdownCard key={type} icon={JNPT_TYPE_ICON[type] ?? 'package'} label={type} ready={ready} progress={progress} />
+          {jnptCategoryBreakdown.map(([type, { total, ready, progress }]) => (
+            <StatCard key={type} label={type} value={total} foot={`${ready} ready · ${progress} in progress`} icon={JNPT_TYPE_ICON[type] ?? 'package'} />
           ))}
         </div>
       )}
