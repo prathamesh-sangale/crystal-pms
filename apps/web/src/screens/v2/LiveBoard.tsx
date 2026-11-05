@@ -1,5 +1,7 @@
 import { createColumnHelper } from '@tanstack/react-table';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { api, type ImsMatch } from '../../lib/api';
+import { useAuth } from '../../lib/auth';
 import {
   formatElapsed,
   isScheduledFor,
@@ -24,11 +26,12 @@ import { useLiveTick } from '../../lib/useLiveTick';
 import { useV2Data } from '../../lib/v2Store';
 import { AssignWorkDialog } from '../../components/v2/AssignWorkDialog';
 import { ContainerDetailDrawer } from '../../components/v2/ContainerDetailDrawer';
+import { ImsQuickAddDialog } from '../../components/v2/ImsQuickAddDialog';
 import { MiniStageLegend, MiniStageStrip } from '../../components/v2/MiniStageStrip';
 import { useStartGuard } from '../../components/v2/useStartGuard';
 import { WorkerDetailDrawer } from '../../components/v2/WorkerDetailDrawer';
 import { Button, Segmented } from '../../components/crystal/Button';
-import { Person, StatusPill } from '../../components/crystal/Data';
+import { Person, StatCard, StatusPill } from '../../components/crystal/Data';
 import { DataTable } from '../../components/crystal/DataTable';
 import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
@@ -389,6 +392,37 @@ export function LiveBoard(): React.ReactElement {
   // Live Board's own table has its own Start button, separate from Container
   // Detail's (which guards itself) — same two checks either way.
   const { attemptStart, confirmDialog: startConfirmDialog } = useStartGuard(containers, workers, startTask);
+  const { can } = useAuth();
+
+  // What's actually sitting at JNPT per IMS right now, regardless of
+  // whether anyone has ever Gate-In'd it here — by direct request, Live
+  // Board should show the real yard, not just whatever's already been typed
+  // into PMS. Fetched once on load, same as the IMS Quick Add dialog itself
+  // (not re-fetched per filter change — this is a small, slow-moving list).
+  const [imsItems, setImsItems] = useState<ImsMatch[]>([]);
+  const [imsLoading, setImsLoading] = useState(true);
+  const [imsQuickAddOpen, setImsQuickAddOpen] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .v2ImsStock()
+      .then(({ items }) => {
+        if (!cancelled) setImsItems(items);
+      })
+      .catch((err: unknown) => console.error('Failed to load IMS stock:', err))
+      .finally(() => {
+        if (!cancelled) setImsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const registeredIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
+  // Already in PMS doesn't need re-adding -- this is specifically "present
+  // at JNPT per IMS, but nobody's gated it in here yet," the gap Gate-In
+  // alone can't show.
+  const notYetInYard = useMemo(() => imsItems.filter((i) => !registeredIds.has(i.containerId)), [imsItems, registeredIds]);
+
   const [view, setView] = useState<View>('stage');
   // Shared across both views, same toggle shape as Yard Board/Worker
   // Roster — switching "By stage"/"By crew" already swaps the whole table,
@@ -736,6 +770,15 @@ export function LiveBoard(): React.ReactElement {
     // 24px gaps were section-sized spacing for what's really one control
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
+      {can('container:create') && (
+        <StatCard
+          label="Available at JNPT, not yet in yard"
+          value={imsLoading ? '—' : notYetInYard.length}
+          foot={imsLoading ? undefined : `${imsItems.length} total at JNPT per IMS — tap to add any of them`}
+          icon="warehouse"
+          onClick={() => setImsQuickAddOpen(true)}
+        />
+      )}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
         <Segmented
           value={view}
@@ -917,6 +960,7 @@ export function LiveBoard(): React.ReactElement {
         initialDate={rosterDate}
       />
       {startConfirmDialog}
+      <ImsQuickAddDialog open={imsQuickAddOpen} onOpenChange={setImsQuickAddOpen} />
     </div>
   );
 }

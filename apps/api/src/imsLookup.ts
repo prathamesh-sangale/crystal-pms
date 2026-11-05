@@ -13,8 +13,22 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
  * not the whole JNPT port (other depots, e.g. "BCT Depot", also sit there)
  * and not IMS's other locations (Kolkata, Chhattisgarh, etc). A match at a
  * different depot is never offered for pre-fill, but it isn't thrown away
- * either — see `elsewhere` on `ImsLookupResult`. */
-const OUR_DEPOT = 'CRYSTAL YARD';
+ * either — see `elsewhere` on `ImsLookupResult`.
+ *
+ * "Our yard" in the Depot column is really eight different spellings from
+ * manual data entry, not eight different real depots — confirmed live
+ * (2026-11-05): "Crystal Yard", "Crystal Yard New", "Crystal yard New",
+ * "CRYSTAL YARD", "Crystal Yard - Office", "Crystal Yard New - Offce",
+ * "Crystal yard", "Crystal Yard new". An exact-match check used to treat
+ * every variant except the first as "a different depot," silently dropping
+ * ~45% of our own real inventory (65 of 143 units, Reefer alone) just
+ * because of how someone typed it that day. A prefix check is safe here —
+ * same approach `mapType` already uses for "Dry"/"Dry Dual Door" — because
+ * no other operator's depot name in the sheet starts with "Crystal"
+ * (checked directly against the live sheet, not assumed). */
+function isOurDepot(depot: string): boolean {
+  return depot.trim().toUpperCase().startsWith('CRYSTAL YARD');
+}
 
 let client: sheets_v4.Sheets | null = null;
 
@@ -160,16 +174,22 @@ export async function findContainerMatches(containerId: string): Promise<ImsLook
   const rows = await loadRows();
   const hits = rows.filter((r) => r.normalizedId === target).map(({ normalizedId: _normalizedId, ...match }) => match);
   return {
-    matches: hits.filter((m) => m.depot.trim().toUpperCase() === OUR_DEPOT),
-    elsewhere: hits.filter((m) => m.depot.trim().toUpperCase() !== OUR_DEPOT),
+    matches: hits.filter((m) => isOurDepot(m.depot)),
+    elsewhere: hits.filter((m) => !isOurDepot(m.depot)),
   };
 }
 
-const AVAILABLE_STATUS = 'STOCK';
+/** Same reasoning as `isOurDepot`: "Stock" and "STOCK - CRYSTAL USE" both
+ * mean the unit is physically here and not out on lease — a prefix check
+ * catches both instead of only the plain "Stock" spelling silently
+ * excluding the rest. */
+function isInStockStatus(status: string): boolean {
+  return status.trim().toUpperCase().startsWith('STOCK');
+}
 
-/** Everything at our own yard currently available (Status = "Stock" in
- * IMS's own sheet, confirmed directly as the definition of "available") —
- * the browse-all-inventory counterpart to findContainerMatches' single-id
+/** Everything at our own yard currently available (Status starting "Stock"
+ * in IMS's own sheet, confirmed directly as the definition of "available")
+ * — the browse-all-inventory counterpart to findContainerMatches' single-id
  * lookup. `types`/`sizes` filter against the already-mapped suggestedType/
  * suggestedSize (this app's own vocabulary), not IMS's raw inconsistent
  * strings, since that's what the admin picks from in the UI. */
@@ -178,8 +198,8 @@ export async function findAvailableStock(types?: string[], sizes?: string[]): Pr
   const typeSet = types && types.length > 0 ? new Set(types) : null;
   const sizeSet = sizes && sizes.length > 0 ? new Set(sizes) : null;
   return rows
-    .filter((r) => r.depot.trim().toUpperCase() === OUR_DEPOT)
-    .filter((r) => r.status.trim().toUpperCase() === AVAILABLE_STATUS)
+    .filter((r) => isOurDepot(r.depot))
+    .filter((r) => isInStockStatus(r.status))
     .filter((r) => !typeSet || (r.suggestedTypeCode !== null && typeSet.has(r.suggestedTypeCode)))
     .filter((r) => !sizeSet || (r.suggestedSize !== null && sizeSet.has(r.suggestedSize)))
     .map(({ normalizedId: _normalizedId, ...match }) => match);
