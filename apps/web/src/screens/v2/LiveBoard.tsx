@@ -889,30 +889,25 @@ export function LiveBoard(): React.ReactElement {
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
       {can('container:create') && (
-        <div className="stack stack-tight">
-          <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
-            <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-              <StatCard
-                label="Present at JNPT"
-                value={imsLoading ? '—' : totalAtJnpt}
-                foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
-                icon="warehouse"
-              />
-              <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
-              <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
-            </div>
-            <Button variant="secondary" size="sm" icon="search" onClick={() => setImsQuickAddOpen(true)}>
-              Add from IMS
-            </Button>
-          </div>
-          {/* Category-wise distribution -- same ready/in-progress-per-type
-             shape as Yard Board's own breakdown row, covering every real
-             type IMS has at JNPT, not just this app's own four. */}
-          <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-            {jnptCategoryBreakdown.map(([type, { ready, progress }]) => (
-              <JnptTypeBreakdownCard key={type} icon={JNPT_TYPE_ICON[type] ?? 'package'} label={type} ready={ready} progress={progress} />
-            ))}
-          </div>
+        // One row of peers, StatCard and JnptTypeBreakdownCard alike --
+        // JnptTypeBreakdownCard was built to match StatCard's own padding
+        // for exactly this (same reasoning as Yard Board's TypeBreakdownCard,
+        // which it's copied from), so mixing the two here doesn't read as
+        // jagged. Two separate rows (stats, then categories) ate a full
+        // extra row of height for no real gain once wrapping already
+        // handles a narrow screen on its own.
+        <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
+          <StatCard
+            label="Present at JNPT"
+            value={imsLoading ? '—' : totalAtJnpt}
+            foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
+            icon="warehouse"
+          />
+          <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
+          <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
+          {jnptCategoryBreakdown.map(([type, { ready, progress }]) => (
+            <JnptTypeBreakdownCard key={type} icon={JNPT_TYPE_ICON[type] ?? 'package'} label={type} ready={ready} progress={progress} />
+          ))}
         </div>
       )}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
@@ -925,15 +920,22 @@ export function LiveBoard(): React.ReactElement {
             { value: 'crew', label: 'By crew' },
           ]}
         />
-        {view === 'stage' && (
-          <InputWithIcon
-            icon="search"
-            placeholder="Search container number…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ maxWidth: '280px' }}
-          />
-        )}
+        <div className="cluster" style={{ gap: 'var(--s-2)' }}>
+          {view === 'stage' && (
+            <InputWithIcon
+              icon="search"
+              placeholder="Search container number…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ maxWidth: '280px' }}
+            />
+          )}
+          {can('container:create') && (
+            <Button variant="secondary" size="sm" icon="search" onClick={() => setImsQuickAddOpen(true)}>
+              Add from IMS
+            </Button>
+          )}
+        </div>
       </div>
 
       {view === 'stage' && (
