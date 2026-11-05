@@ -528,20 +528,26 @@ export function LiveBoard(): React.ReactElement {
   // The grid's actual rows -- a leading "All" row (the same four totals the
   // three old summary cards showed) followed by one row per type, each read
   // straight off jnptCategoryBreakdown so there's only one place that math
-  // happens.
+  // happens. `notReady` is deliberately `total - ready - inProgress`, not
+  // `total - ready` -- the latter still counted an in-progress container
+  // under "not ready" too, the same container showing up in two columns at
+  // once. `notReady` now means specifically "never started" (still just
+  // sitting in IMS, or registered but not yet surveyed), mutually exclusive
+  // with `inProgress`. `Math.max(0, ...)` is defensive, not expected to ever
+  // matter: ready + inProgress can't exceed total by construction.
   const jnptGridRows = useMemo((): JnptCategoryRow[] => {
     const allRow: JnptCategoryRow = {
       category: 'All',
       total: totalAtJnpt,
       ready: readyCount,
-      notReady: totalAtJnpt - readyCount,
+      notReady: Math.max(0, totalAtJnpt - readyCount - inProgressCount),
       inProgress: inProgressCount,
     };
     const typeRows: JnptCategoryRow[] = jnptCategoryBreakdown.map(([type, { total, ready, progress }]) => ({
       category: type,
       total,
       ready,
-      notReady: total - ready,
+      notReady: Math.max(0, total - ready - progress),
       inProgress: progress,
     }));
     return [allRow, ...typeRows];
