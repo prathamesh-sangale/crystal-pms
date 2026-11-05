@@ -429,6 +429,30 @@ export function LiveBoard(): React.ReactElement {
   // counted when a container is both.
   const jnptIds = useMemo(() => new Set([...imsItems.map((i) => i.containerId), ...registeredIds]), [imsItems, registeredIds]);
   const totalAtJnpt = jnptIds.size;
+  // One type per id across the same union `jnptIds` is built from -- IMS's
+  // own mapped type when the id came from there (even once registered, an
+  // IMS-known container's type is still read from IMS first), the app's own
+  // typeCode for anything gated in without ever going through IMS. Never a
+  // hardcoded Dry/Reefer/ISO Tank/Porta Cabin-only list: IMS also has real
+  // units under types this app has no container-type entry for yet
+  // ("Machine", "CCCS" — see item 145), and those shouldn't just vanish from
+  // a breakdown that's supposed to add up to the headline number.
+  const jnptTypeOf = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const i of imsItems) map.set(i.containerId, i.suggestedTypeCode ?? (i.imsType || 'Unspecified'));
+    for (const c of activeContainers) {
+      if (!map.has(c.id)) map.set(c.id, productOf(c.typeCode) ?? c.typeCode);
+    }
+    return map;
+  }, [imsItems, activeContainers]);
+  const jnptTypeBreakdown = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const id of jnptIds) {
+      const t = jnptTypeOf.get(id) ?? 'Unspecified';
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  }, [jnptIds, jnptTypeOf]);
   // Container-level counts, not task-level -- "52" on the Product row below
   // counts open *work items* (several per container), which reads as a much
   // bigger number than "how many containers" and was confusing read next to
@@ -811,7 +835,12 @@ export function LiveBoard(): React.ReactElement {
     <div className="stack stack-tight">
       {can('container:create') && (
         <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-          <StatCard label="Present at JNPT" value={imsLoading ? '—' : totalAtJnpt} icon="warehouse" />
+          <StatCard
+            label="Present at JNPT"
+            value={imsLoading ? '—' : totalAtJnpt}
+            foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
+            icon="warehouse"
+          />
           <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
           <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
           <StatCard
