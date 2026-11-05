@@ -4,6 +4,7 @@ import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import {
   formatElapsed,
+  isReadyToMove,
   isScheduledFor,
   SECTION_LABELS,
   taskElapsedSec,
@@ -417,11 +418,34 @@ export function LiveBoard(): React.ReactElement {
       cancelled = true;
     };
   }, []);
-  const registeredIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
-  // Already in PMS doesn't need re-adding -- this is specifically "present
-  // at JNPT per IMS, but nobody's gated it in here yet," the gap Gate-In
-  // alone can't show.
-  const notYetInYard = useMemo(() => imsItems.filter((i) => !registeredIds.has(i.containerId)), [imsItems, registeredIds]);
+  // `activeContainers`, not `containers` — a departed container has left the
+  // yard, so it shouldn't count as "present" and shouldn't block an IMS row
+  // for the same id from showing as addable again.
+  const registeredIds = useMemo(() => new Set(activeContainers.map((c) => c.id)), [activeContainers]);
+  // The real "present at JNPT" headline: every id IMS knows about at our
+  // yard, unioned with every id actually registered here (covers a
+  // container gated in directly, never through IMS, which still physically
+  // sits at the yard even though this fetch won't have it) -- never double
+  // counted when a container is both.
+  const jnptIds = useMemo(() => new Set([...imsItems.map((i) => i.containerId), ...registeredIds]), [imsItems, registeredIds]);
+  const totalAtJnpt = jnptIds.size;
+  // Container-level counts, not task-level -- "52" on the Product row below
+  // counts open *work items* (several per container), which reads as a much
+  // bigger number than "how many containers" and was confusing read next to
+  // the JNPT total. `isReadyToMove` is the same ready-or-not computation
+  // `overallStatus` already uses elsewhere, not a new definition of ready.
+  const readyCount = useMemo(
+    () => activeContainers.filter((c) => c.readyAt !== null || isReadyToMove(c)).length,
+    [activeContainers]
+  );
+  const inProgressCount = useMemo(
+    () => activeContainers.filter((c) => c.readyAt === null && !isReadyToMove(c) && c.survey !== null).length,
+    [activeContainers]
+  );
+  // Everything else: registered but not yet surveyed, plus every id IMS has
+  // at JNPT that's never been gated in here at all -- both read the same to
+  // whoever's looking at this board, "it's sitting there, untouched."
+  const inStockCount = Math.max(0, totalAtJnpt - readyCount - inProgressCount);
 
   const [view, setView] = useState<View>('stage');
   // Shared across both views, same toggle shape as Yard Board/Worker
@@ -771,13 +795,18 @@ export function LiveBoard(): React.ReactElement {
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
       {can('container:create') && (
-        <StatCard
-          label="Available at JNPT, not yet in yard"
-          value={imsLoading ? '—' : notYetInYard.length}
-          foot={imsLoading ? undefined : `${imsItems.length} total at JNPT per IMS — tap to add any of them`}
-          icon="warehouse"
-          onClick={() => setImsQuickAddOpen(true)}
-        />
+        <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
+          <StatCard label="Present at JNPT" value={imsLoading ? '—' : totalAtJnpt} icon="warehouse" />
+          <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
+          <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
+          <StatCard
+            label="In stock"
+            value={imsLoading ? '—' : inStockCount}
+            foot="Not yet started — tap to add from IMS"
+            icon="package"
+            onClick={() => setImsQuickAddOpen(true)}
+          />
+        </div>
       )}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
         <Segmented
