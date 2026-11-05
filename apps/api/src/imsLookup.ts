@@ -179,12 +179,23 @@ export async function findContainerMatches(containerId: string): Promise<ImsLook
   };
 }
 
-/** Same reasoning as `isOurDepot`: "Stock" and "STOCK - CRYSTAL USE" both
- * mean the unit is physically here and not out on lease — a prefix check
- * catches both instead of only the plain "Stock" spelling silently
- * excluding the rest. */
+/** Exact match on "Stock" only, case-insensitive — NOT a prefix check.
+ *
+ * This used to be `startsWith('STOCK')`, on the assumption that "STOCK -
+ * CRYSTAL USE" was just another spelling of plain "Stock," the same kind of
+ * inconsistency `isOurDepot` above genuinely has. That assumption was wrong,
+ * caught directly from a real mismatch report (2026-11-05): the yard said 85
+ * Reefer and 29 Dry; this app said 85 and 32. Reefer matched exactly — no
+ * "STOCK - X" variant exists for it. Dry was off by precisely 3, and those 3
+ * were all "STOCK - Crystal Use": units set aside for Crystal's own internal
+ * use, not available stock, confirmed against the separate, more
+ * authoritative "Master Sheet" tab in the same spreadsheet (26 "STOCK" + 3
+ * "Stock" = 29 real available Dry; the "STOCK - Crystal Use" rows are a
+ * genuinely different status, not a spelling variant, and the yard's own
+ * count correctly excludes them). Checked the whole sheet, not just Dry: no
+ * other type has a "STOCK - X" variant today, so this fix is precise. */
 function isInStockStatus(status: string): boolean {
-  return status.trim().toUpperCase().startsWith('STOCK');
+  return status.trim().toUpperCase() === 'STOCK';
 }
 
 /** Everything at our own yard currently available (Status starting "Stock"
