@@ -944,16 +944,18 @@ export function LiveBoard(): React.ReactElement {
             One moment.
           </EmptyState>
         ) : (
-          <DataTable
-            data={jnptGridRows}
-            columns={jnptColumns}
-            getRowId={(r) => r.category}
-            onRowOpen={(r) => openImsQuickAdd(r.category === 'All' ? null : r.category)}
-            rowLabel={(r) => r.category}
-            caption="Containers at JNPT, by category"
-            empty={<EmptyState icon="warehouse" title="Nothing at JNPT right now" />}
-            pageSize={10}
-          />
+          <div className="jnptgrid">
+            <DataTable
+              data={jnptGridRows}
+              columns={jnptColumns}
+              getRowId={(r) => r.category}
+              onRowOpen={(r) => openImsQuickAdd(r.category === 'All' ? null : r.category)}
+              rowLabel={(r) => r.category}
+              caption="Containers at JNPT, by category"
+              empty={<EmptyState icon="warehouse" title="Nothing at JNPT right now" />}
+              pageSize={10}
+            />
+          </div>
         ))}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
         <Segmented

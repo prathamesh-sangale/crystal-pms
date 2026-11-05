@@ -193,6 +193,40 @@ body {
   }
 }
 
+/* Live Board's JNPT grid (Category rows x Total/Ready/Not ready/In progress
+ * columns), scoped via .jnptgrid so neither rule leaks onto any other
+ * DataTable in the app.
+ *
+ * Compacted: tighter cell padding than the design system's own table
+ * default (11px/13px), nothing else about the table's structure changed.
+ *
+ * Colored by column, not by row -- DataTable already stamps every <td>
+ * with data-label={column's own meta.label} (so phone "cards" mode can show
+ * it), which doubles as exactly the hook needed here with zero changes to
+ * the component itself. Soft/shade tint tokens (*-bg), not the solid
+ * success/error/warn colors, by direct request ("use shades of the colors
+ * not the actual green red and yellow") -- a block of solid red/yellow
+ * behind small numeric text would fight the text for attention instead of
+ * just helping a reader's eye track the column. Category and Total are left
+ * untinted: Category is identity, Total is the denominator the other three
+ * divide, neither is a status. */
+.jnptgrid table.dt th,
+.jnptgrid table.dt td {
+  padding: var(--s-1) var(--s-2);
+}
+
+.jnptgrid table.dt td[data-label='Ready'] {
+  background: var(--success-bg);
+}
+
+.jnptgrid table.dt td[data-label='Not ready'] {
+  background: var(--error-bg);
+}
+
+.jnptgrid table.dt td[data-label='In progress'] {
+  background: var(--warn-bg);
+}
+
 .quadgrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
