@@ -37,7 +37,7 @@ import { DataTable } from '../../components/crystal/DataTable';
 import { DatePicker } from '../../components/crystal/DatePicker';
 import { EmptyState } from '../../components/crystal/Feedback';
 import { Chip, InputWithIcon } from '../../components/crystal/Form';
-import { Icon } from '../../components/crystal/Icon';
+import { Icon, type IconName } from '../../components/crystal/Icon';
 
 type View = 'stage' | 'crew';
 type DisplayMode = 'cards' | 'list';
@@ -62,6 +62,49 @@ const productOf = (typeCode: string): string | null => TYPE_CODES.find((t) => ty
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
 const crewColumnHelper = createColumnHelper<CrewLoad>();
+
+/** Same four icons Yard Board's own breakdown row uses for TYPE_CODES —
+ * duplicated here rather than exported from YardBoard.tsx, same reasoning as
+ * every other screen-local constant in this app (ImsStock.tsx/
+ * ImsQuickAddDialog.tsx each keep their own copy too). An id whose type
+ * isn't one of these four (IMS's "Machine"/"CCCS", for instance) falls back
+ * to a generic icon at the call site rather than being left without one. */
+const JNPT_TYPE_ICON: Record<string, IconName> = {
+  Dry: 'package',
+  Reefer: 'snow',
+  'ISO Tank': 'drop',
+  'Porta Cabin': 'home',
+};
+
+/** Same compact card Yard Board's own Type breakdown row uses (ready/in
+ * progress on one line, not a full two-block stat card) — kept local here
+ * too rather than shared, same convention as `JNPT_TYPE_ICON` above. */
+function JnptTypeBreakdownCard({
+  icon,
+  label,
+  ready,
+  progress,
+}: {
+  icon: IconName;
+  label: string;
+  ready: number;
+  progress: number;
+}): React.ReactElement {
+  return (
+    <div className="card">
+      <span className="klabel">
+        <Icon name={icon} size="sm" />
+        {label}
+      </span>
+      <div style={{ marginTop: '9px', fontSize: '12.5px' }}>
+        <span style={{ fontWeight: 700, color: 'var(--success)' }}>{ready}</span>
+        <span className="subtle"> ready · </span>
+        <span style={{ fontWeight: 700, color: 'var(--text)' }}>{progress}</span>
+        <span className="subtle"> in progress</span>
+      </div>
+    </div>
+  );
+}
 
 /** Groups `rows` by section (each group pre-sorted by `compare`), then
  * merges them one-row-per-section-per-round instead of concatenating whole
@@ -466,10 +509,22 @@ export function LiveBoard(): React.ReactElement {
     () => activeContainers.filter((c) => c.readyAt === null && !isReadyToMove(c) && c.survey !== null).length,
     [activeContainers]
   );
-  // Everything else: registered but not yet surveyed, plus every id IMS has
-  // at JNPT that's never been gated in here at all -- both read the same to
-  // whoever's looking at this board, "it's sitting there, untouched."
-  const inStockCount = Math.max(0, totalAtJnpt - readyCount - inProgressCount);
+  // Category-wise ready/in-progress, same shape as Yard Board's own
+  // TypeBreakdownCard row -- seeded from jnptTypeBreakdown's own types (not
+  // just TYPE_CODES) so a type IMS has real units under but this app has no
+  // container-type entry for yet (Machine, CCCS) still gets its own card
+  // instead of silently vanishing from the breakdown.
+  const jnptCategoryBreakdown = useMemo(() => {
+    const byType = new Map<string, { ready: number; progress: number }>(jnptTypeBreakdown.map(([type]) => [type, { ready: 0, progress: 0 }]));
+    for (const c of activeContainers) {
+      const type = jnptTypeOf.get(c.id) ?? 'Unspecified';
+      const bucket = byType.get(type);
+      if (!bucket) continue;
+      if (c.readyAt !== null || isReadyToMove(c)) bucket.ready += 1;
+      else if (c.survey !== null) bucket.progress += 1;
+    }
+    return [...byType.entries()];
+  }, [jnptTypeBreakdown, jnptTypeOf, activeContainers]);
 
   const [view, setView] = useState<View>('stage');
   // Shared across both views, same toggle shape as Yard Board/Worker
@@ -834,22 +889,30 @@ export function LiveBoard(): React.ReactElement {
     // cluster, eating space the table itself needed.
     <div className="stack stack-tight">
       {can('container:create') && (
-        <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
-          <StatCard
-            label="Present at JNPT"
-            value={imsLoading ? '—' : totalAtJnpt}
-            foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
-            icon="warehouse"
-          />
-          <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
-          <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
-          <StatCard
-            label="In stock"
-            value={imsLoading ? '—' : inStockCount}
-            foot="Not yet started — tap to add from IMS"
-            icon="package"
-            onClick={() => setImsQuickAddOpen(true)}
-          />
+        <div className="stack stack-tight">
+          <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
+            <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
+              <StatCard
+                label="Present at JNPT"
+                value={imsLoading ? '—' : totalAtJnpt}
+                foot={imsLoading ? undefined : jnptTypeBreakdown.map(([type, count]) => `${count} ${type}`).join(' · ')}
+                icon="warehouse"
+              />
+              <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
+              <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
+            </div>
+            <Button variant="secondary" size="sm" icon="search" onClick={() => setImsQuickAddOpen(true)}>
+              Add from IMS
+            </Button>
+          </div>
+          {/* Category-wise distribution -- same ready/in-progress-per-type
+             shape as Yard Board's own breakdown row, covering every real
+             type IMS has at JNPT, not just this app's own four. */}
+          <div className="cluster" style={{ gap: 'var(--s-2)', flexWrap: 'wrap' }}>
+            {jnptCategoryBreakdown.map(([type, { ready, progress }]) => (
+              <JnptTypeBreakdownCard key={type} icon={JNPT_TYPE_ICON[type] ?? 'package'} label={type} ready={ready} progress={progress} />
+            ))}
+          </div>
         </div>
       )}
       <div className="cluster" style={{ justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--s-2)' }}>
