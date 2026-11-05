@@ -1,6 +1,6 @@
 import { createColumnHelper } from '@tanstack/react-table';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { buildQuickAddContainer } from '../../lib/imsQuickAdd';
@@ -52,6 +52,7 @@ export function ImsStock(): React.ReactElement {
   const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user, can } = useAuth();
   const { containers, gateIn } = useV2Data();
   const toast = useToast();
@@ -65,9 +66,13 @@ export function ImsStock(): React.ReactElement {
     async (container: MockContainer): Promise<void> => {
       await gateIn(container);
       toast.ok('Container registered', `${container.id} is ready to move.`);
-      navigate('/yard');
+      // Same guard as AppShell.tsx's own Gate-In handler and
+      // ImsQuickAddDialog.tsx -- only a real navigation when actually
+      // leaving the current page, so repeated adds don't each stack a
+      // redundant history entry the Back button then has to burn through.
+      if (pathname !== '/yard') navigate('/yard');
     },
-    [gateIn, navigate, toast]
+    [gateIn, navigate, pathname, toast]
   );
 
   /** The only path now, by direct request: an IMS-known container never

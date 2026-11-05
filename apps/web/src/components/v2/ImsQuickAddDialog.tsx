@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { buildQuickAddContainer } from '../../lib/imsQuickAdd';
@@ -62,6 +62,7 @@ export function ImsQuickAddDialog({
   const [quickAddingId, setQuickAddingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { user } = useAuth();
   const { containers, gateIn } = useV2Data();
   const toast = useToast();
@@ -143,9 +144,17 @@ export function ImsQuickAddDialog({
       await gateIn(container);
       toast.ok('Container registered', `${container.id} is ready to move.`);
       onOpenChange(false);
-      navigate('/yard');
+      // Only a real navigation when actually leaving the current page --
+      // this dialog's most common home is Yard Board itself (by direct
+      // request, item 150), so an unconditional push here stacked a
+      // duplicate /yard history entry on every single add made from there.
+      // The browser's Back button then had to burn through one of those per
+      // add before it ever reached whatever screen was open before this
+      // dialog, instead of going straight there. Same guard AppShell.tsx's
+      // own Gate-In handler already uses for the identical reason.
+      if (pathname !== '/yard') navigate('/yard');
     },
-    [gateIn, navigate, onOpenChange, toast]
+    [gateIn, navigate, onOpenChange, pathname, toast]
   );
 
   const handleQuickAdd = useCallback(

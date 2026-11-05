@@ -1,6 +1,6 @@
 import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../lib/auth';
 import { navItemsForUser } from '../../lib/nav';
 import { useTheme } from '../../lib/theme';
@@ -14,6 +14,16 @@ import { Icon } from '../crystal/Icon';
 export function CommandPalette(): React.ReactElement {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  // Only a real navigation when the target actually differs from where we
+  // already are -- picking an item for the current page (e.g. searching for
+  // a container while already on Yard Board) used to push a duplicate
+  // history entry every time, so the Back button had to burn through one of
+  // those per palette action before it ever reached whatever screen was
+  // open before the palette, instead of going straight there.
+  const navigateIfElsewhere = (to: string): void => {
+    if (to !== pathname) navigate(to);
+  };
   const { theme, toggle } = useTheme();
   const { user } = useAuth();
   const { containers, requestOpen } = useV2Data();
@@ -73,7 +83,7 @@ export function CommandPalette(): React.ReactElement {
                 key={item.to}
                 className="cmdk-item"
                 value={`${item.label} ${item.description}`}
-                onSelect={() => run(() => navigate(item.to))}
+                onSelect={() => run(() => navigateIfElsewhere(item.to))}
               >
                 <Icon name={item.icon} size="sm" />
                 {item.label}
@@ -96,10 +106,10 @@ export function CommandPalette(): React.ReactElement {
                       // end — its report is the one place it's still fully
                       // visible.
                       if (container.departedAt) {
-                        navigate(`/containers/${encodeURIComponent(container.id)}/report`);
+                        navigateIfElsewhere(`/containers/${encodeURIComponent(container.id)}/report`);
                       } else {
                         requestOpen(container.id);
-                        navigate('/yard');
+                        navigateIfElsewhere('/yard');
                       }
                     })
                   }
