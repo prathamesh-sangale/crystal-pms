@@ -417,6 +417,14 @@ export function LiveBoard(): React.ReactElement {
   const [imsItems, setImsItems] = useState<ImsMatch[]>([]);
   const [imsLoading, setImsLoading] = useState(true);
   const [imsQuickAddOpen, setImsQuickAddOpen] = useState(false);
+  // Which type's card was clicked, if any -- null for the plain "Add from
+  // IMS" button, a real type when a category card opened the dialog instead,
+  // so the dialog can land pre-filtered to "show me every one of these."
+  const [imsQuickAddType, setImsQuickAddType] = useState<string | null>(null);
+  const openImsQuickAdd = (type: string | null): void => {
+    setImsQuickAddType(type);
+    setImsQuickAddOpen(true);
+  };
   useEffect(() => {
     let cancelled = false;
     api
@@ -879,7 +887,14 @@ export function LiveBoard(): React.ReactElement {
           <StatCard label="Ready" value={imsLoading ? '—' : readyCount} icon="check-circle" />
           <StatCard label="In progress" value={imsLoading ? '—' : inProgressCount} icon="clock" />
           {jnptCategoryBreakdown.map(([type, { total, ready, progress }]) => (
-            <StatCard key={type} label={type} value={total} foot={`${ready} ready · ${progress} in progress`} icon={JNPT_TYPE_ICON[type] ?? 'package'} />
+            <StatCard
+              key={type}
+              label={type}
+              value={total}
+              foot={`${ready} ready · ${progress} in progress`}
+              icon={JNPT_TYPE_ICON[type] ?? 'package'}
+              onClick={() => openImsQuickAdd(type)}
+            />
           ))}
         </div>
       )}
@@ -904,7 +919,7 @@ export function LiveBoard(): React.ReactElement {
             />
           )}
           {can('container:create') && (
-            <Button variant="secondary" size="sm" icon="search" onClick={() => setImsQuickAddOpen(true)}>
+            <Button variant="secondary" size="sm" icon="search" onClick={() => openImsQuickAdd(null)}>
               Add from IMS
             </Button>
           )}
@@ -1071,7 +1086,7 @@ export function LiveBoard(): React.ReactElement {
         initialDate={rosterDate}
       />
       {startConfirmDialog}
-      <ImsQuickAddDialog open={imsQuickAddOpen} onOpenChange={setImsQuickAddOpen} />
+      <ImsQuickAddDialog open={imsQuickAddOpen} onOpenChange={setImsQuickAddOpen} initialType={imsQuickAddType} />
     </div>
   );
 }

@@ -43,9 +43,16 @@ function toggled(set: Set<string>, value: string): Set<string> {
 export function ImsQuickAddDialog({
   open,
   onOpenChange,
+  initialType = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-selects this type's filter chip every time the dialog opens — how
+   * Live Board's own per-type cards ("Reefer", "Machine", ...) jump straight
+   * to "show me every one of these, at JNPT" instead of landing on the
+   * dialog's default unfiltered list. `null` (the default) opens exactly as
+   * before, no filter pre-applied. */
+  initialType?: string | null;
 }): React.ReactElement {
   const [items, setItems] = useState<ImsMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,15 +84,35 @@ export function ImsQuickAddDialog({
     };
   }, [open]);
 
+  // Re-applies whichever type the dialog was opened for, every time it
+  // opens -- not just once on mount, since the same dialog instance gets
+  // reused for a different card's click each time (Reefer one open, Machine
+  // the next). Clears any filter left over from last time first.
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    setSelectedTypes(initialType ? new Set([initialType]) : new Set());
+    setSelectedSizes(new Set());
+  }, [open, initialType]);
+
   const activeIds = useMemo(() => new Set(containers.map((c) => c.id)), [containers]);
+
+  // The effective type an item filters/displays under -- IMS's own mapped
+  // type when it has one, the raw IMS label otherwise (never silently
+  // dropped: "Machine"/"CCCS" have no suggestedTypeCode at all, same gap
+  // item 145 flagged, but that's no reason the dialog can't at least show
+  // and filter to them -- only "Add to yard" stays disabled for those rows,
+  // since there's genuinely nowhere in this app's own container model for
+  // them to go yet).
+  const effectiveType = useCallback((i: ImsMatch): string | null => i.suggestedTypeCode ?? i.imsType ?? null, []);
 
   // Options are derived from what IMS actually returned, not a hardcoded
   // list -- same reasoning as ImsStock.tsx's own typeOptions/sizeOptions:
   // IMS's raw Type/Size spellings only ever map onto a subset of this app's
   // own vocabulary, so a chip IMS can never produce would just be dead.
   const typeOptions = useMemo(
-    () => [...new Set(items.map((i) => i.suggestedTypeCode).filter((t): t is string => t !== null))].sort(),
-    [items]
+    () => [...new Set(items.map(effectiveType).filter((t): t is string => t !== null))].sort(),
+    [items, effectiveType]
   );
   const sizeOptions = useMemo(
     () => [...new Set(items.map((i) => i.suggestedSize).filter((s): s is string => s !== null))].sort(),
@@ -102,11 +129,14 @@ export function ImsQuickAddDialog({
     const needle = query.trim().toUpperCase();
     return items.filter((i) => {
       if (needle && !i.containerId.toUpperCase().includes(needle)) return false;
-      if (selectedTypes.size > 0 && (!i.suggestedTypeCode || !selectedTypes.has(i.suggestedTypeCode))) return false;
+      if (selectedTypes.size > 0) {
+        const type = effectiveType(i);
+        if (!type || !selectedTypes.has(type)) return false;
+      }
       if (selectedSizes.size > 0 && (!i.suggestedSize || !selectedSizes.has(i.suggestedSize))) return false;
       return true;
     });
-  }, [items, query, selectedTypes, selectedSizes]);
+  }, [items, query, selectedTypes, selectedSizes, effectiveType]);
 
   const handleGateIn = useCallback(
     async (container: MockContainer): Promise<void> => {
@@ -155,7 +185,7 @@ export function ImsQuickAddDialog({
                     key={type}
                     pressed={selectedTypes.has(type)}
                     onClick={() => setSelectedTypes(toggled(selectedTypes, type))}
-                    icon={TYPE_ICON[type]}
+                    icon={TYPE_ICON[type] ?? 'package'}
                   >
                     {type}
                   </Chip>
