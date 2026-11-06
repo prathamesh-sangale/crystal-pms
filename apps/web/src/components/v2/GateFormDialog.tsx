@@ -322,6 +322,7 @@ export function GateFormDialog({
   const [typeCode, setTypeCode] = useState(TYPE_CODES[0]!);
   const [size, setSize] = useState(SIZE_OPTIONS[0]!);
   const [indentRef, setIndentRef] = useState('');
+  const [orderNumber, setOrderNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [color, setColor] = useState(STANDARD_COLORS[0]!);
   const [customColor, setCustomColor] = useState('');
@@ -415,6 +416,7 @@ export function GateFormDialog({
     setTypeCode(TYPE_CODES[0]!);
     setSize(SIZE_OPTIONS[0]!);
     setIndentRef('');
+    setOrderNumber('');
     setCustomerName('');
     setColor(STANDARD_COLORS[0]!);
     setCustomColor('');
@@ -469,6 +471,7 @@ export function GateFormDialog({
         loggedBy,
         movementDate: istDay(now),
         indentRef,
+        orderNumber,
         customerName,
         location,
         transporterName,
@@ -534,6 +537,7 @@ export function GateFormDialog({
         loggedBy,
         movementDate: istDay(now),
         indentRef,
+        orderNumber,
         customerName,
         location,
         transporterName,
@@ -725,9 +729,15 @@ export function GateFormDialog({
                   )}
                 </>
               )}
-              <Field label="Indent Reference">
-                {(props) => <input {...props} value={indentRef} onChange={(e) => setIndentRef(e.target.value)} />}
-              </Field>
+              {isOut ? (
+                <Field label="Order Number" required>
+                  {(props) => <input {...props} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />}
+                </Field>
+              ) : (
+                <Field label="Indent Reference">
+                  {(props) => <input {...props} value={indentRef} onChange={(e) => setIndentRef(e.target.value)} />}
+                </Field>
+              )}
               <Field label="Customer Name">
                 {(props) => <input {...props} value={customerName} onChange={(e) => setCustomerName(e.target.value)} />}
               </Field>

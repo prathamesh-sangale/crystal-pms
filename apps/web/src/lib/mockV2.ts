@@ -288,6 +288,9 @@ export interface GateLogEntry {
    * timestamp at every call site. */
   movementDate: string;
   indentRef: string;
+  /** Gate Out only — Gate Out dropped Indent Reference in favor of this,
+   * by direct request. Always '' on a Gate In record. */
+  orderNumber: string;
   customerName: string;
   location: string;
   transporterName: string;

@@ -107,6 +107,7 @@ interface GateEntry {
   loggedBy: string;
   movementDate: string;
   indentRef: string;
+  orderNumber: string;
   customerName: string;
   location: string;
   transporterName: string;
@@ -127,6 +128,7 @@ function gateLogRows(containerId: string, gateIn: unknown, gateOut: unknown): un
       g.loggedBy ?? '',
       g.movementDate ?? '',
       g.indentRef ?? '',
+      g.orderNumber ?? '',
       g.customerName ?? '',
       g.location ?? '',
       g.transporterName ?? '',
@@ -198,7 +200,7 @@ export async function exportToSheet(): Promise<{ tabs: string[]; exportedAt: str
     {
       title: 'Gate Log',
       headers: [
-        'Container ID', 'Kind', 'Logged At', 'Logged By', 'Movement Date', 'Indent Ref',
+        'Container ID', 'Kind', 'Logged At', 'Logged By', 'Movement Date', 'Indent Ref', 'Order Number',
         'Customer Name', 'Location', 'Transporter Name', 'Transporter Number', 'Vehicle Number', 'PTI Check',
       ],
       rows: containers.flatMap((c) => gateLogRows(c.id, (c as unknown as { gateIn: unknown }).gateIn, (c as unknown as { gateOut: unknown }).gateOut)),

@@ -50,10 +50,17 @@ function GateLogPanel({ title, entry }: { title: string; entry: GateLogEntry }):
     <DataPanel title={title} meta={`${formatSurveyDate(entry.movementDate)} · logged by ${entry.loggedBy || 'unspecified'}`}>
       <div className="stack stack-tight">
         <div className="infogrid">
-          <div>
-            <dt>Indent reference</dt>
-            <dd>{entry.indentRef || '—'}</dd>
-          </div>
+          {entry.kind === 'out' ? (
+            <div>
+              <dt>Order number</dt>
+              <dd>{entry.orderNumber || '—'}</dd>
+            </div>
+          ) : (
+            <div>
+              <dt>Indent reference</dt>
+              <dd>{entry.indentRef || '—'}</dd>
+            </div>
+          )}
           <div>
             <dt>Customer</dt>
             <dd>{entry.customerName || '—'}</dd>

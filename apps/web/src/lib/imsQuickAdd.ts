@@ -20,6 +20,7 @@ export function buildQuickAddContainer(item: ImsMatch, loggedBy: string): MockCo
     loggedBy,
     movementDate: istDay(now),
     indentRef: '',
+    orderNumber: '',
     customerName: '',
     location: '',
     transporterName: '',
