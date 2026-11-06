@@ -28,8 +28,11 @@ function formatINR(n: number): string {
 
 export function DashboardsV2(): React.ReactElement {
   // Dashboards describe the active yard, not the full historical record —
-  // departed containers would otherwise skew every stat here.
-  const { activeContainers: containers, workers, assignWorker, scheduleTask, unassignTask, addTask, powerDown, setPowerDown } = useV2Data();
+  // departed containers would otherwise skew every stat here. Total Gate
+  // In/Out is the one exception: a cumulative count is the point, so it
+  // reads the full `containers` (departed included) rather than
+  // `activeContainers`.
+  const { containers: allContainers, activeContainers: containers, workers, assignWorker, scheduleTask, unassignTask, addTask, powerDown, setPowerDown } = useV2Data();
   const navigate = useNavigate();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
@@ -70,7 +73,13 @@ export function DashboardsV2(): React.ReactElement {
 
   const pti = useMemo(() => ptiBreakdown(containers), [containers]);
   const stageCounts = useMemo(() => sectionContainerCounts(containers), [containers]);
-  const gateActivity = useMemo(() => gateActivityToday(containers), [containers]);
+  // Reads the full list, not just the active yard -- a container gated out
+  // today has already dropped out of `activeContainers` (its `departedAt`
+  // is now set), so computing "gated out today" from that list would always
+  // read zero.
+  const gateActivity = useMemo(() => gateActivityToday(allContainers), [allContainers]);
+  const totalGatedIn = allContainers.length;
+  const totalGatedOut = useMemo(() => allContainers.filter((c) => c.departedAt).length, [allContainers]);
   const budget = useMemo(() => budgetExposure(containers), [containers]);
   const exitQueue = useMemo(() => readyNotGatedOut(containers), [containers]);
   const idleCrew = useMemo(() => idleWorkersToday(containers, workers), [containers, workers]);
@@ -114,6 +123,18 @@ export function DashboardsV2(): React.ReactElement {
           value={containers.length}
           icon="warehouse"
           foot={`${gateActivity.gatedInToday} in · ${gateActivity.gatedOutToday} out today`}
+        />
+        <StatCard
+          label="Total gate in"
+          value={totalGatedIn}
+          icon="arrow-down"
+          foot={`${gateActivity.gatedInToday} today`}
+        />
+        <StatCard
+          label="Total gate out"
+          value={totalGatedOut}
+          icon="arrow-up"
+          foot={`${gateActivity.gatedOutToday} today`}
         />
         <button
           type="button"
