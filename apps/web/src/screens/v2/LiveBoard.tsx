@@ -6,6 +6,7 @@ import {
   formatElapsed,
   isReadyToMove,
   isScheduledFor,
+  overallStatus,
   SECTION_LABELS,
   taskElapsedSec,
   tasksBySection,
@@ -43,8 +44,11 @@ type View = 'stage' | 'crew';
 type DisplayMode = 'cards' | 'list';
 /** 'all' sits alongside the four real sections as a fifth filter value —
  * every open task, from every stage, in one table — so seeing everything
- * is the default, not something reached by first picking a category. */
-type StageFilter = 'all' | SectionKind;
+ * is the default, not something reached by first picking a category.
+ * 'ready' is a sixth, separate from the other five: it has no open tasks
+ * by definition, so it reads from `readyContainersForProduct` (containers),
+ * never from the open-task rows the other five filter down from. */
+type StageFilter = 'all' | SectionKind | 'ready';
 /** The product sub-filter, scoped under whichever stage is active — all
  * four real types (TYPE_CODES), matching Yard Board's own breakdown cards
  * and its Type filter. Used to collapse to a Reefer/Dry binary, silently
@@ -62,6 +66,7 @@ const productOf = (typeCode: string): string | null => TYPE_CODES.find((t) => ty
 const SECTION_KINDS: SectionKind[] = ['painting', 'pti', 'cleaning', 'all_rounder', 'sailing'];
 const liveTaskColumnHelper = createColumnHelper<LiveTask>();
 const crewColumnHelper = createColumnHelper<CrewLoad>();
+const readyColumnHelper = createColumnHelper<MockContainer>();
 
 /** One row per type IMS has at JNPT, plus a leading "All" row — a real
  * grid (Category / Total / Ready / Not ready / In progress), not a row of
@@ -686,6 +691,14 @@ export function LiveBoard(): React.ReactElement {
   ];
   const rowsForProduct = activeProduct === 'all' ? allOpenRows : allOpenRows.filter((r) => containerProduct[r.containerId] === activeProduct);
 
+  // Ready containers never appear in `allOpenRows` — they have no open
+  // tasks, so they'd never produce a row there. Scoped by product the same
+  // way the chip counts above are, so this count never drifts from the
+  // others even though it reads from a completely different source.
+  const readyContainersForProduct = activeContainers.filter(
+    (c) => (c.readyAt !== null || isReadyToMove(c)) && (activeProduct === 'all' || containerProduct[c.id] === activeProduct)
+  );
+
   // Stage is the sub-filter, scoped under whichever product is active —
   // "Painting (5)" here means five containers *within the selected
   // product*, not across the whole yard.
@@ -696,6 +709,7 @@ export function LiveBoard(): React.ReactElement {
       label: SECTION_LABELS[kind],
       count: distinctContainerCount(rowsForProduct.filter((r) => r.section === kind)),
     })),
+    { kind: 'ready', label: 'Ready', count: readyContainersForProduct.length },
   ];
 
   const byPriority = (a: LiveTask, b: LiveTask): number => Number(containerPriority[b.containerId]) - Number(containerPriority[a.containerId]);
@@ -716,6 +730,9 @@ export function LiveBoard(): React.ReactElement {
   const stageRows = searchNeedle
     ? stageRowsUnfiltered.filter((r) => `${r.containerId} ${r.containerTypeCode}`.toLowerCase().includes(searchNeedle))
     : stageRowsUnfiltered;
+  const readyRows = searchNeedle
+    ? readyContainersForProduct.filter((c) => `${c.id} ${c.typeCode}`.toLowerCase().includes(searchNeedle))
+    : readyContainersForProduct;
 
   // Deliberately its own useCallback, not just inlined in stageColumns below
   // — stageColumns itself is rebuilt every render (including Live Board's
@@ -811,6 +828,35 @@ export function LiveBoard(): React.ReactElement {
       header: 'Action',
       meta: { label: 'Action' },
       cell: renderStageAction,
+    }),
+  ];
+
+  // Containers, not tasks — a ready container has none of the task-level
+  // columns above (no worker to assign, no TAT, nothing to start/stop), so
+  // this is its own column set rather than squeezed into stageColumns.
+  const readyColumns = [
+    readyColumnHelper.accessor('id', {
+      header: 'Container',
+      meta: { label: 'Container', lead: true },
+      cell: (ctx) => (
+        <span className="cluster" style={{ gap: 'var(--s-1)' }}>
+          <span className="mono">{ctx.getValue()}</span>
+          {containerPriority[ctx.getValue()] && <Icon name="alert" size="sm" title="Fast-track" />}
+        </span>
+      ),
+    }),
+    readyColumnHelper.accessor('typeCode', { header: 'Type', meta: { label: 'Type', secondary: true } }),
+    readyColumnHelper.display({
+      id: 'status',
+      header: 'Status',
+      meta: { label: 'Status' },
+      cell: (ctx) => <StatusPill status={overallStatus(ctx.row.original)} />,
+    }),
+    readyColumnHelper.display({
+      id: 'progress',
+      header: 'Progress',
+      meta: { label: 'Progress', secondary: true },
+      cell: (ctx) => <MiniStageStrip container={ctx.row.original} />,
     }),
   ];
 
@@ -923,7 +969,14 @@ export function LiveBoard(): React.ReactElement {
     <EmptyState icon="check-circle" title="Nothing open here">
       {activeSection === 'all' && activeProduct === 'all'
         ? 'Nothing open anywhere in the yard.'
-        : `No ${activeProduct === 'all' ? '' : `${activeProduct} `}containers currently need ${activeSection === 'all' ? 'anything' : SECTION_LABELS[activeSection]}.`}
+        : `No ${activeProduct === 'all' ? '' : `${activeProduct} `}containers currently need ${
+            activeSection === 'all' || activeSection === 'ready' ? 'anything' : SECTION_LABELS[activeSection]
+          }.`}
+    </EmptyState>
+  );
+  const readyEmpty = (
+    <EmptyState icon="check-circle" title="Nothing ready yet">
+      {activeProduct === 'all' ? 'No containers are ready to move right now.' : `No ${activeProduct} containers are ready to move right now.`}
     </EmptyState>
   );
   const crewEmpty = (
@@ -1026,20 +1079,33 @@ export function LiveBoard(): React.ReactElement {
         </div>
       )}
 
-      <div className="cluster" style={{ justifyContent: 'flex-end' }}>
-        <Segmented
-          value={displayMode}
-          onChange={setDisplayMode}
-          label="Display as"
-          options={[
-            { value: 'cards', label: 'Cards' },
-            { value: 'list', label: 'List' },
-          ]}
-        />
-      </div>
+      {!(view === 'stage' && activeSection === 'ready') && (
+        <div className="cluster" style={{ justifyContent: 'flex-end' }}>
+          <Segmented
+            value={displayMode}
+            onChange={setDisplayMode}
+            label="Display as"
+            options={[
+              { value: 'cards', label: 'Cards' },
+              { value: 'list', label: 'List' },
+            ]}
+          />
+        </div>
+      )}
 
       {view === 'stage' ? (
-        displayMode === 'list' ? (
+        activeSection === 'ready' ? (
+          <DataTable
+            data={readyRows}
+            columns={readyColumns}
+            getRowId={(r) => r.id}
+            caption={`${activeProduct === 'all' ? 'All' : activeProduct} — ready to move`}
+            onRowOpen={(r) => handleOpenContainer(r.id)}
+            rowLabel={(r) => r.id}
+            pageSize={12}
+            empty={readyEmpty}
+          />
+        ) : displayMode === 'list' ? (
           <DataTable
             data={stageRows}
             columns={stageColumns}

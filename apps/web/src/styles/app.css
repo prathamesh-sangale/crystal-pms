@@ -215,6 +215,27 @@ body {
   padding: var(--s-1) var(--s-2);
 }
 
+/* table.dt is width:100% -- fine for a table meant to fill its panel, but
+ * this one has only five columns (one name, four short numbers) that need
+ * barely half that width. Forcing it to stretch anyway doesn't remove the
+ * leftover space, it just relocates it: first tried as gaps between every
+ * column (table-layout default), then as one big gap inside Category after
+ * table-layout:fixed sent the stretch there instead. Letting the table size
+ * to its own content -- the only change needed -- removes the leftover
+ * width altogether rather than moving it around. */
+.jnptgrid table.dt {
+  width: auto;
+}
+
+/* The table shrinking to its content doesn't shrink `.tablewrap`, its
+ * card -- that's a plain block div, so it still stretches to fill
+ * `.jnptgrid` the same way it did before, leaving the freed-up width as
+ * blank card behind the now-narrower table instead of removing it. */
+.jnptgrid .tablewrap {
+  width: fit-content;
+  max-width: 100%;
+}
+
 .jnptgrid table.dt td[data-label='Ready'] {
   background: var(--success-bg);
 }
