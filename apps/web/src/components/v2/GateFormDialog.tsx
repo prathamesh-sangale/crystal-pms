@@ -745,12 +745,16 @@ export function GateFormDialog({
                 <CheckboxField checked={priority} onCheckedChange={setPriority} label="Fast-track this container" />
               )}
 
-              <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
-                User Details
-              </div>
-              <Field label="Email / Name" required>
-                {(props) => <input {...props} value={loggedBy} onChange={(e) => setLoggedBy(e.target.value)} placeholder="Enter your email" autoComplete="off" />}
-              </Field>
+              {!isOut && (
+                <>
+                  <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
+                    User Details
+                  </div>
+                  <Field label="Email / Name" required>
+                    {(props) => <input {...props} value={loggedBy} onChange={(e) => setLoggedBy(e.target.value)} placeholder="Enter your email" autoComplete="off" />}
+                  </Field>
+                </>
+              )}
 
               <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
                 Logistics Movement
