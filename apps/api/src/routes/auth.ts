@@ -6,7 +6,9 @@ import { env } from '../env.js';
 import { parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 
-interface UserRow {
+/** Exported for routes/otpAuth.ts -- same `users` row shape, same `toSession`
+ * mapping, since OTP sign-in resolves to an identical SessionUser. */
+export interface UserRow {
   id: string;
   email: string;
   name: string;
@@ -126,7 +128,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   );
 }
 
-function toSession(user: UserRow): SessionUser {
+/** Exported for routes/otpAuth.ts -- the OTP sign-in issues the exact same
+ * session/JWT shape as this route's own password login, since it's only an
+ * alternative way to prove it's you, not a separate session system. */
+export function toSession(user: UserRow): SessionUser {
   return {
     id: user.id,
     email: user.email,

@@ -1,6 +1,6 @@
-import { loginSchema } from '@pms/shared';
-import { useState } from 'react';
-import { RequestError } from '../lib/api';
+import { loginSchema, otpRequestSchema, otpVerifySchema } from '@pms/shared';
+import { useEffect, useRef, useState } from 'react';
+import { api, RequestError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { ADMIN_ACCOUNT } from '../lib/devAccounts';
 import { Button } from '../components/crystal/Button';
@@ -8,8 +8,159 @@ import { Alert } from '../components/crystal/Feedback';
 import { Field } from '../components/crystal/Form';
 import { Icon } from '../components/crystal/Icon';
 
+const RESEND_COOLDOWN_S = 30;
+
+/** The email-code alternative to the password form below -- entirely
+ * additive and off by default (see `mode` in `Login`), by direct request:
+ * the existing password sign-in stays the default, untouched path. Its own
+ * small component so its three-states-in-one (email step, code step,
+ * in-flight/error) don't tangle with the password form's. */
+function OtpSignIn({ onBack }: { onBack: () => void }): React.ReactElement {
+  const { signInWithOtp } = useAuth();
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  const startCooldown = (): void => {
+    setCooldown(RESEND_COOLDOWN_S);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setCooldown((s) => {
+        if (s <= 1 && timerRef.current) clearInterval(timerRef.current);
+        return Math.max(0, s - 1);
+      });
+    }, 1000);
+  };
+
+  const sendCode = async (event: React.FormEvent): Promise<void> => {
+    event.preventDefault();
+    setFormError(null);
+    const parsed = otpRequestSchema.safeParse({ email });
+    if (!parsed.success) {
+      setErrors({ email: parsed.error.issues[0]?.message ?? 'Enter your email' });
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    try {
+      const result = await api.requestOtp(parsed.data.email);
+      setNotice(result.message);
+      setStep('code');
+      startCooldown();
+    } catch (error) {
+      setFormError(error instanceof RequestError ? error.message : 'Could not send the code. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyCode = async (event: React.FormEvent): Promise<void> => {
+    event.preventDefault();
+    setFormError(null);
+    const parsed = otpVerifySchema.safeParse({ email, code });
+    if (!parsed.success) {
+      setErrors({ code: parsed.error.issues.find((i) => i.path[0] === 'code')?.message ?? 'Enter the 6-digit code' });
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    try {
+      await signInWithOtp(parsed.data.email, parsed.data.code);
+    } catch (error) {
+      setFormError(error instanceof RequestError ? error.message : 'Could not sign in. Try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack">
+      {formError && (
+        <Alert tone="err" title="Could not sign in">
+          {formError}
+        </Alert>
+      )}
+      {step === 'email' ? (
+        <form onSubmit={(e) => void sendCode(e)} className="stack" noValidate>
+          <Field label="Email" required error={errors.email}>
+            {(props) => (
+              <input
+                {...props}
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@reeferready.example"
+              />
+            )}
+          </Field>
+          <Button type="submit" variant="primary" block loading={busy}>
+            Send code
+          </Button>
+        </form>
+      ) : (
+        <form onSubmit={(e) => void verifyCode(e)} className="stack" noValidate>
+          {notice && (
+            <p style={{ fontSize: '12.5px', color: 'var(--text-2)', margin: 0 }}>
+              {notice} Sent to <strong>{email}</strong>.
+            </p>
+          )}
+          <Field label="6-digit code" required error={errors.code}>
+            {(props) => (
+              <input
+                {...props}
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+              />
+            )}
+          </Field>
+          <Button type="submit" variant="primary" block loading={busy} disabled={code.length !== 6}>
+            Verify &amp; sign in
+          </Button>
+          <div className="cluster" style={{ justifyContent: 'space-between' }}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setStep('email');
+                setCode('');
+                setNotice(null);
+              }}
+            >
+              Use a different email
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={cooldown > 0 || busy} onClick={() => void sendCode({ preventDefault: () => {} } as React.FormEvent)}>
+              {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+            </Button>
+          </div>
+        </form>
+      )}
+      <Button type="button" variant="ghost" size="sm" onClick={onBack}>
+        Back to password sign-in
+      </Button>
+    </div>
+  );
+}
+
 export function Login(): React.ReactElement {
   const { signIn } = useAuth();
+  const [mode, setMode] = useState<'password' | 'otp'>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -118,60 +269,69 @@ export function Login(): React.ReactElement {
             </p>
           </div>
 
-          <form onSubmit={submit} className="stack" noValidate>
-            {formError && (
-              <Alert tone="err" title="Could not sign in">
-                {formError}
-              </Alert>
-            )}
+          {mode === 'password' ? (
+            <>
+              <form onSubmit={submit} className="stack" noValidate>
+                {formError && (
+                  <Alert tone="err" title="Could not sign in">
+                    {formError}
+                  </Alert>
+                )}
 
-            <Field label="Email" required error={errors.email}>
-              {(props) => (
-                <input
-                  {...props}
-                  name="email"
-                  type="email"
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@reeferready.example"
-                />
-              )}
-            </Field>
+                <Field label="Email" required error={errors.email}>
+                  {(props) => (
+                    <input
+                      {...props}
+                      name="email"
+                      type="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@reeferready.example"
+                    />
+                  )}
+                </Field>
 
-            <Field label="Password" required error={errors.password}>
-              {(props) => (
-                <div className="input-wrap">
-                  <Icon name="lock" size="sm" />
-                  <input
-                    {...props}
-                    name="password"
-                    style={{ paddingLeft: '34px', paddingRight: '40px' }}
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                  <span className="trail">
-                    <button
-                      type="button"
-                      className="iconbtn bare"
-                      style={{ width: '28px', height: '28px' }}
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      aria-pressed={showPassword}
-                      onClick={() => setShowPassword((v) => !v)}
-                    >
-                      <Icon name="eye" size="sm" />
-                    </button>
-                  </span>
-                </div>
-              )}
-            </Field>
+                <Field label="Password" required error={errors.password}>
+                  {(props) => (
+                    <div className="input-wrap">
+                      <Icon name="lock" size="sm" />
+                      <input
+                        {...props}
+                        name="password"
+                        style={{ paddingLeft: '34px', paddingRight: '40px' }}
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                      />
+                      <span className="trail">
+                        <button
+                          type="button"
+                          className="iconbtn bare"
+                          style={{ width: '28px', height: '28px' }}
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                          aria-pressed={showPassword}
+                          onClick={() => setShowPassword((v) => !v)}
+                        >
+                          <Icon name="eye" size="sm" />
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                </Field>
 
-            <Button type="submit" variant="primary" block loading={busy}>
-              Sign in
-            </Button>
-          </form>
+                <Button type="submit" variant="primary" block loading={busy}>
+                  Sign in
+                </Button>
+              </form>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMode('otp')}>
+                Sign in with an emailed code instead
+              </Button>
+            </>
+          ) : (
+            <OtpSignIn onBack={() => setMode('password')} />
+          )}
 
           {import.meta.env.DEV && (
             <div className="card tint tint-navy">

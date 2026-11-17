@@ -48,6 +48,10 @@ interface AuthValue {
   user: SessionUser | null;
   status: 'loading' | 'signed-in' | 'signed-out';
   signIn: (email: string, password: string) => Promise<void>;
+  /** The email-code alternative to `signIn` above -- same resulting
+   * session, just a different way of proving it's you. Requires the code
+   * to already have been requested (`api.requestOtp`) and emailed. */
+  signInWithOtp: (email: string, code: string) => Promise<void>;
   signOut: () => void;
   /** Self-service password change for whoever's currently signed in -- the
    * server bumps `token_version` on success (so any other open session
@@ -139,6 +143,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
     [queryClient]
   );
 
+  const signInWithOtp = useCallback(
+    async (email: string, code: string) => {
+      sessionEpoch.current += 1;
+      const result = await api.verifyOtp(email, code);
+      token.set(result.token);
+      setUser(result.user);
+      setStatus('signed-in');
+      await queryClient.invalidateQueries();
+    },
+    [queryClient]
+  );
+
   const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
     const result = await api.changePassword(currentPassword, newPassword);
     token.set(result.token);
@@ -150,12 +166,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       user,
       status,
       signIn,
+      signInWithOtp,
       signOut,
       changePassword,
       can: (permission) => (user ? PERMISSIONS[user.role].includes(permission) : false),
       hasScreenAccess: (screen) => (user ? user.role === 'manager' || user.allowedScreens.includes(screen) : false),
     }),
-    [user, status, signIn, signOut, changePassword]
+    [user, status, signIn, signInWithOtp, signOut, changePassword]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -173,6 +173,20 @@ export const api = {
 
   me: () => request<{ user: SessionUser }>('/api/auth/me'),
 
+  /** Step 1 of email-code sign-in -- always resolves the same way whether
+   * or not the email has an account, same as the server's own response. */
+  requestOtp: (email: string) =>
+    request<{ ok: boolean; message: string }>('/api/auth/otp/request', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyOtp: (email: string, code: string) =>
+    request<{ token: string; user: SessionUser }>('/api/auth/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    }),
+
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }, { silentAuth: true }),
 
   changePassword: (currentPassword: string, newPassword: string) =>

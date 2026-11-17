@@ -14,6 +14,7 @@ import { authRoutes } from './routes/auth.js';
 import { devLogsRoutes } from './routes/devLogs.js';
 import { externalApiRoutes } from './routes/externalApi.js';
 import { hydraMovementRoutes } from './routes/hydraMovements.js';
+import { otpAuthRoutes } from './routes/otpAuth.js';
 import { v2ContainerRoutes } from './routes/v2Containers.js';
 import { v2DraftRoutes } from './routes/v2Drafts.js';
 import { v2ExportRoutes } from './routes/v2Export.js';
@@ -152,6 +153,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get('/api/health', async () => ({ ok: true, service: 'crystal-pms' }));
 
   await app.register(authRoutes);
+  await app.register(otpAuthRoutes);
   await app.register(v2WorkerRoutes);
   await app.register(v2ContainerRoutes);
   await app.register(v2DraftRoutes);

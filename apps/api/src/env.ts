@@ -32,6 +32,16 @@ const schema = z.object({
   // config error, not a degraded-but-working state.
   SUPABASE_URL: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'not set — copy apps/api/.env.example to apps/api/.env'),
+  // Optional, by design — unset simply means the emailed-one-time-code sign-in
+  // (routes/otpAuth.ts, an alternative to the password login above, not a
+  // replacement for it) always 503s, same fail-closed shape as
+  // DEV_LOGS_PASSWORD below. The anon key is the public-safe one Supabase
+  // issues alongside the service_role key (Settings -> API) -- it's what
+  // Supabase's own Auth.signInWithOtp/verifyOtp calls require, and unlike
+  // SUPABASE_SERVICE_ROLE_KEY it's meant to be exposed, though it's still
+  // only ever used here, server-side -- apps/web never talks to Supabase
+  // directly, same as every other Supabase credential in this app.
+  SUPABASE_ANON_KEY: z.string().optional(),
   // Optional — only needed where there's no local filesystem to read the
   // gitignored credentials file from (serverless deployments). See
   // googleAuth.ts for the fallback logic.
