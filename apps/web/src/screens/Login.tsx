@@ -10,6 +10,77 @@ import { Icon } from '../components/crystal/Icon';
 
 const RESEND_COOLDOWN_S = 30;
 
+/** Same behavior as OMS's own login screen (app/login/page.tsx), by direct
+ * request: once an "@" is typed, suggest this app's real domains instead of
+ * making everyone type the whole thing out. */
+const EMAIL_DOMAINS = ['@crystalgroup.in', '@crystalpms.com', '@gmail.com'];
+
+function emailDomainSuggestions(email: string): string[] {
+  const atIdx = email.indexOf('@');
+  if (atIdx === -1) return [];
+  const typed = email.slice(atIdx);
+  return EMAIL_DOMAINS.filter((d) => d.startsWith(typed) && d !== typed);
+}
+
+/** Wraps a plain email `<input>` (still fed the `Field` render-prop's own
+ * `props`) with OMS's suggestion dropdown: Tab or Enter applies the first
+ * suggestion instead of leaving the field/submitting the form, and clicking
+ * one fills in the rest. Local to this file -- the only two email inputs
+ * that need it are both on this screen. */
+function EmailInput({
+  inputProps,
+  value,
+  onChange,
+}: {
+  inputProps: Record<string, unknown>;
+  value: string;
+  onChange: (value: string) => void;
+}): React.ReactElement {
+  const suggestions = emailDomainSuggestions(value);
+  const atIdx = value.indexOf('@');
+  const applySuggestion = (domain: string): void => onChange(value.slice(0, atIdx) + domain);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        {...inputProps}
+        type="email"
+        autoComplete="username"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if ((e.key === 'Tab' || e.key === 'Enter') && suggestions.length > 0) {
+            e.preventDefault();
+            applySuggestion(suggestions[0]!);
+          }
+        }}
+        placeholder="name@crystalgroup.in"
+      />
+      {suggestions.length > 0 && (
+        <div className="card" style={{ position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 10, padding: 'var(--s-1)' }}>
+          <div className="stack" style={{ gap: '2px' }}>
+            {suggestions.map((domain) => (
+              <button
+                key={domain}
+                type="button"
+                className="chip"
+                style={{ justifyContent: 'flex-start', textAlign: 'left', width: '100%' }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  applySuggestion(domain);
+                }}
+              >
+                {value.slice(0, atIdx)}
+                <strong>{domain}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The email-code alternative to the password form below -- entirely
  * additive and off by default (see `mode` in `Login`), by direct request:
  * the existing password sign-in stays the default, untouched path. Its own
@@ -93,16 +164,7 @@ function OtpSignIn({ onBack }: { onBack: () => void }): React.ReactElement {
       {step === 'email' ? (
         <form onSubmit={(e) => void sendCode(e)} className="stack" noValidate>
           <Field label="Email" required error={errors.email}>
-            {(props) => (
-              <input
-                {...props}
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@reeferready.example"
-              />
-            )}
+            {(props) => <EmailInput inputProps={props} value={email} onChange={setEmail} />}
           </Field>
           <Button type="submit" variant="primary" block loading={busy}>
             Send code
@@ -279,17 +341,7 @@ export function Login(): React.ReactElement {
                 )}
 
                 <Field label="Email" required error={errors.email}>
-                  {(props) => (
-                    <input
-                      {...props}
-                      name="email"
-                      type="email"
-                      autoComplete="username"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@reeferready.example"
-                    />
-                  )}
+                  {(props) => <EmailInput inputProps={{ ...props, name: 'email' }} value={email} onChange={setEmail} />}
                 </Field>
 
                 <Field label="Password" required error={errors.password}>
