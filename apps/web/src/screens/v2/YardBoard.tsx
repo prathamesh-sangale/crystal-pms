@@ -6,6 +6,7 @@ import { ImsQuickAddDialog } from '../../components/v2/ImsQuickAddDialog';
 import type { SurveyDraftData } from '../../components/v2/RunSurveyDialog';
 import {
   agingStatus,
+  formatSurveyDate,
   isReadyToMove,
   openTaskCount,
   overallStatus,
@@ -24,7 +25,7 @@ import { DataTable } from '../../components/crystal/DataTable';
 import { EmptyState, useToast } from '../../components/crystal/Feedback';
 import { Icon, type IconName } from '../../components/crystal/Icon';
 
-type Filter = 'all' | 'survey' | 'progress' | 'ready';
+type Filter = 'all' | 'survey' | 'progress' | 'ready' | 'gatedOut';
 type DisplayMode = 'cards' | 'list';
 
 const columnHelper = createColumnHelper<MockContainer>();
@@ -190,12 +191,21 @@ export function YardBoard(): React.ReactElement {
         if (bucket) bucket.progress += 1;
       }
     }
-    return { total: activeContainers.length, survey, progress, ready, byType };
-  }, [activeContainers]);
+    // `activeContainers` excludes anything already gated out by definition
+    // (same reasoning DashboardsV2.tsx's own "Total gate out" stat ran into)
+    // -- gatedOut's count has to come from the full `containers` list
+    // instead, the one place that still has them.
+    const gatedOut = containers.filter((c) => c.departedAt !== null).length;
+    return { total: activeContainers.length, survey, progress, ready, gatedOut, byType };
+  }, [activeContainers, containers]);
 
   const rows = useMemo(() => {
-    const filtered = activeContainers.filter((c) => {
-      if (filter === 'all') return true;
+    // Same reasoning as `counts.gatedOut` above -- a departed container has
+    // already fallen out of `activeContainers`, so the Gated out tab reads
+    // from the full list instead, pre-filtered to just what left the yard.
+    const base = filter === 'gatedOut' ? containers.filter((c) => c.departedAt !== null) : activeContainers;
+    const filtered = base.filter((c) => {
+      if (filter === 'all' || filter === 'gatedOut') return true;
       if (filter === 'survey') return !c.survey;
       if (filter === 'ready') return Boolean(c.readyAt) || isReadyToMove(c);
       return Boolean(c.survey) && !c.readyAt && !isReadyToMove(c);
@@ -217,10 +227,16 @@ export function YardBoard(): React.ReactElement {
       }
       return true;
     });
+    // Fast-tracking stops meaning anything once a container has actually
+    // left — most-recently-departed-first reads better there than a flag
+    // from before it shipped.
+    if (filter === 'gatedOut') {
+      return [...advanced].sort((a, b) => new Date(b.departedAt ?? 0).getTime() - new Date(a.departedAt ?? 0).getTime());
+    }
     // Fast-tracked containers first — a flag nobody has to scroll past the
     // rest of the yard to notice.
     return [...advanced].sort((a, b) => Number(b.priority) - Number(a.priority));
-  }, [activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery, selectedTypes]);
+  }, [containers, activeContainers, filter, workerFilter, dateFrom, dateTo, searchQuery, selectedTypes]);
 
   const handleMarkReady = async (id: string, photoUrls: string[]): Promise<void> => {
     await markReady(id, photoUrls);
@@ -281,17 +297,30 @@ export function YardBoard(): React.ReactElement {
         meta: { label: 'Open tasks', num: true },
         cell: (ctx) => openTaskCount(ctx.row.original),
       }),
-      columnHelper.display({
-        id: 'aging',
-        header: 'Aging',
-        meta: { label: 'Aging', secondary: true },
-        cell: (ctx) => {
-          const status = agingStatus(ctx.row.original);
-          return status ? <StatusPill status={status} /> : <span className="subtle">—</span>;
-        },
-      }),
+      // "Aging" (days still waiting) has nothing to say about a container
+      // that's already gone -- swapped for when it actually left instead,
+      // the one thing this particular tab is for.
+      filter === 'gatedOut'
+        ? columnHelper.display({
+            id: 'departed',
+            header: 'Gated out',
+            meta: { label: 'Gated out', secondary: true },
+            cell: (ctx) => {
+              const d = ctx.row.original.departedAt;
+              return d ? formatSurveyDate(d) : <span className="subtle">—</span>;
+            },
+          })
+        : columnHelper.display({
+            id: 'aging',
+            header: 'Aging',
+            meta: { label: 'Aging', secondary: true },
+            cell: (ctx) => {
+              const status = agingStatus(ctx.row.original);
+              return status ? <StatusPill status={status} /> : <span className="subtle">—</span>;
+            },
+          }),
     ],
-    [hasSurveyDraft]
+    [hasSurveyDraft, filter]
   );
 
   return (
@@ -322,6 +351,9 @@ export function YardBoard(): React.ReactElement {
           </Chip>
           <Chip pressed={filter === 'ready'} onClick={() => setFilter('ready')} icon="check-circle">
             Ready to move ({counts.ready})
+          </Chip>
+          <Chip pressed={filter === 'gatedOut'} onClick={() => setFilter('gatedOut')} icon="truck">
+            Gated out ({counts.gatedOut})
           </Chip>
         </div>
         <div className="cluster" style={{ gap: 'var(--s-3)' }}>
