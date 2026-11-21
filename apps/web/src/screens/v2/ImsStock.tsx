@@ -19,6 +19,7 @@ const TYPE_ICON: Record<string, IconName> = {
   Dry: 'package',
   Reefer: 'snow',
   'ISO Tank': 'drop',
+  'Porta Cabin': 'home',
 };
 
 const columnHelper = createColumnHelper<ImsMatch>();

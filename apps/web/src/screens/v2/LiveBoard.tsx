@@ -88,8 +88,9 @@ const jnptColumnHelper = createColumnHelper<JnptCategoryRow>();
  * duplicated here rather than exported from YardBoard.tsx, same reasoning as
  * every other screen-local constant in this app (ImsStock.tsx/
  * ImsQuickAddDialog.tsx each keep their own copy too). An id whose type
- * isn't one of these four (IMS's "Machine"/"CCCS", for instance) falls back
- * to a generic icon at the call site rather than being left without one. */
+ * isn't one of these four (IMS's "Machine," for instance -- "CCCS" is one of
+ * the four now, mapped onto "Porta Cabin") falls back to a generic icon at
+ * the call site rather than being left without one. */
 const JNPT_TYPE_ICON: Record<string, IconName> = {
   Dry: 'package',
   Reefer: 'snow',
@@ -478,8 +479,9 @@ export function LiveBoard(): React.ReactElement {
   // typeCode for anything gated in without ever going through IMS. Never a
   // hardcoded Dry/Reefer/ISO Tank/Porta Cabin-only list: IMS also has real
   // units under types this app has no container-type entry for yet
-  // ("Machine", "CCCS" — see item 145), and those shouldn't just vanish from
-  // a breakdown that's supposed to add up to the headline number.
+  // ("Machine" — see item 145; "CCCS" used to be in the same boat but is now
+  // mapped onto "Porta Cabin," imsLookup.ts), and those shouldn't just vanish
+  // from a breakdown that's supposed to add up to the headline number.
   const jnptTypeOf = useMemo(() => {
     const map = new Map<string, string>();
     for (const i of imsItems) map.set(i.containerId, i.suggestedTypeCode ?? (i.imsType || 'Unspecified'));

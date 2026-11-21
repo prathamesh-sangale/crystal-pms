@@ -56,7 +56,7 @@ export interface ImsMatch {
   /** Best-effort guess at this depot's own Type/Size dropdown values, for
    * pre-filling the Gate-In form — `null` when IMS's own value (its Type
    * column alone has at least 8 distinct, inconsistently-cased spellings,
-   * e.g. "CONTAINER"/"CCCS") doesn't map confidently onto anything. Always
+   * e.g. "CONTAINER"/"MACHINE") doesn't map confidently onto anything. Always
    * just a suggestion: the admin sees and can override it like any other
    * field, never a locked-in value. */
   suggestedTypeCode: string | null;
@@ -87,6 +87,14 @@ function mapType(raw: string): string | null {
   // needs the same treatment there today.
   if (t.startsWith('DRY')) return 'Dry';
   if (t === 'ISO' || t === 'ISO TANK') return 'ISO Tank';
+  // IMS's own code for what its container numbers plainly call "Site Cabin"
+  // units (e.g. "Site Cabin 56") -- confirmed live (2026-11-21) after a
+  // report that these rows' "Add to yard" button stayed disabled in the
+  // dialog. Was previously left unmapped (lumped in with "Machine" as
+  // "nothing in this app's vocabulary fits"), but this app's own Type list
+  // already has a real "Porta Cabin" entry for exactly this product
+  // (SPEC.md §8 item 9) -- "Machine" has no such entry and stays unmapped.
+  if (t === 'CCCS') return 'Porta Cabin';
   return null;
 }
 

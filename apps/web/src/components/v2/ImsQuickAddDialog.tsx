@@ -20,6 +20,7 @@ const TYPE_ICON: Record<string, IconName> = {
   Dry: 'package',
   Reefer: 'snow',
   'ISO Tank': 'drop',
+  'Porta Cabin': 'home',
 };
 
 /** Toggles `value` into/out of a Set, immutably. */
@@ -100,11 +101,10 @@ export function ImsQuickAddDialog({
 
   // The effective type an item filters/displays under -- IMS's own mapped
   // type when it has one, the raw IMS label otherwise (never silently
-  // dropped: "Machine"/"CCCS" have no suggestedTypeCode at all, same gap
-  // item 145 flagged, but that's no reason the dialog can't at least show
-  // and filter to them -- only "Add to yard" stays disabled for those rows,
-  // since there's genuinely nowhere in this app's own container model for
-  // them to go yet).
+  // dropped: "Machine" has no suggestedTypeCode at all, same gap item 145
+  // flagged, but that's no reason the dialog can't at least show and filter
+  // to it -- only "Add to yard" stays disabled for those rows, since there's
+  // genuinely nowhere in this app's own container model for it to go yet).
   const effectiveType = useCallback((i: ImsMatch): string | null => i.suggestedTypeCode ?? i.imsType ?? null, []);
 
   // Options are derived from what IMS actually returned, not a hardcoded
