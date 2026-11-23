@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { buildQuickAddContainer } from '../../lib/imsQuickAdd';
+import { buildQuickAddContainer, resolvedSize, resolvedTypeCode } from '../../lib/imsQuickAdd';
 import type { MockContainer } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { Button, Segmented } from '../../components/crystal/Button';
@@ -201,7 +201,7 @@ export function ImsStock(): React.ReactElement {
                     variant="secondary"
                     size="sm"
                     icon="plus"
-                    disabled={!item.suggestedTypeCode || !item.suggestedSize || quickAddingId !== null}
+                    disabled={!resolvedTypeCode(item) || !resolvedSize(item) || quickAddingId !== null}
                     loading={quickAddingId === item.containerId}
                     onClick={() => void handleQuickAdd(item)}
                   >
@@ -358,7 +358,7 @@ export function ImsStock(): React.ReactElement {
                     variant="secondary"
                     size="sm"
                     icon="plus"
-                    disabled={!i.suggestedTypeCode || !i.suggestedSize || quickAddingId !== null}
+                    disabled={!resolvedTypeCode(i) || !resolvedSize(i) || quickAddingId !== null}
                     loading={quickAddingId === i.containerId}
                     onClick={() => void handleQuickAdd(i)}
                     style={{ marginTop: 'var(--s-3)', width: '100%' }}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, type ImsMatch } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { buildQuickAddContainer } from '../../lib/imsQuickAdd';
+import { buildQuickAddContainer, resolvedSize, resolvedTypeCode } from '../../lib/imsQuickAdd';
 import type { MockContainer } from '../../lib/mockV2';
 import { useV2Data } from '../../lib/v2Store';
 import { useToast } from '../crystal/Feedback';
@@ -102,9 +102,8 @@ export function ImsQuickAddDialog({
   // The effective type an item filters/displays under -- IMS's own mapped
   // type when it has one, the raw IMS label otherwise (never silently
   // dropped: "Machine" has no suggestedTypeCode at all, same gap item 145
-  // flagged, but that's no reason the dialog can't at least show and filter
-  // to it -- only "Add to yard" stays disabled for those rows, since there's
-  // genuinely nowhere in this app's own container model for it to go yet).
+  // flagged -- "Add to yard" registers it under that same raw label too,
+  // via resolvedTypeCode/resolvedSize in imsQuickAdd.ts).
   const effectiveType = useCallback((i: ImsMatch): string | null => i.suggestedTypeCode ?? i.imsType ?? null, []);
 
   // Options are derived from what IMS actually returned, not a hardcoded
@@ -256,7 +255,7 @@ export function ImsQuickAddDialog({
                       variant="secondary"
                       size="sm"
                       icon="plus"
-                      disabled={!i.suggestedTypeCode || !i.suggestedSize || quickAddingId !== null}
+                      disabled={!resolvedTypeCode(i) || !resolvedSize(i) || quickAddingId !== null}
                       loading={quickAddingId === i.containerId}
                       onClick={() => void handleQuickAdd(i)}
                     >
