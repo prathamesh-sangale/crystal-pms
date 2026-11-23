@@ -53,7 +53,9 @@ const BLANK_SECTIONS: Record<SectionKind, boolean> = { painting: false, pti: fal
 /** Whether this is worth keeping as a draft at all — a dialog opened and
  * closed without anything actually entered shouldn't leave a row behind
  * for the "Survey drafted" hint to point at. */
-function isDirty(d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoChoice' | 'needsPti' | 'repairRequired' | 'machineIssueFound' | 'cleaningRequired' | 'remarks'>): boolean {
+function isDirty(
+  d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoChoice' | 'needsPti' | 'repairRequired' | 'machineIssueFound' | 'cleaningRequired' | 'remarks' | 'cabinAvailable' | 'cabinCondition'>
+): boolean {
   return (
     d.step === 'result' ||
     d.paintingRequired ||
@@ -62,7 +64,12 @@ function isDirty(d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoCho
     d.repairRequired ||
     d.machineIssueFound ||
     d.cleaningRequired ||
-    d.remarks.trim() !== ''
+    d.remarks.trim() !== '' ||
+    // The cabin checklist is no longer gated behind `repairRequired` (direct
+    // request, 2026-11-23) -- without this, filling it in without also
+    // touching any other field would silently never save as a draft at all.
+    Object.values(d.cabinAvailable).some((v) => v.trim() !== '') ||
+    Object.values(d.cabinCondition).some((v) => v !== '')
   );
 }
 
@@ -359,7 +366,7 @@ export function RunSurveyDialog({
             </div>
           </div>
 
-          {repairRequired && isCabin && (
+          {isCabin && (
             <>
               <div className="divider-lbl">Site Cabin Fittings</div>
               <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>

@@ -647,7 +647,11 @@ function buildContainerInspectionFields(a: SurveyAssessment): MockSurveyField[] 
  * never surface through it at all — every one would just silently read as
  * the generic checklist's unrelated "good" default. */
 function buildCabinFittingFields(a: SurveyAssessment): MockSurveyField[] {
-  if (!a.repairRequired) return CABIN_FITTING_ITEMS.map((item) => ({ label: item, severity: 'good' as FieldSeverity, note: '' }));
+  // Always live, not gated behind "Repair required?" -- direct request,
+  // 2026-11-23: the checklist is always visible for a cabin now, and its own
+  // entered data is what matters, independent of this unrelated toggle
+  // (which stays askable, for whatever else it's worth recording, but no
+  // longer controls whether the checklist's real content is used).
   const byLabel = new Map(a.repairFields.map((f) => [f.label, f]));
   return CABIN_FITTING_ITEMS.map((item) => {
     const f = byLabel.get(item);
@@ -669,8 +673,17 @@ export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
 /** Which sections the Assessment answers suggest — a starting point the
  * admin can still adjust (check/uncheck) before confirming, same as the
  * "Survey result" step of Gate-In. */
-export function recommendedSurveySections(a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'needsPti' | 'cleaningRequired' | 'repairRequired' | 'repairFields'>): Record<SectionKind, boolean> {
-  const needsRepair = a.repairRequired && a.repairFields.some(fieldNeedsAttention);
+export function recommendedSurveySections(
+  a: Pick<SurveyAssessment, 'paintingRequired' | 'logoChoice' | 'needsPti' | 'cleaningRequired' | 'repairRequired' | 'repairFields' | 'typeCode'>
+): Record<SectionKind, boolean> {
+  // A Porta Cabin's Site Cabin Fittings checklist is always visible and
+  // always live now (direct request, 2026-11-23 -- it isn't gated behind
+  // "Repair required?" the way the generic checklist still is), so whether
+  // Repairment gets recommended for a cabin depends only on whether
+  // anything in that checklist is actually flagged, same as the checklist
+  // itself no longer depends on this toggle's answer either
+  // (`buildCabinFittingFields`, RunSurveyDialog.tsx's `cabinFittingFields`).
+  const needsRepair = isPortaCabin(a.typeCode) ? a.repairFields.some(fieldNeedsAttention) : a.repairRequired && a.repairFields.some(fieldNeedsAttention);
   return {
     painting: a.paintingRequired || a.logoChoice !== 'na',
     pti: a.needsPti,
