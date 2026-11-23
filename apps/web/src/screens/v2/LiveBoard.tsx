@@ -462,9 +462,15 @@ export function LiveBoard(): React.ReactElement {
       cancelled = true;
     };
   }, []);
-  // `activeContainers`, not `containers` — a departed container has left the
-  // yard, so it shouldn't count as "present" and shouldn't block an IMS row
-  // for the same id from showing as addable again.
+  // `activeContainers`, not `containers` — this is specifically "present at
+  // JNPT right now," and a departed container has left, so it shouldn't
+  // count toward that. NOT about letting a departed id be re-added: `id` is
+  // the containers table's own primary key, so a departed id can never be
+  // inserted again regardless of this set (confirmed live, 2026-11-23) --
+  // every actual "Add to yard" entry point (ImsQuickAddDialog.tsx/
+  // ImsStock.tsx's own `activeIds`, AppShell.tsx's `existingIds` into the
+  // plain Gate-In form) already and correctly checks against the *full*
+  // container list, not this one, for exactly that reason.
   const registeredIds = useMemo(() => new Set(activeContainers.map((c) => c.id)), [activeContainers]);
   // The real "present at JNPT" headline: every id IMS knows about at our
   // yard, unioned with every id actually registered here (covers a

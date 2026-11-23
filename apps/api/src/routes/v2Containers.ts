@@ -50,6 +50,35 @@ const runSurveySchema = z.object({
   sections: z.array(z.object({ kind: z.enum(['painting', 'pti', 'cleaning', 'all_rounder']), tasks: z.array(taskInputSchema) })),
 });
 
+/** `gateIn`/`gateOut` are otherwise a loosely-typed bag (`GateLogEntry`'s full
+ * shape, mirrored client-side in mockV2.ts) — deliberately not fully
+ * reproduced here, since most of its fields (photos, PTI/survey leftovers,
+ * etc.) are historical-record shape, not user input, and a strict schema
+ * for all of it would be one more place to keep in sync with that type.
+ *
+ * Only `gateOut` gets a required-fields check, not `gateIn` — confirmed live
+ * (2026-11-23) that `GateFormDialog.tsx`'s `confirmGateOut` is the *only*
+ * place a non-null `gateOut` is ever constructed, so this can be required
+ * unconditionally. `gateIn` has no such single writer: IMS's one-click
+ * "Add to yard" (`imsQuickAdd.ts`'s `buildQuickAddContainer`, used by both
+ * `ImsStock.tsx` and `ImsQuickAddDialog.tsx`) deliberately submits a
+ * `gateIn` with `location`/`transporterName`/`vehicleNumber` all left `''`,
+ * by direct request ("no transport/vehicle details") — a blanket
+ * requirement here would reject every quick-add instead of just closing
+ * the gap. That gap (the real Gate-In *form* not enforcing its own
+ * `required` fields — Modal's body/footer are plain divs, not a real
+ * `<form>`, so native `required` never actually validated anything) is
+ * closed client-side instead, in `GateFormDialog.tsx`'s own `validate()`. */
+function requireGateOutFields(v: Record<string, unknown> | null | undefined): boolean {
+  if (v === null || v === undefined) return true;
+  for (const key of ['location', 'transporterName', 'vehicleNumber', 'orderNumber']) {
+    if (typeof v[key] !== 'string' || (v[key] as string).trim() === '') return false;
+  }
+  return true;
+}
+
+const GATE_OUT_FIELDS_MESSAGE = 'Location, Transporter Name, Vehicle Number, and Order Number are required on a gate-out.';
+
 const createContainerSchema = z.object({
   id: z.string().min(1),
   typeCode: z.string().min(1),
@@ -64,7 +93,7 @@ const createContainerSchema = z.object({
     .object({ performedAt: z.string(), outcome: z.enum(['ready', 'needs-work']), fields: z.array(z.record(z.string(), z.unknown())) })
     .nullable(),
   gateIn: z.record(z.string(), z.unknown()).nullable(),
-  gateOut: z.record(z.string(), z.unknown()).nullable(),
+  gateOut: z.record(z.string(), z.unknown()).nullable().refine(requireGateOutFields, { message: GATE_OUT_FIELDS_MESSAGE }),
   sections: z.array(z.object({ kind: z.enum(['painting', 'pti', 'cleaning', 'all_rounder']), tasks: z.array(taskInputSchema) })),
 });
 
@@ -82,7 +111,7 @@ const patchContainerSchema = z
     readyAt: z.string().nullable().optional(),
     readyPhotoUrls: z.array(z.string()).optional(),
     departedAt: z.string().nullable().optional(),
-    gateOut: z.record(z.string(), z.unknown()).nullable().optional(),
+    gateOut: z.record(z.string(), z.unknown()).nullable().optional().refine(requireGateOutFields, { message: GATE_OUT_FIELDS_MESSAGE }),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
 
@@ -200,7 +229,23 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
         gate_in: body.gateIn,
         gate_out: body.gateOut,
       });
-    if (containerErr) throw app.httpErrors.internalServerError(containerErr.message);
+    if (containerErr) {
+      // Postgres's unique-violation code -- `id` is the table's primary key
+      // (apps/api/supabase/migrations/20261003000000_init_v2_schema.sql), so
+      // this is reachable (two sessions racing to gate in the same
+      // brand-new ID at once; the client-side `existingIds`/`activeIds`
+      // checks can't prevent that). Previously a bare 500 leaking the raw
+      // Postgres constraint message -- found live (2026-11-23) alongside the
+      // gate-field validation gap, same reasoning routes/auth.ts already
+      // uses for not leaking internals on a 4xx-shaped failure.
+      if (containerErr.code === '23505') {
+        return reply.code(409).send({
+          error: 'duplicate_container_id',
+          message: `${body.id} is already registered — use a different ID.`,
+        });
+      }
+      throw app.httpErrors.internalServerError(containerErr.message);
+    }
 
     // Best-effort cleanup if anything below fails -- not a true transaction
     // (supabase-js's REST client doesn't expose one), but `on delete

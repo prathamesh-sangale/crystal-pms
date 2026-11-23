@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api, type NewTaskInput } from './api';
+import { useToast } from '../components/crystal/Feedback';
 import { istToday } from './istDate';
 import {
   type ContainerDraft,
@@ -132,6 +133,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
   const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<ContainerDraft[]>([]);
   const [powerDown, setPowerDownState] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -198,20 +200,53 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
   // Every task/container field-change below updates local state immediately
   // (so Start/Stop etc. keep feeling instant — these are frequent,
   // latency-sensitive clicks) and separately fires the same change at the
-  // server in the background. A failed save is logged, not rolled back —
-  // acceptable for this stage; gateIn/removeContainer below are the two
+  // server in the background; gateIn/removeContainer below are the two
   // actions consequential enough to wait for the server's own confirmation
   // before telling the user it's done.
-  const patchTask = (containerId: string, kind: SectionKind, key: string, patch: Partial<Task>): void => {
-    api.v2PatchTask(containerId, kind, key, patch).catch((err: unknown) => {
-      console.error(`Failed to save task change (${containerId}/${kind}/${key}):`, err);
-    });
-  };
-  const patchContainer = (containerId: string, patch: Parameters<typeof api.v2PatchContainer>[1]): void => {
-    api.v2PatchContainer(containerId, patch).catch((err: unknown) => {
-      console.error(`Failed to save container change (${containerId}):`, err);
-    });
-  };
+  //
+  // A failed save used to only log to the console — found live (2026-11-23):
+  // no toast, and the optimistic local state was never reverted, so a
+  // Start/Stop/Assign/etc. click that failed server-side (an expired
+  // session, a dropped connection, access revoked mid-session) kept showing
+  // as if it had worked, with nothing telling the user otherwise, until it
+  // silently reverted on some later, unrelated refetch. Both helpers now
+  // also toast and re-pull the real container list on failure — the same
+  // "re-fetch rather than hand-patch" rollback `setPowerDown` below already
+  // uses, so local state becomes exactly what the server actually has,
+  // undoing whatever the optimistic update got wrong. Only runs on the rare
+  // failure path, so the normal, instant-feeling success path is unchanged.
+  // useCallback'd (not plain consts) so the big `value` useMemo below can
+  // correctly list these as deps instead of either omitting them (the
+  // exhaustive-deps lint error a plain redeclared-every-render function
+  // runs into) or including them and defeating the memo entirely (since a
+  // fresh closure every render would make `value` recompute every render
+  // regardless of whether containers/workers actually changed).
+  const revertToServer = useCallback((): void => {
+    void api
+      .v2Containers()
+      .then(({ containers: fetched }) => setContainers(fetched))
+      .catch((err: unknown) => console.error('Failed to reload containers after a failed save:', err));
+  }, []);
+  const patchTask = useCallback(
+    (containerId: string, kind: SectionKind, key: string, patch: Partial<Task>): void => {
+      api.v2PatchTask(containerId, kind, key, patch).catch((err: unknown) => {
+        console.error(`Failed to save task change (${containerId}/${kind}/${key}):`, err);
+        toast.error('Could not save that change', "Reloading this container's real, saved state.");
+        revertToServer();
+      });
+    },
+    [toast, revertToServer]
+  );
+  const patchContainer = useCallback(
+    (containerId: string, patch: Parameters<typeof api.v2PatchContainer>[1]): void => {
+      api.v2PatchContainer(containerId, patch).catch((err: unknown) => {
+        console.error(`Failed to save container change (${containerId}):`, err);
+        toast.error('Could not save that change', "Reloading this container's real, saved state.");
+        revertToServer();
+      });
+    },
+    [toast, revertToServer]
+  );
 
   const setPowerDown = async (isDown: boolean): Promise<void> => {
     const { isDown: confirmed } = await api.v2SetPowerStatus(isDown);
@@ -406,7 +441,7 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         setWorkers((cur) => cur.map((w) => (w.id === workerId ? worker : w)));
       },
     }),
-    [containers, workers, pendingOpenId, drafts, powerDown]
+    [containers, workers, pendingOpenId, drafts, powerDown, patchTask, patchContainer]
   );
 
   return <V2Context.Provider value={value}>{children}</V2Context.Provider>;

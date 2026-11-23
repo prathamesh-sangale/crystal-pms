@@ -303,6 +303,15 @@ export function GateFormDialog({
   // needs its own loading state rather than looking frozen.
   const [submitting, setSubmitting] = useState(false);
   const toast = useToast();
+  // Every `required` Field below only ever drew a red asterisk -- Modal's
+  // body/footer are plain divs, not a real <form>, so the browser's native
+  // required-field validation never actually ran, and neither
+  // confirmGateIn/confirmGateOut nor the server checked these fields either.
+  // An operator could leave Location/Transporter Name/Vehicle Number/Order
+  // Number/Email blank and still have the gate event save. Found live
+  // (2026-11-23); this is the actual enforcement those asterisks were
+  // supposed to represent.
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // User Details + Logistics Movement
   const [loggedBy, setLoggedBy] = useState(loggedInEmail ?? '');
@@ -405,7 +414,23 @@ export function GateFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/draft-id change.
   }, [open, isOut, resumeDraft?.id]);
 
+  /** Every field this screen actually marks `required` -- matched one-to-one
+   * against the `<Field required>` usages below, both modes. Returns the
+   * field-keyed error map directly (empty = valid) rather than a boolean, so
+   * the caller can both gate the submit and show exactly which fields are
+   * missing. */
+  const validate = (): Record<string, string> => {
+    const next: Record<string, string> = {};
+    if (!isOut && !loggedBy.trim()) next.loggedBy = 'Enter your email';
+    if (isOut && !orderNumber.trim()) next.orderNumber = 'Enter the order number';
+    if (!location.trim()) next.location = 'Enter the location';
+    if (!transporterName.trim()) next.transporterName = 'Enter the transporter name';
+    if (!vehicleNumber.trim()) next.vehicleNumber = 'Enter the vehicle number';
+    return next;
+  };
+
   const reset = (): void => {
+    setErrors({});
     setLoggedBy(loggedInEmail ?? '');
     setId('');
     setIdError(null);
@@ -454,6 +479,13 @@ export function GateFormDialog({
   };
 
   const confirmGateIn = async (): Promise<void> => {
+    const validation = validate();
+    if (Object.keys(validation).length > 0) {
+      setErrors(validation);
+      toast.error('Missing required fields', 'Fill in every field marked required before confirming.');
+      return;
+    }
+    setErrors({});
     const trimmedId = id.trim();
     if (trimmedId && existingIds?.includes(trimmedId)) {
       setIdError(`${trimmedId} is already in the yard — use a different ID.`);
@@ -527,6 +559,13 @@ export function GateFormDialog({
 
   const confirmGateOut = async (): Promise<void> => {
     if (!container) return;
+    const validation = validate();
+    if (Object.keys(validation).length > 0) {
+      setErrors(validation);
+      toast.error('Missing required fields', 'Fill in every field marked required before confirming.');
+      return;
+    }
+    setErrors({});
     setSubmitting(true);
     try {
       const photosResult = await buildPhotos(container.id);
@@ -730,7 +769,7 @@ export function GateFormDialog({
                 </>
               )}
               {isOut ? (
-                <Field label="Order Number" required>
+                <Field label="Order Number" required error={errors.orderNumber}>
                   {(props) => <input {...props} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />}
                 </Field>
               ) : (
@@ -750,7 +789,7 @@ export function GateFormDialog({
                   <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', margin: 'var(--s-2) 0 var(--s-1)' }}>
                     User Details
                   </div>
-                  <Field label="Email / Name" required>
+                  <Field label="Email / Name" required error={errors.loggedBy}>
                     {(props) => <input {...props} value={loggedBy} onChange={(e) => setLoggedBy(e.target.value)} placeholder="Enter your email" autoComplete="off" />}
                   </Field>
                 </>
@@ -771,16 +810,16 @@ export function GateFormDialog({
               <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11.5px', color: 'var(--text)', marginBottom: 'var(--s-1)' }}>
                 Transport Details
               </div>
-              <Field label="Location" required>
+              <Field label="Location" required error={errors.location}>
                 {(props) => <input {...props} value={location} onChange={(e) => setLocation(e.target.value)} />}
               </Field>
-              <Field label="Transporter Name" required>
+              <Field label="Transporter Name" required error={errors.transporterName}>
                 {(props) => <input {...props} value={transporterName} onChange={(e) => setTransporterName(e.target.value)} />}
               </Field>
               <Field label="Transporter Number">
                 {(props) => <input {...props} value={transporterNumber} onChange={(e) => setTransporterNumber(e.target.value)} />}
               </Field>
-              <Field label="Vehicle Number" required>
+              <Field label="Vehicle Number" required error={errors.vehicleNumber}>
                 {(props) => <input {...props} value={vehicleNumber} onChange={(e) => setVehicleNumber(e.target.value)} />}
               </Field>
               <Field label="LR Copy" hint={lrCopyName ?? 'No file chosen'}>
