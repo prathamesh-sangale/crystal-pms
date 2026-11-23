@@ -22,6 +22,11 @@ const updateUserSchema = z
     // Omitted or blank means "leave the password unchanged" -- never
     // overwritten with a random/blank value by accident.
     password: z.string().min(8).optional(),
+    // The real lockout lever (see the `active` column's own migration
+    // comment) -- distinct from DELETE, which removes the row entirely.
+    // Deactivating is reversible; a manager can flip it back without
+    // recreating the login or losing its history.
+    active: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: 'Nothing to update.' });
 
@@ -32,6 +37,7 @@ interface UserRow {
   role: string;
   worker_id: string | null;
   allowed_screens: string[];
+  active: boolean;
 }
 
 function toUser(row: UserRow): Record<string, unknown> {
@@ -42,6 +48,7 @@ function toUser(row: UserRow): Record<string, unknown> {
     role: row.role,
     workerId: row.worker_id,
     allowedScreens: row.allowed_screens,
+    active: row.active,
   };
 }
 
@@ -56,7 +63,7 @@ async function requireManager(request: FastifyRequest, reply: FastifyReply): Pro
   await reply.code(403).send({ error: 'forbidden', message: 'Only an admin can manage access.' });
 }
 
-const USER_SELECT = 'id, email, name, role, worker_id, allowed_screens';
+const USER_SELECT = 'id, email, name, role, worker_id, allowed_screens, active';
 
 /**
  * The first real way to create a login other than running
@@ -110,24 +117,30 @@ export async function v2UserRoutes(app: FastifyInstance): Promise<void> {
     // login" and "an admin locks themselves out with no second admin to
     // undo it" -- the frontend hides your own row from this screen's list
     // as a UX nicety (AccessManagement.tsx), which stops nothing against a
-    // direct API call. Role is the only field that can actually lock you
-    // out; renaming yourself or resetting your own password here is fine.
+    // direct API call. Role and `active` are the two fields that can
+    // actually lock you out; renaming yourself or resetting your own
+    // password here is fine.
     if (id === request.user.id && body.role !== undefined && body.role !== 'manager') {
       return reply.code(409).send(conflict("You can't remove your own admin access."));
     }
+    if (id === request.user.id && body.active === false) {
+      return reply.code(409).send(conflict("You can't deactivate your own login."));
+    }
 
     const { password, ...rest } = body;
-    // Bumping this is what makes a role/screen change (or a password reset
-    // -- might as well kill other sessions too) take effect immediately
-    // instead of waiting up to 12h for the old token to expire on its own.
-    // Set to the current timestamp, not incremented -- the only requirement
-    // is "different from whatever's in any token issued before now", which
-    // a timestamp guarantees without a read-then-write race.
-    const revokesSessions = rest.role !== undefined || rest.allowedScreens !== undefined || password !== undefined;
+    // Bumping this is what makes a role/screen change, a password reset, or
+    // a deactivation (might as well kill other sessions too in every case)
+    // take effect immediately instead of waiting up to 12h for the old
+    // token to expire on its own. Set to the current timestamp, not
+    // incremented -- the only requirement is "different from whatever's in
+    // any token issued before now", which a timestamp guarantees without a
+    // read-then-write race.
+    const revokesSessions = rest.role !== undefined || rest.allowedScreens !== undefined || password !== undefined || rest.active === false;
     const patch: Record<string, unknown> = {
       ...(rest.name !== undefined && { name: rest.name }),
       ...(rest.role !== undefined && { role: rest.role }),
       ...(rest.allowedScreens !== undefined && { allowed_screens: rest.allowedScreens }),
+      ...(rest.active !== undefined && { active: rest.active }),
       ...(password !== undefined && { password_hash: hashPassword(password) }),
       ...(revokesSessions && { token_version: Date.now() }),
     };

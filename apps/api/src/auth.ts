@@ -90,9 +90,14 @@ declare module '@fastify/jwt' {
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
     const payload = await request.jwtVerify<SessionUser>();
-    const { data, error } = await supabase().from('users').select('token_version').eq('id', payload.id).maybeSingle();
+    const { data, error } = await supabase().from('users').select('token_version, active').eq('id', payload.id).maybeSingle();
     if (error) throw error;
-    if (!data || (data as { token_version: number }).token_version !== payload.tokenVersion) {
+    const row = data as { token_version: number; active: boolean } | null;
+    // `!row.active` sits alongside the token_version mismatch, not as a
+    // separate check -- same reasoning, same response: deactivating a login
+    // should kill an already-issued session immediately, not just block the
+    // next sign-in (see the `active` column's own migration comment).
+    if (!row || row.token_version !== payload.tokenVersion || !row.active) {
       await reply.code(401).send({
         error: 'unauthorized',
         message: 'Your access has changed. Sign in again to continue.',

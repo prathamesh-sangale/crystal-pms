@@ -1,0 +1,18 @@
+-- Resetting a login's password (or narrowing its role/allowed_screens) bumps
+-- token_version specifically to kill its existing sessions, on the implicit
+-- assumption that also stops the account from signing back in at all. That
+-- held while password was the only way in -- but email-code sign-in
+-- (routes/otpAuth.ts) only needs Supabase to confirm the emailed code, then
+-- looks the account up by email alone; it never reads password_hash. So an
+-- admin resetting a compromised or offboarded account's password, believing
+-- that locks it out, hasn't actually done so if OTP is configured: the
+-- account can still sign back in via the emailed code using only its own
+-- inbox. Found live (2026-11-23), alongside the other audit findings in
+-- DEVELOPMENT-STATUS.md item 172.
+--
+-- This column is the actual lockout lever, independent of any login method:
+-- checked by /api/auth/login, both OTP routes, and authenticate()'s existing
+-- real-time revocation check (so deactivating also instantly kills any
+-- already-issued session, not just blocks new logins). Defaults true so
+-- every existing login keeps working unchanged.
+alter table public.users add column active boolean not null default true;

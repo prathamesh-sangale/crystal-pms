@@ -17,7 +17,10 @@ export interface UserRow {
   worker_id: string | null;
   allowed_screens: string[];
   token_version: number;
+  active: boolean;
 }
+
+export const USER_AUTH_SELECT = 'id, email, name, role, password_hash, worker_id, allowed_screens, token_version, active';
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1),
@@ -43,14 +46,15 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const { data: user } = (await supabase()
         .from('users')
-        .select('id, email, name, role, password_hash, worker_id, allowed_screens, token_version')
+        .select(USER_AUTH_SELECT)
         .eq('email', body.email.toLowerCase())
         .maybeSingle()) as { data: UserRow | null };
 
-      // Same response and roughly the same work whether the account exists or
-      // the password is wrong, so the endpoint does not confirm who has one.
+      // Same response and roughly the same work whether the account exists,
+      // the password is wrong, or the account's been deactivated -- the
+      // endpoint never confirms which one it was.
       const ok = user ? verifyPassword(body.password, user.password_hash) : false;
-      if (!user || !ok) {
+      if (!user || !ok || !user.active) {
         return reply.code(401).send({
           error: 'invalid_credentials',
           message: 'That email and password do not match an account.',
@@ -101,7 +105,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const { data: user, error: fetchErr } = (await supabase()
         .from('users')
-        .select('id, email, name, role, password_hash, worker_id, allowed_screens, token_version')
+        .select(USER_AUTH_SELECT)
         .eq('id', request.user.id)
         .maybeSingle()) as { data: UserRow | null; error: unknown };
       if (fetchErr) throw app.httpErrors.internalServerError(String(fetchErr));
@@ -117,7 +121,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         .from('users')
         .update({ password_hash: hashPassword(body.newPassword), token_version: tokenVersion })
         .eq('id', user.id)
-        .select('id, email, name, role, password_hash, worker_id, allowed_screens, token_version')
+        .select(USER_AUTH_SELECT)
         .single();
       if (updateErr) throw app.httpErrors.internalServerError(updateErr.message);
 

@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { env } from '../env.js';
 import { parseOr422 } from '../http.js';
 import { supabase, supabaseAnon } from '../supabase.js';
-import { toSession, type UserRow } from './auth.js';
+import { toSession, USER_AUTH_SELECT, type UserRow } from './auth.js';
 
 /**
  * Sign-in with an emailed 6-digit code — an additional way to prove it's
@@ -36,15 +36,15 @@ export async function otpAuthRoutes(app: FastifyInstance): Promise<void> {
       const email = body.email.toLowerCase();
       const { data: user } = (await supabase()
         .from('users')
-        .select('id')
+        .select('id, active')
         .eq('email', email)
-        .maybeSingle()) as { data: Pick<UserRow, 'id'> | null };
+        .maybeSingle()) as { data: Pick<UserRow, 'id' | 'active'> | null };
 
-      // Same response whether or not the account exists -- this route must
-      // never confirm which emails have a login, same reasoning as
-      // /api/auth/login's own constant response shape.
+      // Same response whether the account doesn't exist, or exists but is
+      // deactivated -- this route must never confirm either one, same
+      // reasoning as /api/auth/login's own constant response shape.
       const sent = { ok: true, message: 'If that email has an account, a 6-digit code has been sent.' };
-      if (!user) return reply.send(sent);
+      if (!user || !user.active) return reply.send(sent);
 
       if (!env.SUPABASE_ANON_KEY) {
         request.log.error('OTP requested but SUPABASE_ANON_KEY is not configured');
@@ -99,14 +99,14 @@ export async function otpAuthRoutes(app: FastifyInstance): Promise<void> {
 
       const { data: user, error: fetchErr } = (await supabase()
         .from('users')
-        .select('id, email, name, role, password_hash, worker_id, allowed_screens, token_version')
+        .select(USER_AUTH_SELECT)
         .eq('email', email)
         .maybeSingle()) as { data: UserRow | null; error: unknown };
       if (fetchErr) throw app.httpErrors.internalServerError(String(fetchErr));
-      // The account could in principle have been deleted between /request
-      // and /verify -- the code checked out, but there's no PMS login left
-      // to issue a session for.
-      if (!user) return reply.code(401).send(invalid);
+      // The account could in principle have been deleted (or deactivated)
+      // between /request and /verify -- the code checked out, but there's
+      // no live PMS login left to issue a session for.
+      if (!user || !user.active) return reply.code(401).send(invalid);
 
       const session = toSession(user);
       const token = app.jwt.sign(session, { expiresIn: '12h' });

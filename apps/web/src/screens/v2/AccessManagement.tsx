@@ -1,5 +1,5 @@
 import { createColumnHelper } from '@tanstack/react-table';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type AccessUser, type Screen } from '../../lib/api';
 import { roleDisplayLabel, useAuth } from '../../lib/auth';
 import { WORKER_TYPE_LABELS, WORKER_TYPES, type MockWorker, type WorkerType } from '../../lib/mockV2';
@@ -107,7 +107,7 @@ export function AccessManagement(): React.ReactElement {
   // looking at the page right now.
   const visibleUsers = useMemo(() => users.filter((u) => u.id !== signedInUser?.id), [users, signedInUser?.id]);
 
-  const displayName = (u: AccessUser): string => (u.workerId && workerById.get(u.workerId)?.name) || u.name;
+  const displayName = useCallback((u: AccessUser): string => (u.workerId && workerById.get(u.workerId)?.name) || u.name, [workerById]);
 
   const openGiveAccess = (workerId: string): void => {
     setDraft(emptyDraft('new-worker', workerId));
@@ -233,6 +233,23 @@ export function AccessManagement(): React.ReactElement {
     }
   };
 
+  /** The reversible alternative to Remove -- blocks every sign-in method
+   * (password and the emailed-code one) without deleting the login or its
+   * history. Flip back any time. No confirm dialog, unlike Remove: nothing
+   * is lost either direction. */
+  const handleToggleActive = useCallback(
+    async (u: AccessUser): Promise<void> => {
+      try {
+        const { user } = await api.v2UpdateUser(u.id, { active: !u.active });
+        setUsers((cur) => cur.map((cu) => (cu.id === user.id ? user : cu)));
+        toast.ok(user.active ? 'Access reactivated' : 'Access deactivated', `${displayName(user)} can ${user.active ? 'now' : 'no longer'} sign in.`);
+      } catch (err) {
+        toast.error('Could not change this', err instanceof Error ? err.message : 'Try again.');
+      }
+    },
+    [toast, displayName]
+  );
+
   const dialogTitle = !draft
     ? ''
     : draft.kind === 'edit'
@@ -252,7 +269,8 @@ export function AccessManagement(): React.ReactElement {
         cell: (ctx) => {
           const u = ctx.row.original;
           const worker = u.workerId ? workerById.get(u.workerId) : null;
-          return <Person name={ctx.getValue()} detail={worker ? `${roleDisplayLabel(u.role)} · ${WORKER_TYPE_LABELS[worker.type]}` : roleDisplayLabel(u.role)} />;
+          const detail = worker ? `${roleDisplayLabel(u.role)} · ${WORKER_TYPE_LABELS[worker.type]}` : roleDisplayLabel(u.role);
+          return <Person name={ctx.getValue()} detail={u.active ? detail : `${detail} · Deactivated`} />;
         },
       }),
       columnHelper.accessor('email', {
@@ -286,6 +304,14 @@ export function AccessManagement(): React.ReactElement {
             <Button variant="secondary" size="sm" icon="edit" onClick={() => openEdit(ctx.row.original)}>
               Edit access
             </Button>
+            <Button
+              variant={ctx.row.original.active ? 'danger' : 'accent'}
+              size="sm"
+              icon="lock"
+              onClick={() => void handleToggleActive(ctx.row.original)}
+            >
+              {ctx.row.original.active ? 'Deactivate' : 'Reactivate'}
+            </Button>
             <Button variant="ghost" size="sm" icon="trash" onClick={() => setRemoveTarget(ctx.row.original)}>
               Remove
             </Button>
@@ -293,7 +319,7 @@ export function AccessManagement(): React.ReactElement {
         ),
       }),
     ],
-    [workerById]
+    [workerById, handleToggleActive]
   );
 
   return (
@@ -354,7 +380,13 @@ export function AccessManagement(): React.ReactElement {
                   <div className="cluster" style={{ justifyContent: 'space-between' }}>
                     <Person name={displayName(u)} detail={worker ? `${roleDisplayLabel(u.role)} · ${WORKER_TYPE_LABELS[worker.type]}` : roleDisplayLabel(u.role)} />
                   </div>
-                  <StatusPill status={{ tone: 'ok', icon: 'check-circle', label: u.email, detail: `Can sign in as ${u.email}.` }} />
+                  <StatusPill
+                    status={
+                      u.active
+                        ? { tone: 'ok', icon: 'check-circle', label: u.email, detail: `Can sign in as ${u.email}.` }
+                        : { tone: 'bad', icon: 'lock', label: 'Deactivated', detail: `${u.email} can no longer sign in, by any method.` }
+                    }
+                  />
                   {u.allowedScreens.length === 0 ? (
                     <span className="subtle" style={{ fontSize: '12px' }}>No screens granted yet</span>
                   ) : (
@@ -367,6 +399,9 @@ export function AccessManagement(): React.ReactElement {
                   <span className="cluster" style={{ gap: 'var(--s-2)' }}>
                     <Button variant="secondary" size="sm" icon="edit" onClick={() => openEdit(u)}>
                       Edit access
+                    </Button>
+                    <Button variant={u.active ? 'danger' : 'accent'} size="sm" icon="lock" onClick={() => void handleToggleActive(u)}>
+                      {u.active ? 'Deactivate' : 'Reactivate'}
                     </Button>
                     <Button variant="ghost" size="sm" icon="trash" onClick={() => setRemoveTarget(u)}>
                       Remove

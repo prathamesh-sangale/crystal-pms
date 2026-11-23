@@ -158,6 +158,10 @@ export interface AccessUser {
   role: SessionUser['role'];
   workerId: string | null;
   allowedScreens: Screen[];
+  /** The real lockout lever (apps/api's `active` column) -- false means this
+   * login can no longer sign in at all, by any method, distinct from
+   * deleting it outright (reversible, history-preserving). */
+  active: boolean;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -219,7 +223,7 @@ export const api = {
   v2CreateUser: (input: { id: string; email: string; password: string; name: string; role: AccessUser['role']; workerId: string | null; allowedScreens: Screen[] }) =>
     request<{ user: AccessUser }>('/api/v2/users', { method: 'POST', body: JSON.stringify(input) }),
 
-  v2UpdateUser: (id: string, patch: Partial<{ name: string; role: AccessUser['role']; allowedScreens: Screen[]; password: string }>) =>
+  v2UpdateUser: (id: string, patch: Partial<{ name: string; role: AccessUser['role']; allowedScreens: Screen[]; password: string; active: boolean }>) =>
     request<{ user: AccessUser }>(`/api/v2/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   v2DeleteUser: (id: string) => request<void>(`/api/v2/users/${encodeURIComponent(id)}`, { method: 'DELETE' }),
