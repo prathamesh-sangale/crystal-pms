@@ -41,6 +41,10 @@ export interface SurveyDraftData {
    * Only ever populated for a Porta Cabin; empty objects otherwise. */
   cabinAvailable: Record<string, string>;
   cabinCondition: Record<string, CabinFittingCondition>;
+  /** This survey's own Expected Qty per item — seeded from
+   * `CABIN_FITTING_EXPECTED_QTY` on open but freely editable from here on,
+   * so the baseline can be corrected per survey without a code change. */
+  cabinExpectedQty: Record<string, string>;
   machineIssueFound: boolean;
   machineRepairNote: string;
   cleaningRequired: boolean;
@@ -50,11 +54,19 @@ export interface SurveyDraftData {
 
 const BLANK_SECTIONS: Record<SectionKind, boolean> = { painting: false, pti: false, cleaning: false, all_rounder: false, sailing: false };
 
+/** The Expected Qty column's starting values for a brand-new survey — a
+ * plain string copy of `CABIN_FITTING_EXPECTED_QTY`, since the column is a
+ * real input from here on (see `SurveyDraftData.cabinExpectedQty`), not a
+ * read of the constant at render time. */
+const DEFAULT_CABIN_EXPECTED_QTY: Record<string, string> = Object.fromEntries(
+  CABIN_FITTING_ITEMS.map((item) => [item, CABIN_FITTING_EXPECTED_QTY[item] != null ? String(CABIN_FITTING_EXPECTED_QTY[item]) : ''])
+);
+
 /** Whether this is worth keeping as a draft at all — a dialog opened and
  * closed without anything actually entered shouldn't leave a row behind
  * for the "Survey drafted" hint to point at. */
 function isDirty(
-  d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoChoice' | 'needsPti' | 'repairRequired' | 'machineIssueFound' | 'cleaningRequired' | 'remarks' | 'cabinAvailable' | 'cabinCondition'>
+  d: Pick<SurveyDraftData, 'step' | 'paintingRequired' | 'logoChoice' | 'needsPti' | 'repairRequired' | 'machineIssueFound' | 'cleaningRequired' | 'remarks' | 'cabinAvailable' | 'cabinCondition' | 'cabinExpectedQty'>
 ): boolean {
   return (
     d.step === 'result' ||
@@ -69,7 +81,11 @@ function isDirty(
     // request, 2026-11-23) -- without this, filling it in without also
     // touching any other field would silently never save as a draft at all.
     Object.values(d.cabinAvailable).some((v) => v.trim() !== '') ||
-    Object.values(d.cabinCondition).some((v) => v !== '')
+    Object.values(d.cabinCondition).some((v) => v !== '') ||
+    // Only an edited Expected Qty counts as "entered" -- every survey starts
+    // pre-filled with the default baseline, which isn't itself a reason to
+    // keep a draft around.
+    Object.entries(d.cabinExpectedQty).some(([item, v]) => v !== (DEFAULT_CABIN_EXPECTED_QTY[item] ?? ''))
   );
 }
 
@@ -138,6 +154,7 @@ export function RunSurveyDialog({
   const [repairFields, setRepairFields] = useState<DraftField[]>(() => blankFields(REPAIR_ITEMS, 'good'));
   const [cabinAvailable, setCabinAvailable] = useState<Record<string, string>>({});
   const [cabinCondition, setCabinCondition] = useState<Record<string, CabinFittingCondition>>({});
+  const [cabinExpectedQty, setCabinExpectedQty] = useState<Record<string, string>>(DEFAULT_CABIN_EXPECTED_QTY);
   const [machineIssueFound, setMachineIssueFound] = useState(false);
   const [machineRepairNote, setMachineRepairNote] = useState('');
   const [cleaningRequired, setCleaningRequired] = useState(false);
@@ -159,6 +176,7 @@ export function RunSurveyDialog({
     setRepairFields(d?.repairFields ?? blankFields(REPAIR_ITEMS, 'good'));
     setCabinAvailable(d?.cabinAvailable ?? {});
     setCabinCondition(d?.cabinCondition ?? {});
+    setCabinExpectedQty(d?.cabinExpectedQty ?? DEFAULT_CABIN_EXPECTED_QTY);
     setMachineIssueFound(d?.machineIssueFound ?? false);
     setMachineRepairNote(d?.machineRepairNote ?? '');
     setCleaningRequired(d?.cleaningRequired ?? false);
@@ -172,8 +190,8 @@ export function RunSurveyDialog({
   // over -- a plain dependency array on every field would re-run this
   // effect (and its cleanup) on every keystroke, which is exactly what a
   // ref avoids.
-  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], cabinAvailable: {}, cabinCondition: {}, machineIssueFound: false, machineRepairNote: '', cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
-  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, cabinAvailable, cabinCondition, machineIssueFound, machineRepairNote, cleaningRequired, remarks, sections };
+  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], cabinAvailable: {}, cabinCondition: {}, cabinExpectedQty: DEFAULT_CABIN_EXPECTED_QTY, machineIssueFound: false, machineRepairNote: '', cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
+  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, cabinAvailable, cabinCondition, cabinExpectedQty, machineIssueFound, machineRepairNote, cleaningRequired, remarks, sections };
   // Set right before a successful confirm() closes the dialog, so the
   // effect below knows not to turn a just-submitted survey back into a
   // leftover draft of itself.
@@ -212,7 +230,8 @@ export function RunSurveyDialog({
    * one `repairFields` shape, never branch on which capture UI produced it. */
   const cabinFittingFields = (): DraftField[] =>
     CABIN_FITTING_ITEMS.map((item) => {
-      const qty = CABIN_FITTING_EXPECTED_QTY[item] ?? null;
+      const qtyRaw = cabinExpectedQty[item] ?? '';
+      const qty = qtyRaw.trim() === '' ? null : Number(qtyRaw);
       const availableRaw = cabinAvailable[item] ?? '';
       const availableNum = availableRaw.trim() === '' ? null : Number(availableRaw);
       const shortfall = qty !== null && availableNum !== null && availableNum < qty;
@@ -370,7 +389,7 @@ export function RunSurveyDialog({
             <>
               <div className="divider-lbl">Site Cabin Fittings</div>
               <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>
-                Expected quantities for this cabin. Enter how many are actually present — falling short of the expected count opens a Condition dropdown for that item.
+                Qty is this depot's usual baseline — correct it here if this cabin differs. Enter how many are actually present — falling short of the expected count opens a Condition dropdown for that item.
               </p>
               <div className="tablewrap">
                 <div className="tablescroll">
@@ -386,7 +405,8 @@ export function RunSurveyDialog({
                     </thead>
                     <tbody>
                       {CABIN_FITTING_ITEMS.map((item, i) => {
-                        const qty = CABIN_FITTING_EXPECTED_QTY[item] ?? null;
+                        const qtyRaw = cabinExpectedQty[item] ?? '';
+                        const qty = qtyRaw.trim() === '' ? null : Number(qtyRaw);
                         const available = cabinAvailable[item] ?? '';
                         const availableNum = available.trim() === '' ? null : Number(available);
                         const shortfall = qty !== null && availableNum !== null && availableNum < qty;
@@ -394,7 +414,16 @@ export function RunSurveyDialog({
                           <tr key={item}>
                             <td>{i + 1}</td>
                             <td>{item}</td>
-                            <td>{qty ?? '—'}</td>
+                            <td>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                style={{ width: '80px' }}
+                                value={qtyRaw}
+                                onChange={(e) => setCabinExpectedQty((cur) => ({ ...cur, [item]: e.target.value }))}
+                              />
+                            </td>
                             <td>
                               <input
                                 className="input"

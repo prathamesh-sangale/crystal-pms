@@ -224,14 +224,27 @@ export const CABIN_FITTING_ITEMS = [
 ];
 
 /** The expected-quantity baseline a cabin's Available count is checked
- * against. `null` for every item today, by direct instruction ("ignore that
- * list for now") — no real baseline numbers exist yet, so nothing can be
- * flagged as short until this is filled in later; the checklist still
- * records what's actually present either way. Same baseline regardless of
- * cabin size (10/20/40 Feet), also by direct confirmation ("same for all"). */
-export const CABIN_FITTING_EXPECTED_QTY: Record<string, number | null> = Object.fromEntries(
-  CABIN_FITTING_ITEMS.map((item) => [item, null])
-);
+ * against — the real numbers, provided directly (2026-11-23), same baseline
+ * regardless of cabin size (10/20/40 Feet) per earlier confirmation ("same
+ * for all"). Only the *starting point* for a new survey now, not a locked-in
+ * value: `RunSurveyDialog`'s own Qty column is a real input seeded from
+ * this, so an admin can correct it per survey without a code change (direct
+ * instruction: "dont make the static"). */
+export const CABIN_FITTING_EXPECTED_QTY: Record<string, number | null> = {
+  Fan: 3,
+  LED: 4,
+  '5 Amp Switch': 2,
+  Window: 2,
+  '15A Switch': 1,
+  Bulkhead: 1,
+  'AC point': 1,
+  MCB: 1,
+  'Manager Table': 1,
+  Table: 4,
+  'Overhead Storage': 4,
+  Chair: 7,
+  Partition: 1,
+};
 
 export function isPortaCabin(typeCode: string): boolean {
   return typeCode.startsWith('Porta Cabin');
