@@ -1,8 +1,10 @@
 import {
+  CABIN_FITTING_ITEMS,
   CONTAINER_INSPECTION_FIELDS,
   FIELD_SEVERITY_LABELS,
   formatElapsed,
   formatSurveyDate,
+  isPortaCabin,
   isReadyToMove,
   MACHINE_REPAIR_LABEL,
   SECTION_LABELS,
@@ -181,7 +183,16 @@ export function ContainerReportContent({
   const workerFor = (id: string | null): MockWorker | undefined => workers.find((w) => w.id === id);
   const ready = Boolean(container.readyAt) || isReadyToMove(container);
 
-  const inspectionFields = container.survey?.fields.slice(0, CONTAINER_INSPECTION_FIELDS.length) ?? [];
+  // A positional slice, not a label lookup -- `buildSurveyFields`
+  // (mockV2.ts) always writes this checklist first, in one of these two
+  // fixed-length orders depending on type, with only the Reefer
+  // machine-repair entry (found separately below) ever appended after it.
+  // Using the wrong length here doesn't just mislabel the section, it drops
+  // real items too -- a cabin's 13 fittings sliced to the generic
+  // checklist's 12 silently lost "Partition" off the end before this was
+  // typeCode-aware.
+  const isCabin = isPortaCabin(container.typeCode);
+  const inspectionFields = container.survey?.fields.slice(0, isCabin ? CABIN_FITTING_ITEMS.length : CONTAINER_INSPECTION_FIELDS.length) ?? [];
   const machineRepairField = container.survey?.fields.find((f) => f.label === MACHINE_REPAIR_LABEL) ?? null;
 
   return (
@@ -236,7 +247,7 @@ export function ContainerReportContent({
             {inspectionFields.length > 0 && (
               <div>
                 <div style={{ fontFamily: 'var(--f-display)', fontWeight: 700, fontSize: '11px', color: 'var(--text-2)', margin: 'var(--s-2) 0 2px' }}>
-                  Container Inspection Checklist
+                  {isCabin ? 'Site Cabin Fittings' : 'Container Inspection Checklist'}
                 </div>
                 <ul style={{ margin: 0, paddingLeft: 0, listStyle: 'none', fontSize: '12.5px' }}>
                   {inspectionFields.map((f) => (

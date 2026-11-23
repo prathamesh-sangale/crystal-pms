@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   buildSurveyFields,
+  CABIN_FITTING_EXPECTED_QTY,
+  CABIN_FITTING_ITEMS,
+  isPortaCabin,
   recommendedSurveySections,
   REPAIR_ITEMS,
   surveySectionTasks,
@@ -22,6 +25,8 @@ import { blankFields, RepairFieldRow, type DraftField } from './GateFormDialog';
  * open). Saved under the container's own real id in the shared `drafts`
  * table (apps/api/src/routes/v2Drafts.ts) — a plain id a Gate-In draft's
  * generated `draft-<timestamp>` id can never collide with. */
+export type CabinFittingCondition = 'good' | 'damage' | '';
+
 export interface SurveyDraftData {
   step: 'assessment' | 'result';
   paintingRequired: boolean;
@@ -29,6 +34,13 @@ export interface SurveyDraftData {
   needsPti: boolean;
   repairRequired: boolean;
   repairFields: DraftField[];
+  /** Porta Cabin's own checklist state -- keyed by `CABIN_FITTING_ITEMS`
+   * entry, kept separate from `repairFields` above rather than reusing that
+   * same array, since a cabin's capture UI (expected/available/condition per
+   * item) needs richer per-item state than a plain Good/Damage toggle does.
+   * Only ever populated for a Porta Cabin; empty objects otherwise. */
+  cabinAvailable: Record<string, string>;
+  cabinCondition: Record<string, CabinFittingCondition>;
   machineIssueFound: boolean;
   machineRepairNote: string;
   cleaningRequired: boolean;
@@ -107,6 +119,7 @@ export function RunSurveyDialog({
 }): React.ReactElement {
   const toast = useToast();
   const isReefer = Boolean(container?.typeCode.startsWith('Reefer'));
+  const isCabin = Boolean(container && isPortaCabin(container.typeCode));
 
   const [step, setStep] = useState<'assessment' | 'result'>('assessment');
   const [submitting, setSubmitting] = useState(false);
@@ -116,6 +129,8 @@ export function RunSurveyDialog({
   const [needsPti, setNeedsPti] = useState(false);
   const [repairRequired, setRepairRequired] = useState(false);
   const [repairFields, setRepairFields] = useState<DraftField[]>(() => blankFields(REPAIR_ITEMS, 'good'));
+  const [cabinAvailable, setCabinAvailable] = useState<Record<string, string>>({});
+  const [cabinCondition, setCabinCondition] = useState<Record<string, CabinFittingCondition>>({});
   const [machineIssueFound, setMachineIssueFound] = useState(false);
   const [machineRepairNote, setMachineRepairNote] = useState('');
   const [cleaningRequired, setCleaningRequired] = useState(false);
@@ -135,6 +150,8 @@ export function RunSurveyDialog({
     setNeedsPti(d?.needsPti ?? false);
     setRepairRequired(d?.repairRequired ?? false);
     setRepairFields(d?.repairFields ?? blankFields(REPAIR_ITEMS, 'good'));
+    setCabinAvailable(d?.cabinAvailable ?? {});
+    setCabinCondition(d?.cabinCondition ?? {});
     setMachineIssueFound(d?.machineIssueFound ?? false);
     setMachineRepairNote(d?.machineRepairNote ?? '');
     setCleaningRequired(d?.cleaningRequired ?? false);
@@ -148,8 +165,8 @@ export function RunSurveyDialog({
   // over -- a plain dependency array on every field would re-run this
   // effect (and its cleanup) on every keystroke, which is exactly what a
   // ref avoids.
-  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], machineIssueFound: false, machineRepairNote: '', cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
-  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, machineIssueFound, machineRepairNote, cleaningRequired, remarks, sections };
+  const latestRef = useRef<SurveyDraftData>({ step: 'assessment', paintingRequired: false, logoChoice: 'na', needsPti: false, repairRequired: false, repairFields: [], cabinAvailable: {}, cabinCondition: {}, machineIssueFound: false, machineRepairNote: '', cleaningRequired: false, remarks: '', sections: BLANK_SECTIONS });
+  latestRef.current = { step, paintingRequired, logoChoice, needsPti, repairRequired, repairFields, cabinAvailable, cabinCondition, machineIssueFound, machineRepairNote, cleaningRequired, remarks, sections };
   // Set right before a successful confirm() closes the dialog, so the
   // effect below knows not to turn a just-submitted survey back into a
   // leftover draft of itself.
@@ -181,6 +198,27 @@ export function RunSurveyDialog({
     setRepairFields((cur) => cur.map((f) => (f.key === key ? { ...f, note } : f)));
   };
 
+  /** Converts the cabin checklist's own richer per-item state (expected/
+   * available/condition) into the same `DraftField[]` shape the generic
+   * Container Inspection Checklist already produces — so `buildSurveyFields`/
+   * `recommendedSurveySections`/`surveySectionTasks` only ever need to read
+   * one `repairFields` shape, never branch on which capture UI produced it. */
+  const cabinFittingFields = (): DraftField[] =>
+    CABIN_FITTING_ITEMS.map((item) => {
+      const qty = CABIN_FITTING_EXPECTED_QTY[item] ?? null;
+      const availableRaw = cabinAvailable[item] ?? '';
+      const availableNum = availableRaw.trim() === '' ? null : Number(availableRaw);
+      const shortfall = qty !== null && availableNum !== null && availableNum < qty;
+      const condition = cabinCondition[item] || '';
+      const conditionLabel = condition === 'damage' ? 'Damage' : condition === 'good' ? 'Good' : '';
+      const note = shortfall
+        ? `${availableNum}/${qty} available${conditionLabel ? ` — ${conditionLabel}` : ''}`
+        : availableRaw.trim() !== ''
+          ? `Available: ${availableRaw}`
+          : '';
+      return { key: item, label: item, severity: shortfall ? 'flagged' : 'good', note };
+    });
+
   const assessment = {
     isReefer,
     typeCode: container?.typeCode ?? '',
@@ -188,7 +226,7 @@ export function RunSurveyDialog({
     logoChoice,
     needsPti,
     repairRequired,
-    repairFields,
+    repairFields: isCabin ? cabinFittingFields() : repairFields,
     machineIssueFound,
     machineRepairNote,
     cleaningRequired,
@@ -321,7 +359,71 @@ export function RunSurveyDialog({
             </div>
           </div>
 
-          {repairRequired && (
+          {repairRequired && isCabin && (
+            <>
+              <div className="divider-lbl">Site Cabin Fittings</div>
+              <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>
+                Expected quantities for this cabin. Enter how many are actually present — falling short of the expected count opens a Condition dropdown for that item.
+              </p>
+              <div className="tablewrap">
+                <div className="tablescroll">
+                  <table className="dt">
+                    <thead>
+                      <tr>
+                        <th>Sr. No.</th>
+                        <th>Items</th>
+                        <th>Qty</th>
+                        <th>Available</th>
+                        <th>Condition</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {CABIN_FITTING_ITEMS.map((item, i) => {
+                        const qty = CABIN_FITTING_EXPECTED_QTY[item] ?? null;
+                        const available = cabinAvailable[item] ?? '';
+                        const availableNum = available.trim() === '' ? null : Number(available);
+                        const shortfall = qty !== null && availableNum !== null && availableNum < qty;
+                        return (
+                          <tr key={item}>
+                            <td>{i + 1}</td>
+                            <td>{item}</td>
+                            <td>{qty ?? '—'}</td>
+                            <td>
+                              <input
+                                className="input"
+                                type="number"
+                                min={0}
+                                style={{ width: '80px' }}
+                                value={available}
+                                onChange={(e) => setCabinAvailable((cur) => ({ ...cur, [item]: e.target.value }))}
+                              />
+                            </td>
+                            <td>
+                              {shortfall ? (
+                                <select
+                                  className="input"
+                                  style={{ width: '120px' }}
+                                  value={cabinCondition[item] ?? ''}
+                                  onChange={(e) => setCabinCondition((cur) => ({ ...cur, [item]: e.target.value as CabinFittingCondition }))}
+                                >
+                                  <option value="">Select…</option>
+                                  <option value="good">Good</option>
+                                  <option value="damage">Damage</option>
+                                </select>
+                              ) : (
+                                <span className="subtle">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+          {repairRequired && !isCabin && (
             <>
               <div className="divider-lbl">Container Inspection Checklist</div>
               <p className="subtle" style={{ fontSize: '12px', margin: '0 0 var(--s-2)' }}>

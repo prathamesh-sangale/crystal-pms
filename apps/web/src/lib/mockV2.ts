@@ -201,6 +201,42 @@ export const REPAIR_ITEMS = [
   'Gasket Door',
 ];
 
+/** A Porta Cabin's own checklist, replacing the generic Container Inspection
+ * Checklist above entirely for this one type — a cabin's furniture/
+ * electrical fittings don't have an "Outside/Undercarriage" or a "Gasket
+ * Door" to grade Good/Damage; what matters is whether each fitting is
+ * actually present in the expected quantity. Reference/wording confirmed
+ * directly from Sitaram (2026-11-23). */
+export const CABIN_FITTING_ITEMS = [
+  'Fan',
+  'LED',
+  '5 Amp Switch',
+  'Window',
+  '15A Switch',
+  'Bulkhead',
+  'AC point',
+  'MCB',
+  'Manager Table',
+  'Table',
+  'Overhead Storage',
+  'Chair',
+  'Partition',
+];
+
+/** The expected-quantity baseline a cabin's Available count is checked
+ * against. `null` for every item today, by direct instruction ("ignore that
+ * list for now") — no real baseline numbers exist yet, so nothing can be
+ * flagged as short until this is filled in later; the checklist still
+ * records what's actually present either way. Same baseline regardless of
+ * cabin size (10/20/40 Feet), also by direct confirmation ("same for all"). */
+export const CABIN_FITTING_EXPECTED_QTY: Record<string, number | null> = Object.fromEntries(
+  CABIN_FITTING_ITEMS.map((item) => [item, null])
+);
+
+export function isPortaCabin(typeCode: string): boolean {
+  return typeCode.startsWith('Porta Cabin');
+}
+
 /** The full checklist every container gets — Reefer no longer adds its own
  * itemized Machine Check half (direct request: PTI keeps just Lights, Strip
  * & curtain, and a single Repairment task backed by a free-text remark
@@ -586,13 +622,9 @@ export interface SurveyAssessment {
  * `ContainerReportContent` can find it by name regardless of position. */
 export const MACHINE_REPAIR_LABEL = 'Machine repair';
 
-/** The full fixed-order checklist `container.survey.fields` expects —
- * `CONTAINER_INSPECTION_FIELDS` in order, plus one more entry at the end iff
- * a Reefer's machine issue was flagged, carrying the admin's own remark
- * rather than any itemized sub-field. */
-export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
+function buildContainerInspectionFields(a: SurveyAssessment): MockSurveyField[] {
   const repairByLabel = new Map(a.repairFields.map((f) => [f.label, f]));
-  const base = surveyFieldNames().map((label) => {
+  return surveyFieldNames().map((label) => {
     if (label === 'Contamination') {
       return a.cleaningRequired
         ? { label, severity: 'minor' as FieldSeverity, note: a.remarks.trim() || 'Flagged for cleaning.' }
@@ -604,6 +636,32 @@ export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
     }
     return { label, severity: 'good' as FieldSeverity, note: '' };
   });
+}
+
+/** `buildContainerInspectionFields`'s cabin counterpart — anchored on
+ * `CABIN_FITTING_ITEMS` instead of the generic checklist's own fixed list.
+ * Needed as its own branch, not just a different `repairFields` input to
+ * the same loop: the generic loop above iterates
+ * `CONTAINER_INSPECTION_FIELDS` by name regardless of what `repairFields`
+ * actually contains, so a cabin's own item labels (Fan, LED, ...) would
+ * never surface through it at all — every one would just silently read as
+ * the generic checklist's unrelated "good" default. */
+function buildCabinFittingFields(a: SurveyAssessment): MockSurveyField[] {
+  if (!a.repairRequired) return CABIN_FITTING_ITEMS.map((item) => ({ label: item, severity: 'good' as FieldSeverity, note: '' }));
+  const byLabel = new Map(a.repairFields.map((f) => [f.label, f]));
+  return CABIN_FITTING_ITEMS.map((item) => {
+    const f = byLabel.get(item);
+    return f ? { label: f.label, severity: f.severity, note: f.note } : { label: item, severity: 'good' as FieldSeverity, note: '' };
+  });
+}
+
+/** The full fixed-order checklist `container.survey.fields` expects —
+ * `CONTAINER_INSPECTION_FIELDS` in order (or `CABIN_FITTING_ITEMS`, for a
+ * Porta Cabin), plus one more entry at the end iff a Reefer's machine issue
+ * was flagged, carrying the admin's own remark rather than any itemized
+ * sub-field. */
+export function buildSurveyFields(a: SurveyAssessment): MockSurveyField[] {
+  const base = isPortaCabin(a.typeCode) ? buildCabinFittingFields(a) : buildContainerInspectionFields(a);
   if (!a.isReefer || !a.machineIssueFound) return base;
   return [...base, { label: MACHINE_REPAIR_LABEL, severity: 'flagged' as FieldSeverity, note: a.machineRepairNote.trim() }];
 }
@@ -645,7 +703,13 @@ export function surveySectionTasks(
     case 'cleaning':
       return cleaningTasks(null);
     case 'all_rounder': {
-      const tasks = repairTasksFor(fields, REPAIR_ITEMS, 'Painting site');
+      // A cabin's flagged items are named Fan/LED/etc., not any of
+      // REPAIR_ITEMS's structural panel names -- repairTasksFor only ever
+      // turns a flagged field into a task when its label is in the list it's
+      // given, so the wrong list here would silently produce zero named
+      // tasks for a cabin, just the generic fallback below.
+      const itemNames = isPortaCabin(a.typeCode) ? CABIN_FITTING_ITEMS : REPAIR_ITEMS;
+      const tasks = repairTasksFor(fields, itemNames, 'Painting site');
       return tasks.length > 0
         ? tasks
         : [{ key: 'other', label: 'Repairment (reason not specified)', workerId: null, state: 'pending', startedAt: null, elapsedSec: 0, estHrs: 2, site: null }];
