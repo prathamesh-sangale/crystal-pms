@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { authenticate, requireScreen, userHasScreen } from '../auth.js';
+import { checkGate, gateRulesEnabled } from '../gateCheck.js';
 import { notFound, parseOr422 } from '../http.js';
 import { supabase } from '../supabase.js';
 import { recordTntCompletions } from '../tntRecords.js';
@@ -211,6 +212,18 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
     const body = await parseOr422(createContainerSchema, request.body, reply);
     if (!body) return;
 
+    // The agreed IMS-based Gate In rule (gateRules.ts), enforced here as well
+    // as in the form so it can't be skipped. Only while GATE_RULES_ENABLED is
+    // on, and only for a real Gate In form entry: IMS "Add to yard" registers
+    // containers IMS already shows as Stock, so it must never be refused by
+    // this rule. Only reads IMS.
+    if (gateRulesEnabled() && body.gateIn?.source === 'gate-form') {
+      const decision = await checkGate('in', body.id, body.typeCode, request.log);
+      if (!decision.allowed) {
+        return reply.code(409).send({ error: 'gate_rule', message: decision.reason ?? 'IMS does not allow this gate-in.' });
+      }
+    }
+
     const { error: containerErr } = await supabase()
       .from('containers')
       .insert({
@@ -295,6 +308,27 @@ export async function v2ContainerRoutes(app: FastifyInstance): Promise<void> {
         error: 'forbidden',
         message: "You don't have access to this part of the system. Ask an admin to grant it.",
       });
+    }
+
+    // The agreed Gate Out rule (gateRules.ts), only while GATE_RULES_ENABLED
+    // is on: never twice, and only when IMS shows Stock, Blocked, LEASE,
+    // SALE or TRADING. Only reads IMS; fails open if IMS can't be read.
+    if (gateRulesEnabled() && body.gateOut) {
+      const { data: current, error: currentErr } = await supabase()
+        .from('containers')
+        .select('type_code, departed_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (currentErr) throw app.httpErrors.internalServerError(currentErr.message);
+      if (!current) return reply.code(404).send(notFound('Container'));
+      const row = current as { type_code: string; departed_at: string | null };
+      if (row.departed_at) {
+        return reply.code(409).send({ error: 'gate_rule', message: 'This container is already gated out.' });
+      }
+      const decision = await checkGate('out', id, row.type_code, request.log);
+      if (!decision.allowed) {
+        return reply.code(409).send({ error: 'gate_rule', message: decision.reason ?? 'IMS does not allow this gate-out.' });
+      }
     }
 
     // "Ready" without a photo was only ever a client-side rule (the Mark

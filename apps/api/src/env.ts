@@ -56,6 +56,18 @@ const schema = z.object({
   // (10/min), which is the actual guard against guessing a short value, not
   // length validation at boot.
   DEV_LOGS_PASSWORD: z.string().min(1).optional(),
+  // Optional — the Gate Out order lookup against OMS's public API
+  // (omsClient.ts). Both unset simply means the lookup is off and Gate Out
+  // keeps a plain Order Number box. Read-only key (realm `orders`, scope
+  // `read:core`) named "PMS - Gate Out order lookup" in OMS. OMS_API_URL is
+  // the site root, e.g. https://oms.crystalgrp.xyz (no /api/v1).
+  OMS_API_URL: z.string().min(1).optional(),
+  OMS_API_KEY: z.string().min(1).optional(),
+  // Off unless exactly "true" — the IMS-based Gate In / Gate Out rules
+  // (gateRules.ts), agreed with the owner 2026-11-24. They only ever READ
+  // IMS. Off means gate entries behave exactly as they did before the rules
+  // existed.
+  GATE_RULES_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 const parsed = schema.safeParse(process.env);

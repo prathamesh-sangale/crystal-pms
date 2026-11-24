@@ -912,6 +912,58 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
     - `RunSurveyDialog.tsx`: new `cabinExpectedQty: Record<string, string>` state, added to `SurveyDraftData` (persists through a draft resume same as `cabinAvailable`/`cabinCondition`) and seeded from a new `DEFAULT_CABIN_EXPECTED_QTY` (a string copy of the constant) on every fresh open. The Qty column's `<td>{qty ?? '—'}</td>` became a real `<input type="number">` bound to this state, identical in kind to the existing Available input next to it. `cabinFittingFields()` (the function that actually builds what gets submitted — shortfall, note, severity) now reads the live `cabinExpectedQty` state instead of the constant directly, so an edited baseline genuinely changes what gets flagged and what task gets generated, not just what the table displays. `isDirty()` only counts an edited Qty as "entered" (compares against `DEFAULT_CABIN_EXPECTED_QTY`, not merely "non-empty") — every survey starts pre-filled with the baseline, which on its own isn't a reason to keep a draft around.
     - **Verified**: a disposable, local-only script (no DB/network, deleted after) confirmed the real baseline values load (`Fan: 3`, `Chair: 7`, ...) and that overriding Fan's Qty to 5 (available: 3) correctly flags it, correctly drives the Repairment recommendation, and generates a properly-named "Repair: Fan" task — the exact path a per-survey edit takes. `npm run verify` (typecheck + lint + lint:css + full 18-test suite against the live Supabase project) passes clean.
 
+178. **Legacy Gate-In/Gate-Out sync: design agreed, access granted, and a separate TEST database created. No app code changed yet (2026-11-24).** The user pasted the legacy Apps Script Gate-In portal (backend `Code.gs` plus `GateIn_UI.html`, saved in Downloads as `gatein.pdf` but really HTML). They asked that PMS use the same storage places so that "legacy and pms data has to be sync properly", especially for stock, ready and gated-out containers. **Hard rule from the user: "dont change any working or current data of the ims or pms."**
+    - **Storage places (from the script's `CONFIG`)**:
+      - Ledger: "Yard Report" `1J4R3c…_jALTKl4`, tab "CONTAINER GATE-IN/ GATE-OUT", 605 rows. Its header has 30 named columns, but the script appends 32 values: the second Yard Location and the Porta Cabin checklist land in unnamed columns.
+      - `Container_Repository`, inside "Enterprise_procurement_master_database_Jeet_1" `1c1KJt…SygIU`.
+      - IMS "Master Sheet" `1qgAe0…M42nSuiRFo`. IMS's "Container Finder" tab, the one `imsLookup.ts` reads, is a live `FILTER` of Master Sheet A:N.
+      - Drive folder "GATE_IN_OUT_DOCS" `1ZgdbdifVvIyi0FzsBTiqRnzes_fbTMa-`.
+      - The user shared the ledger, the repository and the folder with the service account as Editor. A read-only check confirmed `canEdit=true` on all three, plus IMS.
+    - **Agreed rules**:
+      - Gate In is refused if IMS shows Stock at Crystal Yard (includes "STOCK - Crystal Use"). Stock at another depot is allowed with a warning.
+      - Gate Out is allowed when IMS shows Stock, Blocked, LEASE, SALE or TRADING, and refused if the latest gate entry is already a Gate Out. Checked live: OMS sets LEASE/SALE before the physical gate-out; 4 of the 23 PMS-yard containers already showed LEASE.
+      - Ready is shown in PMS only and never written to IMS.
+      - A PMS Gate In sets that one Master Sheet row to Stock, matching the legacy script, but only for new gate-ins after switch-on.
+      - Legacy-only ledger fields (PTI, Repair, Budget, cabin checklist) are filled from PMS survey results, not added to the gate form.
+      - All three legacy extras are wanted: the per-submit email, the inspection PDF and the `auto_close_pipeline` webhook.
+      - Gate Out gets an OMS order-number search through OMS's existing `/api/v1/orders` API (returns `transactionType` and `containers`).
+      - A container may be gated in again after Gate Out. The user approved that DB change; it must be additive only.
+    - **Test database created**: Supabase project `crystal-pms-TEST-gate-sync` (ref `cqalveuwmcewrnitcmng`, ap-southeast-1, free tier).
+      - **Exact use**: a safe sandbox for trying the "gate in again after gate out" database change and the sheet-sync code before anything touches the real `crystal pms` project.
+      - All 15 existing migrations were applied, so it has the same structure with **no real data** (0 containers).
+      - It carries a `_about_this_test_database` table stating that purpose (RLS on, no policies).
+      - The password lives only in git-ignored `apps/api/credentials/test-db.json`.
+      - Nothing in the live app points at it. It is safe to delete once the change ships.
+      - The real `crystal pms` database was not touched: no CLI link, and `--db-url` targeted the test project only.
+
+179. **Legacy gate-sync, first slice: OMS order lookup + Order Type in Gate Out, and the IMS-based Gate In / Gate Out rules (switched off) (2026-11-24).** Built while the read-only cross-system audit (OMS, Spares/procurement, TMS, S-Automation, dashboards) was still running. By direct instruction ("do the work now, without changing anything"), this slice only READS IMS and OMS. Nothing in it writes to IMS, OMS, the ledger or Container_Repository; those writes wait for the audit. Left uncommitted for review.
+    - **OMS order lookup**:
+      - New files: `omsOrderSearch.ts` (pure search and mapping), `omsClient.ts` (read-only client) and the `GET /api/v2/oms/orders` route in `routes/v2Gate.ts`.
+      - It searches OMS's `active` orders plus genuinely part-delivered ones (deliveredQty > 0 and < quantity, not closed). Checked live: of 818 delivered orders, 147 have deliveredQty 0 (no delivery count recorded) and are excluded. That leaves 146 open orders (54 active, 82 part-delivered), matching OMS's own count.
+      - An exact order number not in that list is fetched directly from OMS.
+      - Load on OMS: a 5-minute cache, refreshed only when someone uses it, with ETag/304 on every page.
+      - Off when `OMS_API_URL`/`OMS_API_KEY` are unset. They are in local `.env` only; nothing is on Vercel yet.
+    - **Gate Out form**:
+      - Order Number searches OMS as you type ("64", "OR64", "or-64"). As soon as the form opens, it lists the open orders that include this container.
+      - A new required **Order Type** dropdown (Lease / Sale / AMC / Other) fills in from OMS (Lease→Lease, Sale/Tender→Sale, AMC/CMC/PM→AMC) and stays editable. It is saved on the gate-out record as `orderType`, plus `omsTransactionType`, and shown on the container report.
+      - A container missing from the picked order's container list is only a warning.
+    - **Gate rules**: `gateRules.ts` (pure), `gateCheck.ts`, `GET /api/v2/gate-check`, plus server enforcement in `POST`/`PATCH /api/v2/containers`. They only apply when `GATE_RULES_ENABLED=true`; unset, gate entries behave exactly as before.
+      - Gate In is refused when IMS "Master Sheet" (read directly, not Container Finder) shows Stock, including "STOCK - Crystal Use", at a Crystal Yard depot. Every other status, or no IMS row at all, is allowed. Stock at another depot is allowed with a warning.
+      - Gate Out is allowed for Stock, anything Blocked, LEASE, SALE or TRADING, and refused if the container is already gated out.
+      - Owner's decision after the cross-system audit: "STOCK - Crystal Use" on gate-in and Offlease on gate-out are warnings, not blocks.
+      - When the same number sits on two IMS rows, only the row matching the form's Type counts.
+      - IMS unreachable → allowed with a warning.
+      - The rule applies only to real gate-form entries: a new `source` field (`'gate-form'` | `'ims-quick-add'`) keeps IMS "Add to yard" (always IMS Stock) from ever being refused.
+      - The form checks the rule before uploading any photo, so a refused entry leaves nothing in Drive.
+    - **Dry run on live data** (rules off, read-only): 22 of the 23 containers in the PMS yard would be allowed to gate out. **CCLU1030700 would be refused**: it is physically in the yard (gate ledger shows an Inward on 23/11/2026), but IMS showed it OFFLEASE at a customer site.
+      - Update: a person corrected it by hand in IMS at 15:48 IST the same day, to STOCK/STOCK. PMS wrote nothing.
+      - Its IMS Depot and Location still read "Refrac Consultancy & Services (P) Ltd." / "Navi Mumbai", not Crystal Yard New / JNPT. Pending the owner's decision.
+    - **Verified**:
+      - typecheck, ESLint and stylelint are clean.
+      - 22 new pure unit tests.
+      - The full API suite (35 tests) ran against the TEST database `crystal-pms-TEST-gate-sync` via an environment override, never the live database. The admin login was seeded into the test database for this; its service key is in git-ignored `credentials/test-db.json`.
+      - A switch-ON run on the test database with real IMS data passed all 8 checks: Stock gate-in refused (form and server), the same container via "Add to yard" accepted, first gate-out allowed, second refused, WIP gate-in allowed, WIP gate-out refused, OMS search answering. Everything created was deleted afterwards.
+
 ---
 
 ## 7. Testing & Quality

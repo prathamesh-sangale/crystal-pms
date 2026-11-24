@@ -18,6 +18,7 @@ import { otpAuthRoutes } from './routes/otpAuth.js';
 import { v2ContainerRoutes } from './routes/v2Containers.js';
 import { v2DraftRoutes } from './routes/v2Drafts.js';
 import { v2ExportRoutes } from './routes/v2Export.js';
+import { v2GateRoutes } from './routes/v2Gate.js';
 import { v2ImsLookupRoutes } from './routes/v2ImsLookup.js';
 import { v2PowerRoutes } from './routes/v2Power.js';
 import { v2UploadRoutes } from './routes/v2Uploads.js';
@@ -159,6 +160,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(v2DraftRoutes);
   await app.register(v2UploadRoutes);
   await app.register(v2ImsLookupRoutes);
+  await app.register(v2GateRoutes);
   await app.register(v2ExportRoutes);
   await app.register(v2PowerRoutes);
   await app.register(v2UserRoutes);

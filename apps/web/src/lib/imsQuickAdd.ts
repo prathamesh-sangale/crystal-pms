@@ -57,6 +57,7 @@ export function buildQuickAddContainer(item: ImsMatch, loggedBy: string): MockCo
     cleaningRequired: false,
     estBudget: '',
     remarks: 'Added directly from IMS — no inspection run, nothing flagged.',
+    source: 'ims-quick-add',
   };
   return {
     id: item.containerId,

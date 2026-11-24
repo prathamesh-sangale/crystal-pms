@@ -53,10 +53,19 @@ function GateLogPanel({ title, entry }: { title: string; entry: GateLogEntry }):
       <div className="stack stack-tight">
         <div className="infogrid">
           {entry.kind === 'out' ? (
-            <div>
-              <dt>Order number</dt>
-              <dd>{entry.orderNumber || '—'}</dd>
-            </div>
+            <>
+              <div>
+                <dt>Order number</dt>
+                <dd>{entry.orderNumber || '—'}</dd>
+              </div>
+              <div>
+                <dt>Order type</dt>
+                <dd>
+                  {entry.orderType || '—'}
+                  {entry.omsTransactionType && entry.omsTransactionType !== entry.orderType ? ` (OMS: ${entry.omsTransactionType})` : ''}
+                </dd>
+              </div>
+            </>
           ) : (
             <div>
               <dt>Indent reference</dt>

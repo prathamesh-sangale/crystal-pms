@@ -15,7 +15,7 @@ import {
   type MockContainer,
   type MockSurveyField,
 } from '../../lib/mockV2';
-import { api, type ImsMatch } from '../../lib/api';
+import { api, RequestError, type ImsMatch, type OmsOrder } from '../../lib/api';
 import { cx } from '../../lib/cx';
 import { istDay } from '../../lib/istDate';
 import { Button } from '../crystal/Button';
@@ -183,6 +183,98 @@ function ImsLookupPanel({
   );
 }
 
+/** Gate Out's order nature, by direct request ("lease or sell or etc").
+ * Filled in automatically when an order is picked from OMS (Lease -> Lease;
+ * Sale/Tender -> Sale; AMC/CMC/PM -> AMC; anything else -> Other), and
+ * always editable. */
+const ORDER_TYPES = ['Lease', 'Sale', 'AMC', 'Other'] as const;
+
+/** OMS order suggestions under Gate Out's Order Number box. Read-only
+ * against OMS. Shows the open orders this container is allocated to as soon
+ * as the form opens, then the orders matching what's typed; picking one
+ * fills Order Number and Order Type. A container missing from the picked
+ * order's list is only a warning, never a block: OMS's allocation list is
+ * often empty or incomplete. Not rendered at all when PMS has no OMS key,
+ * so the box stays a plain text field. */
+function OmsOrderSuggestions({
+  containerId,
+  query,
+  loading,
+  available,
+  forContainer,
+  results,
+  picked,
+  onPick,
+}: {
+  containerId: string;
+  query: string;
+  loading: boolean;
+  available: boolean;
+  forContainer: OmsOrder[];
+  results: OmsOrder[];
+  picked: OmsOrder | null;
+  onPick: (order: OmsOrder) => void;
+}): React.ReactElement {
+  if (!available) {
+    return (
+      <Note tone="dim" icon="info">
+        Couldn’t reach OMS right now. Type the order number and choose the order type by hand.
+      </Note>
+    );
+  }
+  const normalizedId = containerId.toUpperCase().replace(/\s+/g, '');
+  const offTheList = picked !== null && picked.containers.length > 0 && !picked.containers.includes(normalizedId);
+  const typed = query.trim();
+  const searching = typed !== '' && picked?.ref !== typed;
+  const showing = searching ? results : picked ? [] : forContainer;
+  const heading = searching ? 'Matching OMS orders' : `Open OMS orders listing ${containerId}`;
+
+  return (
+    <div className="stack" style={{ gap: 'var(--s-1)' }}>
+      {loading && (
+        <Note tone="dim" icon="search">
+          Searching OMS…
+        </Note>
+      )}
+      {showing.length > 0 && (
+        <div className="card" style={{ padding: 'var(--s-2)' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-3)', marginBottom: 'var(--s-1)' }}>{heading}</div>
+          <div className="stack" style={{ gap: 'var(--s-1)' }}>
+            {showing.map((o) => (
+              <button
+                key={o.ref}
+                type="button"
+                className="chip"
+                aria-pressed={picked?.ref === o.ref}
+                style={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                onClick={() => onPick(o)}
+              >
+                {o.ref} · {o.transactionType ?? 'No type in OMS'}
+                {o.stage ? ` · ${o.stage}` : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {searching && !loading && results.length === 0 && (
+        <Note tone="dim" icon="info">
+          No open OMS order matches “{typed}”. You can still enter it and choose the order type by hand.
+        </Note>
+      )}
+      {picked && !offTheList && (
+        <Note tone="ok" icon="check-circle">
+          Order {picked.ref} found in OMS.
+        </Note>
+      )}
+      {offTheList && (
+        <Note tone="warn" icon="alert">
+          OMS doesn’t list {containerId} on order {picked?.ref}. Check the order number before confirming.
+        </Note>
+      )}
+    </div>
+  );
+}
+
 /** One required (or optional "additional") photo tile — shows an upload
  * prompt until a photo's picked, then a real thumbnail via an object URL.
  * Mock-only: nothing here is ever actually uploaded anywhere. */
@@ -332,6 +424,16 @@ export function GateFormDialog({
   const [size, setSize] = useState(SIZE_OPTIONS[0]!);
   const [indentRef, setIndentRef] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  // Gate Out's order nature and its OMS lookup (read-only against OMS).
+  // `omsEnabled` stays false when PMS has no OMS key or OMS can't be asked,
+  // which keeps Order Number a plain text box exactly as before.
+  const [orderType, setOrderType] = useState('');
+  const [omsEnabled, setOmsEnabled] = useState(false);
+  const [omsAvailable, setOmsAvailable] = useState(true);
+  const [omsLoading, setOmsLoading] = useState(false);
+  const [omsForContainer, setOmsForContainer] = useState<OmsOrder[]>([]);
+  const [omsResults, setOmsResults] = useState<OmsOrder[]>([]);
+  const [omsPicked, setOmsPicked] = useState<OmsOrder | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [color, setColor] = useState(STANDARD_COLORS[0]!);
   const [customColor, setCustomColor] = useState('');
@@ -414,6 +516,73 @@ export function GateFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only on open/draft-id change.
   }, [open, isOut, resumeDraft?.id]);
 
+  // Gate Out: as soon as the form opens, ask OMS (read-only) whether the
+  // lookup is set up, and which open orders list this container. Any failure
+  // just leaves the plain Order Number box.
+  const gateOutContainerId = isOut ? (container?.id ?? '') : '';
+  useEffect(() => {
+    if (!open || !gateOutContainerId) return;
+    let cancelled = false;
+    setOmsLoading(true);
+    api
+      .v2OmsOrders(undefined, gateOutContainerId)
+      .then((res) => {
+        if (cancelled) return;
+        setOmsEnabled(res.enabled);
+        setOmsAvailable(res.available);
+        setOmsForContainer(res.forContainer);
+      })
+      .catch(() => {
+        if (!cancelled) setOmsEnabled(false);
+      })
+      .finally(() => {
+        if (!cancelled) setOmsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, gateOutContainerId]);
+
+  // Search OMS as the order number is typed (debounced), unless the box
+  // holds exactly the order already picked.
+  useEffect(() => {
+    if (!open || !isOut || !omsEnabled) return;
+    const q = orderNumber.trim();
+    if (!q || omsPicked?.ref === q) {
+      setOmsResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setOmsLoading(true);
+      api
+        .v2OmsOrders(q)
+        .then((res) => {
+          if (cancelled) return;
+          setOmsAvailable(res.available);
+          setOmsResults(res.orders);
+        })
+        .catch(() => {
+          if (!cancelled) setOmsResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setOmsLoading(false);
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, isOut, omsEnabled, orderNumber, omsPicked]);
+
+  const pickOmsOrder = (order: OmsOrder): void => {
+    setOrderNumber(order.ref);
+    setOrderType(order.orderType);
+    setOmsPicked(order);
+    setOmsResults([]);
+    setErrors(({ orderNumber: _orderNumber, orderType: _orderType, ...rest }) => rest);
+  };
+
   /** Every field this screen actually marks `required` -- matched one-to-one
    * against the `<Field required>` usages below, both modes. Returns the
    * field-keyed error map directly (empty = valid) rather than a boolean, so
@@ -423,6 +592,7 @@ export function GateFormDialog({
     const next: Record<string, string> = {};
     if (!isOut && !loggedBy.trim()) next.loggedBy = 'Enter your email';
     if (isOut && !orderNumber.trim()) next.orderNumber = 'Enter the order number';
+    if (isOut && !orderType) next.orderType = 'Choose the order type';
     if (!location.trim()) next.location = 'Enter the location';
     if (!transporterName.trim()) next.transporterName = 'Enter the transporter name';
     if (!vehicleNumber.trim()) next.vehicleNumber = 'Enter the vehicle number';
@@ -442,6 +612,13 @@ export function GateFormDialog({
     setSize(SIZE_OPTIONS[0]!);
     setIndentRef('');
     setOrderNumber('');
+    setOrderType('');
+    setOmsEnabled(false);
+    setOmsAvailable(true);
+    setOmsLoading(false);
+    setOmsForContainer([]);
+    setOmsResults([]);
+    setOmsPicked(null);
     setCustomerName('');
     setColor(STANDARD_COLORS[0]!);
     setCustomColor('');
@@ -478,6 +655,27 @@ export function GateFormDialog({
     return { ...(Object.fromEntries(entries) as Record<GatePhotoKey, string>), additional };
   };
 
+  /** The IMS-based Gate In / Gate Out rule (reads IMS only). Returns false
+   * when the entry must stop. While the rules are switched off it always
+   * passes, and if the check itself fails it passes too: the server applies
+   * the same rule again on save, and also lets the entry through when IMS
+   * can't be read. Run before any photo is uploaded, so a refused entry
+   * leaves nothing behind in Drive. */
+  const passesGateRule = async (kind: 'in' | 'out', containerId: string, type: string): Promise<boolean> => {
+    try {
+      const result = await api.v2GateCheck(kind, containerId, type);
+      if (!result.enabled) return true;
+      if (!result.allowed) {
+        toast.error(kind === 'in' ? 'Gate-in not allowed' : 'Gate-out not allowed', result.reason ?? undefined);
+        return false;
+      }
+      if (result.warnings.length > 0) toast.toast('warn', 'Check IMS', result.warnings.join(' '));
+      return true;
+    } catch {
+      return true;
+    }
+  };
+
   const confirmGateIn = async (): Promise<void> => {
     const validation = validate();
     if (Object.keys(validation).length > 0) {
@@ -494,6 +692,8 @@ export function GateFormDialog({
     setIdError(null);
     setSubmitting(true);
     try {
+      // A blank ID becomes a placeholder below, which IMS can't know about.
+      if (trimmedId && !(await passesGateRule('in', trimmedId, typeCode))) return;
       const finalId = trimmedId || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`;
       const photosResult = await buildPhotos(finalId);
       const now = new Date();
@@ -522,6 +722,7 @@ export function GateFormDialog({
         cleaningRequired: null,
         estBudget: '',
         remarks,
+        source: 'gate-form',
       };
 
       const container: MockContainer = {
@@ -551,7 +752,8 @@ export function GateFormDialog({
       reset();
     } catch (err) {
       console.error('Gate-in failed:', err);
-      toast.error('Could not complete gate-in', 'Photos or the record itself didn’t save — check your connection and try again.');
+      if (err instanceof RequestError && err.code === 'gate_rule') toast.error('Gate-in not allowed', err.message);
+      else toast.error('Could not complete gate-in', 'Photos or the record itself didn’t save — check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -568,6 +770,7 @@ export function GateFormDialog({
     setErrors({});
     setSubmitting(true);
     try {
+      if (!(await passesGateRule('out', container.id, container.typeCode))) return;
       const photosResult = await buildPhotos(container.id);
       const now = new Date();
       const entry: GateLogEntry = {
@@ -595,13 +798,17 @@ export function GateFormDialog({
         cleaningRequired: null,
         estBudget: '',
         remarks,
+        orderType,
+        omsTransactionType: omsPicked?.ref === orderNumber.trim() ? omsPicked.transactionType : null,
+        source: 'gate-form',
       };
       await onGateOut?.(container.id, entry);
       onOpenChange(false);
       reset();
     } catch (err) {
       console.error('Gate-out failed:', err);
-      toast.error('Could not complete gate-out', 'Photos or the record itself didn’t save — check your connection and try again.');
+      if (err instanceof RequestError && err.code === 'gate_rule') toast.error('Gate-out not allowed', err.message);
+      else toast.error('Could not complete gate-out', 'Photos or the record itself didn’t save — check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
@@ -769,9 +976,56 @@ export function GateFormDialog({
                 </>
               )}
               {isOut ? (
-                <Field label="Order Number" required error={errors.orderNumber}>
-                  {(props) => <input {...props} value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} />}
-                </Field>
+                <>
+                  <Field
+                    label="Order Number"
+                    required
+                    error={errors.orderNumber}
+                    hint={omsEnabled ? 'Type to search OMS, or pick a suggestion below' : undefined}
+                  >
+                    {(props) => (
+                      <input
+                        {...props}
+                        value={orderNumber}
+                        onChange={(e) => {
+                          setOrderNumber(e.target.value);
+                          if (omsPicked && e.target.value.trim() !== omsPicked.ref) setOmsPicked(null);
+                        }}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    )}
+                  </Field>
+                  {omsEnabled && container && (
+                    <OmsOrderSuggestions
+                      containerId={container.id}
+                      query={orderNumber}
+                      loading={omsLoading}
+                      available={omsAvailable}
+                      forContainer={omsForContainer}
+                      results={omsResults}
+                      picked={omsPicked}
+                      onPick={pickOmsOrder}
+                    />
+                  )}
+                  <Field
+                    label="Order Type"
+                    required
+                    error={errors.orderType}
+                    hint={omsPicked?.transactionType ? `From OMS: ${omsPicked.transactionType}` : undefined}
+                  >
+                    {(props) => (
+                      <select {...props} value={orderType} onChange={(e) => setOrderType(e.target.value)}>
+                        <option value="">Choose…</option>
+                        {ORDER_TYPES.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </Field>
+                </>
               ) : (
                 <Field label="Indent Reference">
                   {(props) => <input {...props} value={indentRef} onChange={(e) => setIndentRef(e.target.value)} />}

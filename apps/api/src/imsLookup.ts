@@ -1,4 +1,5 @@
 import { google, type sheets_v4 } from 'googleapis';
+import type { ImsStatusRow } from './gateRules.js';
 import { googleServiceAccountKey } from './googleAuth.js';
 
 /** The real IMS's own spreadsheet — read-only, same service account already
@@ -185,6 +186,63 @@ export async function findContainerMatches(containerId: string): Promise<ImsLook
     matches: hits.filter((m) => isOurDepot(m.depot)),
     elsewhere: hits.filter((m) => !isOurDepot(m.depot)),
   };
+}
+
+/** The Gate In / Gate Out rules (gateRules.ts) read IMS's authoritative
+ * "Master Sheet" tab directly, not "Container Finder": Container Finder is a
+ * FILTER view of only Master Sheet's first 14 columns, while the rules need
+ * the full row set and both Status (L) and Current (M). Read-only, like
+ * everything else in this module. The cache is kept short (30 s) because a
+ * gate decision should see a container that was just gated in elsewhere. */
+const MASTER_TAB = 'Master Sheet';
+const STATUS_CACHE_TTL_MS = 30 * 1000;
+let statusCache: { rows: Array<ImsStatusRow & { normalizedId: string }>; fetchedAt: number } | null = null;
+
+async function loadMasterStatusRows(): Promise<Array<ImsStatusRow & { normalizedId: string }>> {
+  if (statusCache && Date.now() - statusCache.fetchedAt < STATUS_CACHE_TTL_MS) return statusCache.rows;
+
+  const res = await sheets().spreadsheets.values.get({
+    spreadsheetId: IMS_SPREADSHEET_ID,
+    range: `'${MASTER_TAB}'!A1:M`,
+  });
+  const values = res.data.values ?? [];
+  // Found by header text, not fixed letters, so an inserted column on their
+  // side can't silently shift what's read.
+  const header = (values[0] ?? []).map((h) => String(h).trim());
+  const col = (name: string): number => header.indexOf(name);
+  const idCol = col('Container No');
+  const typeCol = col('Product Type');
+  const depotCol = col('Depot');
+  const statusCol = col('Status');
+  const currentCol = col('Current');
+  if (idCol === -1 || depotCol === -1 || currentCol === -1) {
+    throw new Error(`Could not find the Container No / Depot / Current headers in IMS's "${MASTER_TAB}" tab.`);
+  }
+
+  const cell = (row: string[], index: number): string => (index === -1 ? '' : String(row[index] ?? ''));
+  const rows: Array<ImsStatusRow & { normalizedId: string }> = [];
+  for (const row of values.slice(1)) {
+    const containerNo = cell(row, idCol).trim();
+    if (!containerNo) continue;
+    rows.push({
+      containerNo,
+      normalizedId: normalize(containerNo),
+      productType: cell(row, typeCol).trim(),
+      depot: cell(row, depotCol).trim(),
+      status: cell(row, statusCol).trim(),
+      current: cell(row, currentCol).trim(),
+    });
+  }
+  statusCache = { rows, fetchedAt: Date.now() };
+  return rows;
+}
+
+/** Every "Master Sheet" row for this container number (spaces and case ignored). */
+export async function findMasterSheetStatus(containerId: string): Promise<ImsStatusRow[]> {
+  const target = normalize(containerId);
+  if (!target) return [];
+  const rows = await loadMasterStatusRows();
+  return rows.filter((r) => r.normalizedId === target).map(({ normalizedId: _normalizedId, ...row }) => row);
 }
 
 /** Exact match on "Stock" only, case-insensitive — NOT a prefix check.

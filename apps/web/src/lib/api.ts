@@ -317,6 +317,24 @@ export const api = {
     return request<{ items: ImsMatch[] }>(`/api/v2/ims-stock${qs ? `?${qs}` : ''}`);
   },
 
+  /** Gate Out's order search against OMS (read-only on OMS's side). `q`
+   * matches order numbers as typed ("64", "OR64", "or-64"); `containerId`
+   * returns the open orders this container is allocated to. */
+  v2OmsOrders: (q?: string, containerId?: string) => {
+    const params = new URLSearchParams();
+    if (q?.trim()) params.set('q', q.trim());
+    if (containerId?.trim()) params.set('containerId', containerId.trim());
+    return request<OmsOrdersResult>(`/api/v2/oms/orders?${params}`);
+  },
+
+  /** The IMS-based Gate In / Gate Out rule (reads IMS only). `enabled: false`
+   * means the rules are switched off and the gate behaves as before. */
+  v2GateCheck: (kind: 'in' | 'out', containerId: string, typeCode?: string) => {
+    const params = new URLSearchParams({ kind, containerId });
+    if (typeCode) params.set('typeCode', typeCode);
+    return request<GateCheckResult>(`/api/v2/gate-check?${params}`);
+  },
+
   v2PowerStatus: () => request<{ isDown: boolean; changedAt: string }>('/api/v2/power-status'),
 
   v2SetPowerStatus: (isDown: boolean) =>
@@ -348,6 +366,39 @@ export interface ImsMatch {
   reeferUnit: string;
   suggestedTypeCode: string | null;
   suggestedSize: string | null;
+}
+
+/** One OMS order, as Gate Out's order search shows it. */
+export interface OmsOrder {
+  ref: string;
+  /** OMS's own lifecycle status, e.g. "active", "delivered". */
+  status: string | null;
+  /** OMS's own value, verbatim (free text; can be null). */
+  transactionType: string | null;
+  /** This app's grouping of it, for the Order Type dropdown. */
+  orderType: 'Lease' | 'Sale' | 'AMC' | 'Other';
+  product: string | null;
+  stage: string | null;
+  quantity: number | null;
+  deliveredQty: number | null;
+  /** Allocated container numbers, uppercase without spaces; often empty. */
+  containers: string[];
+}
+
+export interface OmsOrdersResult {
+  /** False when PMS isn't set up with an OMS key: the form keeps a plain Order Number box. */
+  enabled: boolean;
+  /** False when OMS couldn't be reached right now. */
+  available: boolean;
+  orders: OmsOrder[];
+  forContainer: OmsOrder[];
+}
+
+export interface GateCheckResult {
+  enabled: boolean;
+  allowed: boolean;
+  reason: string | null;
+  warnings: string[];
 }
 
 export interface ImsLookupResult {

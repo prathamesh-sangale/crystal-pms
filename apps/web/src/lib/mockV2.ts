@@ -340,6 +340,17 @@ export interface GateLogEntry {
   /** Gate Out only — Gate Out dropped Indent Reference in favor of this,
    * by direct request. Always '' on a Gate In record. */
   orderNumber: string;
+  /** Gate Out only: the order's nature (Lease / Sale / AMC / Other), picked
+   * by hand or filled in from OMS. Optional because records saved before
+   * this field existed don't have it. */
+  orderType?: string;
+  /** Gate Out only: OMS's own transaction type when the order was picked
+   * from OMS (e.g. "Tender", which shows as Sale); null when typed by hand. */
+  omsTransactionType?: string | null;
+  /** Which screen created this entry: the real Gate In / Gate Out form, or
+   * IMS "Add to yard". The IMS-based Gate In rule only applies to the form.
+   * Optional because older records don't have it. */
+  source?: 'gate-form' | 'ims-quick-add';
   customerName: string;
   location: string;
   transporterName: string;
