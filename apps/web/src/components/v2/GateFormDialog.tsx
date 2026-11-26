@@ -17,6 +17,7 @@ import {
 } from '../../lib/mockV2';
 import { api, RequestError, type ImsMatch, type OmsOrder } from '../../lib/api';
 import { cx } from '../../lib/cx';
+import { syncGateEntryToLegacy } from '../../lib/legacySync';
 import { istDay } from '../../lib/istDate';
 import { Button } from '../crystal/Button';
 import { useToast } from '../crystal/Feedback';
@@ -445,6 +446,9 @@ export function GateFormDialog({
   const [transporterNumber, setTransporterNumber] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [lrCopyName, setLrCopyName] = useState<string | null>(null);
+  // The LR Copy file itself, uploaded on confirm. It used to be dropped,
+  // keeping only its name.
+  const [lrCopyFile, setLrCopyFile] = useState<File | null>(null);
 
   // Inspection Photos
   const [photos, setPhotos] = useState<Record<GatePhotoKey, File | null>>(emptyPhotos);
@@ -628,6 +632,7 @@ export function GateFormDialog({
     setTransporterNumber('');
     setVehicleNumber('');
     setLrCopyName(null);
+    setLrCopyFile(null);
     setPhotos(emptyPhotos());
     setAdditionalFiles([]);
     setRemarks('');
@@ -696,6 +701,7 @@ export function GateFormDialog({
       if (trimmedId && !(await passesGateRule('in', trimmedId, typeCode))) return;
       const finalId = trimmedId || `NEW ${Math.floor(Math.random() * 900 + 100)}-${Math.floor(Math.random() * 9)}`;
       const photosResult = await buildPhotos(finalId);
+      const lrCopyUrl = await uploadIfPresent(lrCopyFile, finalId);
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'in',
@@ -710,6 +716,7 @@ export function GateFormDialog({
         transporterNumber,
         vehicleNumber,
         lrCopyName,
+        lrCopyUrl: lrCopyUrl || null,
         ptiCheck: 'No',
         ptiVideoName: null,
         ptiVideoUrl: null,
@@ -747,6 +754,9 @@ export function GateFormDialog({
         departedAt: null,
       };
       await onGateIn?.(container);
+      // Already saved in PMS; copying it into the legacy portal's sheets runs
+      // in the background (nothing happens while that sync is switched off).
+      void syncGateEntryToLegacy(container.id, 'in');
       if (resumeDraft) onDiscardDraft?.(resumeDraft.id);
       onOpenChange(false);
       reset();
@@ -772,6 +782,7 @@ export function GateFormDialog({
     try {
       if (!(await passesGateRule('out', container.id, container.typeCode))) return;
       const photosResult = await buildPhotos(container.id);
+      const lrCopyUrl = await uploadIfPresent(lrCopyFile, container.id);
       const now = new Date();
       const entry: GateLogEntry = {
         kind: 'out',
@@ -786,6 +797,7 @@ export function GateFormDialog({
         transporterNumber,
         vehicleNumber,
         lrCopyName,
+        lrCopyUrl: lrCopyUrl || null,
         ptiCheck: 'No',
         ptiVideoName: null,
         ptiVideoUrl: null,
@@ -803,6 +815,7 @@ export function GateFormDialog({
         source: 'gate-form',
       };
       await onGateOut?.(container.id, entry);
+      void syncGateEntryToLegacy(container.id, 'out');
       onOpenChange(false);
       reset();
     } catch (err) {
@@ -1082,7 +1095,11 @@ export function GateFormDialog({
                     {...props}
                     type="file"
                     accept="image/*,application/pdf"
-                    onChange={(e) => setLrCopyName(e.target.files?.[0]?.name ?? null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setLrCopyFile(file);
+                      setLrCopyName(file?.name ?? null);
+                    }}
                   />
                 )}
               </Field>

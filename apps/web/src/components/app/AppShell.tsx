@@ -38,7 +38,7 @@ export function AppShell(): React.ReactElement {
   const navigate = useNavigate();
   const { user, signIn, signOut, can, hasScreenAccess } = useAuth();
   const { theme, toggle } = useTheme();
-  const { containers, gateIn, drafts, saveDraft, discardDraft, powerDown, setPowerDown } = useV2Data();
+  const { containers, gateIn, drafts, saveDraft, discardDraft, powerDown, setPowerDown, reloadContainers } = useV2Data();
   const toast = useToast();
   const current = navItemFor(pathname);
   const resumeDraft = drafts.find((d) => d.id === resumeDraftId) ?? null;
@@ -93,6 +93,32 @@ export function AppShell(): React.ReactElement {
   useEffect(() => {
     api.v2ImsStock().catch(() => {});
   }, []);
+
+  // Legacy Gate-In portal sync: every few minutes, mirror new old-portal
+  // ledger entries into PMS and finish any unfinished PMS -> sheet copies.
+  // The server answers `enabled: false` (and does nothing) while the sync is
+  // switched off; only users who can see a board trigger it.
+  const canSeeBoards = hasScreenAccess('live') || hasScreenAccess('yard');
+  useEffect(() => {
+    if (!canSeeBoards) return;
+    let stopped = false;
+    const run = (): void => {
+      api
+        .v2LegacyCatchUp()
+        .then((res) => {
+          if (stopped || !res.enabled) return;
+          if ((res.created?.length ?? 0) > 0 || (res.gatedOut?.length ?? 0) > 0) void reloadContainers().catch(() => {});
+        })
+        .catch(() => {});
+    };
+    run();
+    const timer = window.setInterval(run, 3 * 60 * 1000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadContainers is recreated each render; the interval only needs access, not identity.
+  }, [canSeeBoards]);
 
   const switchSection: Array<MenuItem | 'separator' | { heading: string }> =
     import.meta.env.DEV && user?.email !== ADMIN_ACCOUNT.email

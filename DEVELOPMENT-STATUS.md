@@ -964,6 +964,27 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
       - The full API suite (35 tests) ran against the TEST database `crystal-pms-TEST-gate-sync` via an environment override, never the live database. The admin login was seeded into the test database for this; its service key is in git-ignored `credentials/test-db.json`.
       - A switch-ON run on the test database with real IMS data passed all 8 checks: Stock gate-in refused (form and server), the same container via "Add to yard" accepted, first gate-out allowed, second refused, WIP gate-in allowed, WIP gate-out refused, OMS search answering. Everything created was deleted afterwards.
 
+180. **Legacy Gate-In portal sync built: PMS gate entries now flow into the old portal's sheets, and old-portal entries flow into PMS. Every part ships switched OFF (2026-11-26).** Direct request: "make it working today", so that a gate entry in PMS works the same as one made on the Apps Script portal.
+    - **PMS -> sheets** (`legacyRows.ts` pure rules, `legacySheets.ts` I/O, `legacySync.ts` runner, `routes/v2LegacySync.ts`). After a gate-form entry saves, the browser calls `POST /api/v2/containers/:id/legacy-sync`, which runs the next steps within one request's time limit. Each step's result is saved on the gate entry (`legacySync`), so nothing is ever done twice, and unfinished work resumes from the app shell's 3-minute catch-up. Steps:
+      - copy photos into GATE_IN_OUT_DOCS via the bridge;
+      - append the ledger row in the legacy 32-column order: real dates, formula-looking text stored as text, idempotent against an identical recent row, verified after append;
+      - Gate In only: IMS Stock, with the audit's safeguards (only from WIP / In Transit / Offlease / blank / Stock elsewhere; never over holds; exactly one row; fresh read and row verified before and after; IN STOCK DATE written as a real date);
+      - Container_Repository MARKED GATE-IN/OUT (the typed indent first; never over STOCK - DIRECT DELIVERY; never re-marks; single cell, verified);
+      - auto-close only when this gate-in completes the indent, the indent appears exactly once, isn't already complete/cancelled/rejected and the container count reaches its Quantity, and only counted as done on `success:true`;
+      - PDF and email via the bridge.
+    - **Old portal -> PMS** (`runLegacyImport`): reads the last 300 ledger rows and acts only on rows after `LEGACY_IMPORT_SINCE`, so no history is imported. An Inward for a container not in PMS creates it (`source: 'legacy-import'`); an Outward for one in the PMS yard gates it out. PMS's own rows are skipped naturally by state; TMS's synthetic rows are skipped. Returning containers are skipped (re-entry not built yet). Writes PMS's database only.
+    - **Bridge** `tools/legacy-bridge/PmsGateBridge.gs`, deployed by the folder owner as a web app with a shared secret. Actions `copy` and `pdfEmail`; the PDF cell is claimed under a lock first, so a retry never emails twice.
+    - **LR Copy fix**: the file is now actually uploaded (`lrCopyUrl`), not just its name.
+    - **Switches** (env, all off unless "true"): `LEGACY_SYNC_ENABLED` + `LEGACY_SYNC_SINCE` (no backfill), `LEGACY_IMS_WRITE`, `LEGACY_AUTOCLOSE` + `LEGACY_AUTOCLOSE_URL`, `LEGACY_IMPORT` + `LEGACY_IMPORT_SINCE`, `LEGACY_BRIDGE_URL` + `LEGACY_BRIDGE_SECRET`. Test overrides: `LEGACY_LEDGER/IMS/REPO_SHEET_ID`.
+    - **Verified on TEST copies** of the ledger, IMS Master Sheet and Container_Repository/Indents, created in PMS's Shared Drive and named "TEST COPY - PMS gate sync - … - do not use". The test database was used throughout, and every container created was deleted afterwards.
+      - Offlease-at-customer became Stock / JNPT / Crystal Yard New with a real date.
+      - SALE was left untouched.
+      - The repository went MARKED GATE-IN then MARKED GATE-OUT; auto-close was correctly skipped (indent already Pipeline Complete).
+      - Ledger rows came out in exact legacy format; a re-run added nothing.
+      - Import created then gated out an old-portal entry, and a repeat did nothing.
+      - 54 tests pass on the TEST DB; typecheck, ESLint and stylelint are clean.
+    - **Not built yet:** container re-entry after gate-out; survey results filling the ledger's PTI/Repair/Budget cells.
+
 ---
 
 ## 7. Testing & Quality

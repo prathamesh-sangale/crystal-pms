@@ -76,6 +76,8 @@ interface V2Data {
    * Live Board while staying fully visible in its own report and in Yard
    * Report's Departed panel. */
   gateOut: (containerId: string, entry: GateLogEntry) => Promise<void>;
+  /** Re-fetches every container, e.g. after old-portal entries were mirrored in. */
+  reloadContainers: () => Promise<void>;
   /** Removes the container record entirely — a mistaken or duplicate entry,
    * not a real-world event like load/offload. No confirmation lives here;
    * the caller (Container Detail) owns that. */
@@ -369,6 +371,11 @@ export function V2DataProvider({ children }: { children: React.ReactNode }): Rea
         const { container: saved } = await api.v2GateIn(container);
         setContainers((cur) => [saved, ...cur]);
         setPendingOpenId(saved.id);
+      },
+
+      reloadContainers: async () => {
+        const { containers: fetched } = await api.v2Containers();
+        setContainers(fetched);
       },
 
       gateOut: async (containerId, entry) => {

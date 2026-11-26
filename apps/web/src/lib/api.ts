@@ -335,6 +335,21 @@ export const api = {
     return request<GateCheckResult>(`/api/v2/gate-check?${params}`);
   },
 
+  /** Runs the next steps of copying one gate entry into the legacy portal's
+   * sheets. `enabled: false` means the sync is switched off. */
+  v2LegacySync: (containerId: string, kind: 'in' | 'out') =>
+    request<{ enabled: boolean; state: { done: boolean } | null }>(`/api/v2/containers/${encodeURIComponent(containerId)}/legacy-sync`, {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    }),
+
+  /** Mirrors new old-portal entries into PMS and resumes unfinished syncs. */
+  v2LegacyCatchUp: () =>
+    request<{ enabled: boolean; throttled?: boolean; created?: string[]; gatedOut?: string[]; resumed?: number }>('/api/v2/legacy-sync/catch-up', {
+      method: 'POST',
+      body: '{}',
+    }),
+
   v2PowerStatus: () => request<{ isDown: boolean; changedAt: string }>('/api/v2/power-status'),
 
   v2SetPowerStatus: (isDown: boolean) =>

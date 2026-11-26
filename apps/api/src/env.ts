@@ -68,6 +68,32 @@ const schema = z.object({
   // IMS. Off means gate entries behave exactly as they did before the rules
   // existed.
   GATE_RULES_ENABLED: z.enum(['true', 'false']).optional(),
+  // ---- Legacy Gate-In portal sync (legacySync.ts). Every switch is off
+  // unless exactly "true". Off means PMS writes nothing to the shared sheets.
+  // Master switch: PMS gate entries are written to the gate ledger and
+  // Container_Repository (and, with the bridge set up, photos/PDF/email).
+  LEGACY_SYNC_ENABLED: z.enum(['true', 'false']).optional(),
+  // Only gate entries logged at or after this instant are ever synced: no
+  // backfill of anything made before switch-on. Required with the switch.
+  LEGACY_SYNC_SINCE: z.string().optional(),
+  // Separate switch for the one IMS write (Stock on Gate In, with safeguards).
+  LEGACY_IMS_WRITE: z.enum(['true', 'false']).optional(),
+  // Separate switch for the main portal's indent auto-close call.
+  LEGACY_AUTOCLOSE: z.enum(['true', 'false']).optional(),
+  LEGACY_AUTOCLOSE_URL: z.string().optional(),
+  // Old portal -> PMS: read new ledger rows and mirror them in PMS (writes
+  // PMS's own database only). Rows before LEGACY_IMPORT_SINCE are ignored.
+  LEGACY_IMPORT: z.enum(['true', 'false']).optional(),
+  LEGACY_IMPORT_SINCE: z.string().optional(),
+  // The "PMS Gate Bridge" Apps Script (photos into GATE_IN_OUT_DOCS, PDF,
+  // email). Unset: those steps are skipped and the ledger gets PMS's own
+  // photo links.
+  LEGACY_BRIDGE_URL: z.string().optional(),
+  LEGACY_BRIDGE_SECRET: z.string().optional(),
+  // Test-only overrides: point the sync at copies of the shared sheets.
+  LEGACY_LEDGER_SHEET_ID: z.string().optional(),
+  LEGACY_IMS_SHEET_ID: z.string().optional(),
+  LEGACY_REPO_SHEET_ID: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

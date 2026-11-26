@@ -350,7 +350,13 @@ export interface GateLogEntry {
   /** Which screen created this entry: the real Gate In / Gate Out form, or
    * IMS "Add to yard". The IMS-based Gate In rule only applies to the form.
    * Optional because older records don't have it. */
-  source?: 'gate-form' | 'ims-quick-add';
+  source?: 'gate-form' | 'ims-quick-add' | 'legacy-import';
+  /** A real Drive link to the uploaded LR Copy. Older records only have
+   * `lrCopyName`, because the file used to be dropped. */
+  lrCopyUrl?: string | null;
+  /** Progress of copying this entry into the legacy Gate-In portal's sheets
+   * (ledger, IMS, Container_Repository). Set by the server only. */
+  legacySync?: { done: boolean; steps: Record<string, { status: string; detail: string }> };
   customerName: string;
   location: string;
   transporterName: string;
