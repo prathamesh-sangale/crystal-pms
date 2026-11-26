@@ -86,6 +86,11 @@ function EmailInput({
  * the existing password sign-in stays the default, untouched path. Its own
  * small component so its three-states-in-one (email step, code step,
  * in-flight/error) don't tangle with the password form's. */
+/** Hidden for now by the owner's request (2026-11-26): the mailbox's Gmail
+ * App Password is rejected, so codes can't be sent yet. Set back to true once
+ * a working SMTP_PASS is in place; the server side is unchanged. */
+const SHOW_EMAIL_CODE_LOGIN = false;
+
 function OtpSignIn({ onBack }: { onBack: () => void }): React.ReactElement {
   const { signInWithOtp } = useAuth();
   const [step, setStep] = useState<'email' | 'code'>('email');
@@ -377,9 +382,11 @@ export function Login(): React.ReactElement {
                   Sign in
                 </Button>
               </form>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setMode('otp')}>
-                Sign in with an emailed code instead
-              </Button>
+              {SHOW_EMAIL_CODE_LOGIN && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setMode('otp')}>
+                  Sign in with an emailed code instead
+                </Button>
+              )}
             </>
           ) : (
             <OtpSignIn onBack={() => setMode('password')} />
