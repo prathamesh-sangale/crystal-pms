@@ -42,6 +42,8 @@ export interface LegacySyncState {
 }
 
 const MAX_ATTEMPTS = 3;
+/** Marker in the ledger's Photo_Merge_Pdf cell: "copy photos, build the PDF, send the email". */
+export const PMS_PDF_PENDING = 'PMS-PENDING';
 const on = (v: string | undefined): boolean => v === 'true';
 
 export function legacySyncEnabled(): boolean {
@@ -100,7 +102,7 @@ const settled = (r?: StepResult): boolean => !!r && (r.status === 'ok' || r.stat
 async function runStep(step: StepName, c: ContainerRow, kind: 'in' | 'out', entry: Entry, state: LegacySyncState, actorEmail: string): Promise<{ status: 'ok' | 'skipped'; detail: string }> {
   switch (step) {
     case 'copy': {
-      if (!bridgeConfigured()) return { status: 'skipped', detail: 'Bridge not set up; the ledger gets PMS photo links.' };
+      if (!bridgeConfigured()) return { status: 'skipped', detail: 'Photos are copied later by the Gate-In script timer.' };
       const links = pmsLinks(entry);
       const files: BridgeFile[] = [];
       for (const k of PHOTO_KEYS) {
@@ -124,7 +126,12 @@ async function runStep(step: StepName, c: ContainerRow, kind: 'in' | 'out', entr
       return { status: 'ok', detail: `${Object.keys(copied).length} file(s) copied into GATE_IN_OUT_DOCS.` };
     }
     case 'ledger': {
-      const links = state.links ?? pmsLinks(entry);
+      // Without a callable bridge (the company Workspace blocks "Anyone" web
+      // apps), the PDF cell gets PMS_PDF_PENDING: a time trigger in the
+      // Gate-In script, running as the folder owner, picks such rows up,
+      // copies the photos into GATE_IN_OUT_DOCS, builds the PDF and sends
+      // the email (tools/legacy-bridge/GateIn_Code_with_PMS_bridge.gs).
+      const links = state.links ?? { ...pmsLinks(entry), pdf: bridgeConfigured() ? '' : PMS_PDF_PENDING };
       const row = buildLedgerRow({ id: c.id, typeCode: c.type_code, size: c.size }, entry as never, links, actorEmail);
       state.ledgerRow = await appendLedgerRow(row, c.id);
       return { status: 'ok', detail: `Gate ledger row ${state.ledgerRow}.` };
@@ -144,7 +151,7 @@ async function runStep(step: StepName, c: ContainerRow, kind: 'in' | 'out', entr
       return autoCloseIfComplete(state.repo.indentId, (state.repo.indentRows ?? []) as never, true);
     }
     case 'pdfEmail': {
-      if (!bridgeConfigured()) return { status: 'skipped', detail: 'Bridge not set up; no PDF or email.' };
+      if (!bridgeConfigured()) return { status: 'skipped', detail: 'Handed to the Gate-In script timer (ledger PDF cell marked PMS-PENDING).' };
       if (!state.ledgerRow) return { status: 'skipped', detail: 'No ledger row to attach the PDF to.' };
       const detail = await bridgePdfEmail({
         containerNo: c.id,

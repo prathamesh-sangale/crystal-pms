@@ -973,7 +973,13 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
       - auto-close only when this gate-in completes the indent, the indent appears exactly once, isn't already complete/cancelled/rejected and the container count reaches its Quantity, and only counted as done on `success:true`;
       - PDF and email via the bridge.
     - **Old portal -> PMS** (`runLegacyImport`): reads the last 300 ledger rows and acts only on rows after `LEGACY_IMPORT_SINCE`, so no history is imported. An Inward for a container not in PMS creates it (`source: 'legacy-import'`); an Outward for one in the PMS yard gates it out. PMS's own rows are skipped naturally by state; TMS's synthetic rows are skipped. Returning containers are skipped (re-entry not built yet). Writes PMS's database only.
-    - **Bridge** `tools/legacy-bridge/PmsGateBridge.gs`, deployed by the folder owner as a web app with a shared secret. Actions `copy` and `pdfEmail`; the PDF cell is claimed under a lock first, so a retry never emails twice.
+    - **Photos / PDF / email:** the company Workspace blocks "Anyone" web apps, so there is no web-app bridge. PMS writes `PMS-PENDING` into the ledger row's Photo_Merge_Pdf cell. Section 7 of the existing Gate-In script (`tools/legacy-bridge/GateIn_Code_with_PMS_bridge.gs`, the owner's code plus that section, nothing else changed) runs a 5-minute timer as the GATE_IN_OUT_DOCS owner. It installs once via `setupPmsGateTrigger()` and needs no new deployment, so the live portal link is untouched. For each pending row it:
+      - claims the row under a lock;
+      - copies the LR copy, photos and additional photos into GATE_IN_OUT_DOCS with the legacy names, reusing copies on retry;
+      - puts those links back into the row;
+      - builds `Inspection_<container>.pdf` and sends the legacy email.
+      - Failures retry, then show `PMS-FAILED: …` after 3 attempts.
+      - The web-app client `legacyBridge.ts` remains, but is unused unless `LEGACY_BRIDGE_URL`/`SECRET` are set.
     - **LR Copy fix**: the file is now actually uploaded (`lrCopyUrl`), not just its name.
     - **Switches** (env, all off unless "true"): `LEGACY_SYNC_ENABLED` + `LEGACY_SYNC_SINCE` (no backfill), `LEGACY_IMS_WRITE`, `LEGACY_AUTOCLOSE` + `LEGACY_AUTOCLOSE_URL`, `LEGACY_IMPORT` + `LEGACY_IMPORT_SINCE`, `LEGACY_BRIDGE_URL` + `LEGACY_BRIDGE_SECRET`. Test overrides: `LEGACY_LEDGER/IMS/REPO_SHEET_ID`.
     - **Verified on TEST copies** of the ledger, IMS Master Sheet and Container_Repository/Indents, created in PMS's Shared Drive and named "TEST COPY - PMS gate sync - … - do not use". The test database was used throughout, and every container created was deleted afterwards.

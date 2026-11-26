@@ -1,8 +1,13 @@
 import { env } from './env.js';
 
 /**
- * Client for the "PMS Gate Bridge" Apps Script (tools/legacy-bridge/
- * PmsGateBridge.gs), which runs as the owner of GATE_IN_OUT_DOCS. Google
+ * OPTIONAL, currently unused: the company Workspace blocks "Anyone" web
+ * apps, so production uses the time-trigger route instead (PMS marks the
+ * ledger row PMS-PENDING and section 7 of tools/legacy-bridge/
+ * GateIn_Code_with_PMS_bridge.gs does the copy / PDF / email). This client
+ * only runs if LEGACY_BRIDGE_URL and LEGACY_BRIDGE_SECRET are ever set.
+ *
+ * Client for a web-app bridge running as the owner of GATE_IN_OUT_DOCS. Google
  * won't let PMS's service account create files in that personal My Drive
  * folder, so the bridge does the three things that need the owner:
  *  - `copy`: copies PMS's uploaded files into GATE_IN_OUT_DOCS with the legacy
