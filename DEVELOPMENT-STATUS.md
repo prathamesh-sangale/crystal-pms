@@ -990,6 +990,11 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
       - Import created then gated out an old-portal entry, and a repeat did nothing.
       - 54 tests pass on the TEST DB; typecheck, ESLint and stylelint are clean.
     - **Not built yet:** container re-entry after gate-out; survey results filling the ledger's PTI/Repair/Budget cells.
+    - **Switched ON in production on 2026-11-26 at 10:59:10 IST**, on the owner's go-ahead.
+      - `LEGACY_SYNC_ENABLED`, `LEGACY_IMS_WRITE`, `LEGACY_AUTOCLOSE` (+URL), `LEGACY_IMPORT` are on.
+      - Both SINCE values are 2026-11-26T05:29:10.760Z, so nothing earlier is written or imported.
+      - `GATE_RULES_ENABLED` stays unset (rules off).
+      - The owner added `PMS_GateRows.gs` as a separate file in the Gate-In script project and ran `setupPmsGateTrigger()`; the 5-minute timer is installed.
 
 ---
 
