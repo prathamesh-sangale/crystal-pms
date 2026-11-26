@@ -797,12 +797,12 @@ function processPmsGateRows() {
   if (!sheet) return;
   const last = sheet.getLastRow();
   if (last < 2) return;
-  const from = Math.max(2, last - 150);
-  const marks = sheet.getRange(from, 26, last - from + 1, 1).getValues();
+  const startRow = Math.max(2, last - 150);
+  const marks = sheet.getRange(startRow, 26, last - startRow + 1, 1).getValues();
   const started = Date.now();
   for (let i = 0; i < marks.length; i++) {
     if (Date.now() - started > 4 * 60 * 1000) break;
-    if (String(marks[i][0]).trim() === PMS_PENDING) processOnePmsRow_(sheet, from + i);
+    if (String(marks[i][0]).trim() === PMS_PENDING) processOnePmsRow_(sheet, startRow + i);
   }
 }
 
