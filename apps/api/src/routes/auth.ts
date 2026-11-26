@@ -44,11 +44,22 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = await parseOr422(loginSchema, request.body, reply);
       if (!body) return;
 
-      const { data: user } = (await supabase()
+      const { data: user, error: lookupError } = (await supabase()
         .from('users')
         .select(USER_AUTH_SELECT)
         .eq('email', body.email.toLowerCase())
-        .maybeSingle()) as { data: UserRow | null };
+        .maybeSingle()) as { data: UserRow | null; error: unknown };
+
+      // The database couldn't be reached (network/DNS): say so, instead of
+      // the misleading "email and password do not match" (seen 2026-11-26,
+      // when a DNS failure on the developer's PC looked like a wrong password).
+      if (lookupError) {
+        request.log.error({ err: lookupError }, 'Login lookup failed');
+        return reply.code(503).send({
+          error: 'service_unavailable',
+          message: 'Could not reach the PMS database just now. Check your internet connection and try again.',
+        });
+      }
 
       // Same response and roughly the same work whether the account exists,
       // the password is wrong, or the account's been deactivated -- the
