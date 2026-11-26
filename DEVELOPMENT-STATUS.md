@@ -996,6 +996,16 @@ Requested to connect this app's data to "the inventory dashboard." The dashboard
       - `GATE_RULES_ENABLED` stays unset (rules off).
       - The owner added `PMS_GateRows.gs` as a separate file in the Gate-In script project and ran `setupPmsGateTrigger()`; the 5-minute timer is installed.
 
+181. **Email-code sign-in made to work like OMS, alongside passwords; Auditor login added (2026-11-26).** The owner chose "both" (code and password), sending through OMS's mailbox, with a PMS-branded code email.
+    - **Before:** code sign-in relied on Supabase Auth's email OTP, which needed `SUPABASE_ANON_KEY` (never set anywhere) and Supabase's default mailer (team members only, ~2/hour). It never worked in production.
+    - **Now:** PMS sends the code itself (`mailer.ts`, nodemailer) through the SMTP settings copied from OMS's config (`SMTP_HOST/PORT/USER/PASS/FROM`, in local `.env` and on Vercel, never displayed). The email is from "Crystal PMS <OMS's address>", with subject "<code> is your PMS sign-in code", and says it is only for PMS and not an OMS code.
+    - **Nothing is stored.** `/otp/request` returns a 10-minute `challenge` (its own HMAC format, so it can never pass as a session JWT) holding an HMAC of email + code keyed with the server secret. `/otp/verify` checks the code timing-safe.
+    - Unknown or inactive emails get an identical response with an unsatisfiable challenge, so no account enumeration is possible.
+    - Rate limits are unchanged (5/min request, 10/min verify). The session is identical to a password login's.
+    - Web: `api.requestOtp` keeps the challenge and `api.verifyOtp` sends it back; the login screen is unchanged.
+    - **Logins:** service@ (Sitaram), mansi.agarwal@ and aa@ (Akash) already existed as managers, with emails confirmed from OMS's profiles. Added `auditor@crystalgroup.in` (id `u-auditor`, manager, same access as the others, random unknown password, so it signs in by code). "Support" has no address in OMS or PMS: pending from the owner.
+    - 54 tests pass on the TEST DB; typecheck and lint are clean.
+
 ---
 
 ## 7. Testing & Quality

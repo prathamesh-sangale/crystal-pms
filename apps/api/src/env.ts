@@ -68,6 +68,13 @@ const schema = z.object({
   // IMS. Off means gate entries behave exactly as they did before the rules
   // existed.
   GATE_RULES_ENABLED: z.enum(['true', 'false']).optional(),
+  // Outgoing mail for PMS sign-in codes (mailer.ts): the same mailbox OMS
+  // uses. Unset means email-code sign-in is unavailable (password only).
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
   // ---- Legacy Gate-In portal sync (legacySync.ts). Every switch is off
   // unless exactly "true". Off means PMS writes nothing to the shared sheets.
   // Master switch: PMS gate entries are written to the gate ledger and

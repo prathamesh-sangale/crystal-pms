@@ -66,6 +66,9 @@ interface RequestOptions {
   silentAuth?: boolean;
 }
 
+/** The challenge from the latest email-code request, sent back with the code. */
+let otpChallenge: string | null = null;
+
 async function request<T>(path: string, init: RequestInit = {}, opts: RequestOptions = {}): Promise<T> {
   const headers = new Headers(init.headers);
   // A FormData body (the upload endpoint) needs the browser to set its own
@@ -179,16 +182,20 @@ export const api = {
 
   /** Step 1 of email-code sign-in -- always resolves the same way whether
    * or not the email has an account, same as the server's own response. */
-  requestOtp: (email: string) =>
-    request<{ ok: boolean; message: string }>('/api/auth/otp/request', {
+  requestOtp: async (email: string) => {
+    const res = await request<{ ok: boolean; message: string; challenge?: string }>('/api/auth/otp/request', {
       method: 'POST',
       body: JSON.stringify({ email }),
-    }),
+    });
+    // The server's signed proof of which code it sent; returned on verify.
+    otpChallenge = res.challenge ?? null;
+    return res;
+  },
 
   verifyOtp: (email: string, code: string) =>
     request<{ token: string; user: SessionUser }>('/api/auth/otp/verify', {
       method: 'POST',
-      body: JSON.stringify({ email, code }),
+      body: JSON.stringify({ email, code, challenge: otpChallenge ?? '' }),
     }),
 
   logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }, { silentAuth: true }),
